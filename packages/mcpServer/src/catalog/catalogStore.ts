@@ -1,9 +1,16 @@
 import { initialCatalogFixtures } from "./catalogFixtures.js";
 import {
+  meshCatalogUpdatesChannel,
+  catalogEventAdded,
+  catalogEventUpdated,
+  catalogEventRemoved
+} from "../constants/protocolConstants.js";
+import {
   CatalogSkuItem,
   SkuFilterCriteria,
   SkuNotFoundException,
-  catalogSkuItemSchema
+  catalogSkuItemSchema,
+  RedisChannelSubscriber
 } from "../types/mcpToolTypes.js";
 
 export class CatalogStore {
@@ -23,6 +30,64 @@ export class CatalogStore {
       this.itemsMap.set(validatedItem.skuId, validatedItem);
       this.stockMap.set(validatedItem.skuId, validatedItem.availableStock);
     }
+  }
+
+  public addSku(item: CatalogSkuItem): void {
+    const validated = catalogSkuItemSchema.parse(item);
+    this.itemsMap.set(validated.skuId, validated);
+    this.stockMap.set(validated.skuId, validated.availableStock);
+  }
+
+  public removeSku(skuId: string): boolean {
+    this.stockMap.delete(skuId);
+    return this.itemsMap.delete(skuId);
+  }
+
+  public subscribeToCatalogChannel(redisSubscriber: RedisChannelSubscriber): void {
+    redisSubscriber.subscribe(meshCatalogUpdatesChannel);
+    redisSubscriber.on("message", (channel: unknown, rawMessage: unknown) => {
+      if (typeof channel !== "string" || channel !== meshCatalogUpdatesChannel) {
+        return;
+      }
+      if (typeof rawMessage !== "string") {
+        return;
+      }
+      try {
+        const parsed = JSON.parse(rawMessage) as {
+          action?: string;
+          event?: string;
+          type?: string;
+          item?: unknown;
+          payload?: unknown;
+          skuId?: string;
+          sku_id?: string;
+        };
+        const actionType = parsed.action ?? parsed.event ?? parsed.type;
+        if (
+          actionType === catalogEventAdded ||
+          actionType === catalogEventUpdated ||
+          actionType === "CATALOG_ITEM_ADDED" ||
+          actionType === "CATALOG_ITEM_UPDATED"
+        ) {
+          const itemData = (parsed.item ?? parsed.payload ?? parsed) as CatalogSkuItem;
+          this.addSku(itemData);
+        } else if (
+          actionType === catalogEventRemoved ||
+          actionType === "CATALOG_ITEM_REMOVED"
+        ) {
+          const skuId =
+            parsed.skuId ??
+            parsed.sku_id ??
+            (parsed.payload as { skuId?: string; sku_id?: string })?.skuId ??
+            (parsed.payload as { skuId?: string; sku_id?: string })?.sku_id;
+          if (skuId) {
+            this.removeSku(skuId);
+          }
+        }
+      } catch {
+        // Ignore malformed message payloads gracefully
+      }
+    });
   }
 
   public getSku(skuId: string): CatalogSkuItem | undefined {

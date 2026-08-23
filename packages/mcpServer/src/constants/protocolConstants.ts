@@ -22,7 +22,7 @@ export const defaultMerchantPrivateKeyHex = "4c3b2a1009080706050403020100ffeeddc
 export const defaultLockTtlSeconds = 60;
 export const minLockTtlSeconds = 10;
 export const maxLockTtlSeconds = 120;
-export const quoteValiditySeconds = 300;
+export const quoteValiditySeconds = 60;
 
 export const minQuantity = 1;
 export const maxQuantity = 10000;
@@ -131,3 +131,21 @@ export const pincodePrefixStateMap: Record<string, string> = {
 };
 
 export const defaultFallbackState = "KA";
+ 
+ export const discountTypeVolumeTier = "VOLUME_TIER" as const;
+ export const discountTypeCampaign = "CAMPAIGN" as const;
+ export const discountTypePaymentRail = "PAYMENT_RAIL" as const;
+ export const discountTypePromoCode = "PROMO_CODE" as const;
+ 
+ export const festiveCampaignName = "RAZORPAY_FESTIVE_10";
+ export const festiveCampaignBps = 1000;
+ export const festiveCampaignCapPaise = 2000;
+ export const upiCashbackName = "UPI_CASHBACK";
+ export const upiCashbackPaise = 150;
+ export const corporatePromoCode = "CORP_5PCT";
+ export const corporatePromoBps = 500;
+ 
+ export const meshCatalogUpdatesChannel = "mesh:catalog:updates";
+ export const catalogEventAdded = "CATALOG_ITEM_ADDED";
+ export const catalogEventUpdated = "CATALOG_ITEM_UPDATED";
+ export const catalogEventRemoved = "CATALOG_ITEM_REMOVED";

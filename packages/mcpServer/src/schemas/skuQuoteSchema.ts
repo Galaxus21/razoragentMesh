@@ -9,10 +9,20 @@ export const skuQuoteRequestSchema = z.object({
   sku_id: z.string().regex(/^SKU-[A-Z0-9_-]{3,32}$/),
   quantity: z.number().int().min(minQuantity).max(maxQuantity),
   buyer_agent_id: z.string().regex(/^did:agent:[a-z0-9_\-\.:]+$/),
-  delivery_pincode: z.string().regex(/^[1-9][0-9]{5}$/)
+  delivery_pincode: z.string().regex(/^[1-9][0-9]{5}$/),
+  promo_code: z.string().optional()
 });
 
 export type SkuQuoteRequest = z.infer<typeof skuQuoteRequestSchema>;
+
+export const appliedDiscountItemSchema = z.object({
+  type: z.enum(["VOLUME_TIER", "CAMPAIGN", "PAYMENT_RAIL", "PROMO_CODE"]),
+  label: z.string(),
+  discountBps: z.number().int().optional(),
+  discountPaise: z.number().int().min(0).optional()
+});
+
+export type AppliedDiscountItemSchema = z.infer<typeof appliedDiscountItemSchema>;
 
 export const skuQuoteResponseSchema = z.object({
   sku_id: z.string(),
@@ -29,7 +39,9 @@ export const skuQuoteResponseSchema = z.object({
     total_tax_paise: z.number().int().min(0)
   }),
   quote_expiry_timestamp: z.number().int().positive(),
-  quote_hash: z.string().min(1)
+  quote_hash: z.string().min(1),
+  applied_discounts: z.array(appliedDiscountItemSchema).optional(),
+  total_savings_paise: z.number().int().min(0).optional()
 });
 
 export type SkuQuoteResponse = z.infer<typeof skuQuoteResponseSchema>;

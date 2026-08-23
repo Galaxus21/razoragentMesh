@@ -1,13 +1,26 @@
 import {
   bpsDivisor,
   percentDivisor,
-  halfGstDivisor
+  halfGstDivisor,
+  discountTypeVolumeTier,
+  discountTypeCampaign,
+  discountTypePaymentRail,
+  discountTypePromoCode,
+  festiveCampaignBps,
+  festiveCampaignCapPaise,
+  upiCashbackPaise,
+  corporatePromoCode,
+  corporatePromoBps
 } from "../constants/protocolConstants.js";
 import {
   VolumeTier,
   TaxBreakdown,
-  ArithmeticDriftException
+  ArithmeticDriftException,
+  AppliedDiscountItem,
+  DiscountStackResult
 } from "../types/mcpToolTypes.js";
+
+export type { AppliedDiscountItem, DiscountStackResult };
 
 export interface PricingResult {
   readonly baseUnitPricePaise: number;
@@ -116,5 +129,114 @@ export function calculateGstBreakdown(
     sgstPaise: zeroPaise,
     igstPaise,
     totalTaxPaise: igstPaise
+  };
+}
+
+function applyVolumeTierDiscountStep(
+  unitPricePaise: number,
+  quantity: number,
+  tiers: readonly VolumeTier[],
+  appliedDiscounts: AppliedDiscountItem[]
+): number {
+  const matchingTier = findMatchingVolumeTier(quantity, tiers);
+  if (!matchingTier || matchingTier.discountBps <= zeroBps) {
+    return unitPricePaise;
+  }
+  const discountPaise = Math.floor((unitPricePaise * matchingTier.discountBps) / bpsDivisor);
+  if (discountPaise <= zeroPaise) {
+    return unitPricePaise;
+  }
+  appliedDiscounts.push({
+    type: discountTypeVolumeTier,
+    label: `Volume Tier Discount (${matchingTier.discountBps / 100}%)`,
+    discountBps: matchingTier.discountBps,
+    discountPaise
+  });
+  return unitPricePaise - discountPaise;
+}
+
+function applyCampaignDiscountStep(
+  unitPricePaise: number,
+  appliedDiscounts: AppliedDiscountItem[]
+): number {
+  const uncappedPaise = Math.floor((unitPricePaise * festiveCampaignBps) / bpsDivisor);
+  const discountPaise = Math.min(festiveCampaignCapPaise, uncappedPaise);
+  if (discountPaise <= zeroPaise) {
+    return unitPricePaise;
+  }
+  appliedDiscounts.push({
+    type: discountTypeCampaign,
+    label: `Festive Campaign (${festiveCampaignBps / 100}% off capped at ₹${festiveCampaignCapPaise / 100})`,
+    discountBps: festiveCampaignBps,
+    discountPaise
+  });
+  return unitPricePaise - discountPaise;
+}
+
+function applyPaymentRailDiscountStep(
+  unitPricePaise: number,
+  appliedDiscounts: AppliedDiscountItem[]
+): number {
+  const discountPaise = Math.min(unitPricePaise, upiCashbackPaise);
+  if (discountPaise <= zeroPaise) {
+    return unitPricePaise;
+  }
+  appliedDiscounts.push({
+    type: discountTypePaymentRail,
+    label: `UPI Instant Cashback (₹${(upiCashbackPaise / 100).toFixed(2)})`,
+    discountPaise
+  });
+  return unitPricePaise - discountPaise;
+}
+
+function applyPromoCodeDiscountStep(
+  unitPricePaise: number,
+  promoCode: string | undefined,
+  appliedDiscounts: AppliedDiscountItem[]
+): number {
+  if (!promoCode || promoCode.trim().toUpperCase() !== corporatePromoCode) {
+    return unitPricePaise;
+  }
+  const discountPaise = Math.floor((unitPricePaise * corporatePromoBps) / bpsDivisor);
+  if (discountPaise <= zeroPaise) {
+    return unitPricePaise;
+  }
+  appliedDiscounts.push({
+    type: discountTypePromoCode,
+    label: `Corporate Promo Code (${corporatePromoBps / 100}% off)`,
+    discountBps: corporatePromoBps,
+    discountPaise
+  });
+  return unitPricePaise - discountPaise;
+}
+
+export function computeAutoDiscountStack(
+  baseUnitPricePaise: number,
+  quantity: number,
+  volumeTiers: readonly VolumeTier[],
+  promoCode?: string
+): DiscountStackResult {
+  assertIntegerPaise(baseUnitPricePaise, "baseUnitPricePaise");
+  assertIntegerPaise(quantity, "quantity");
+
+  if (baseUnitPricePaise < zeroPaise || quantity < 1) {
+    throw new ArithmeticDriftException(
+      `Invalid base price ${baseUnitPricePaise} or quantity ${quantity}`
+    );
+  }
+
+  const appliedDiscounts: AppliedDiscountItem[] = [];
+  let currentPrice = applyVolumeTierDiscountStep(baseUnitPricePaise, quantity, volumeTiers, appliedDiscounts);
+  currentPrice = applyCampaignDiscountStep(currentPrice, appliedDiscounts);
+  currentPrice = applyPaymentRailDiscountStep(currentPrice, appliedDiscounts);
+  currentPrice = applyPromoCodeDiscountStep(currentPrice, promoCode, appliedDiscounts);
+
+  const offeredUnitPricePaise = Math.max(zeroPaise, currentPrice);
+  const totalSavingsPaise = (baseUnitPricePaise - offeredUnitPricePaise) * quantity;
+
+  return {
+    offeredUnitPricePaise,
+    appliedDiscounts,
+    totalSavingsPaise
   };
 }

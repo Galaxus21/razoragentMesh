@@ -45,4 +45,76 @@ describe("CatalogStore", () => {
     const furniture = testStore.filterSkus({ category: "Office Furniture" });
     assert.ok(furniture.length >= 2);
   });
+
+  it("should add a new SKU to the store and retrieve it", () => {
+    const testStore = new CatalogStore();
+    const newSku = {
+      skuId: "SKU-TEST-999",
+      name: "Test Mechanical Keyboard",
+      category: "Electronics",
+      description: "Ergonomic tactile mechanical keyboard",
+      hsnCode: "84716060",
+      gstRatePercent: 18,
+      baseUnitPricePaise: 850000,
+      availableStock: 25,
+      volumeTiers: [{ minQuantity: 5, discountBps: 500 }]
+    };
+    testStore.addSku(newSku);
+    const retrieved = testStore.getSku("SKU-TEST-999");
+    assert.ok(retrieved);
+    assert.equal(retrieved.skuId, "SKU-TEST-999");
+    assert.equal(retrieved.availableStock, 25);
+  });
+
+  it("should remove an existing SKU from the store", () => {
+    const testStore = new CatalogStore();
+    assert.ok(testStore.getSku("SKU-CHAIR-001"));
+    const removed = testStore.removeSku("SKU-CHAIR-001");
+    assert.equal(removed, true);
+    assert.equal(testStore.getSku("SKU-CHAIR-001"), undefined);
+  });
+
+  it("should handle dynamic catalog sync channel updates", () => {
+    const testStore = new CatalogStore();
+    let messageListener: ((channel: string, message: string) => void) | undefined;
+    const mockSubscriber = {
+      subscribe: (_channel: string) => {},
+      on: (event: string, listener: (...args: unknown[]) => void) => {
+        if (event === "message") {
+          messageListener = listener as (channel: string, message: string) => void;
+        }
+      }
+    };
+
+    testStore.subscribeToCatalogChannel(mockSubscriber);
+    assert.ok(messageListener);
+
+    // Add item via channel
+    messageListener("mesh:catalog:updates", JSON.stringify({
+      action: "CATALOG_ITEM_ADDED",
+      item: {
+        skuId: "SKU-SYNC-100",
+        name: "Synced Monitor Stand",
+        category: "Office Accessories",
+        description: "Solid bamboo dual monitor stand",
+        hsnCode: "94036000",
+        gstRatePercent: 18,
+        baseUnitPricePaise: 320000,
+        availableStock: 40,
+        volumeTiers: []
+      }
+    }));
+
+    const syncedItem = testStore.getSku("SKU-SYNC-100");
+    assert.ok(syncedItem);
+    assert.equal(syncedItem.skuId, "SKU-SYNC-100");
+
+    // Remove item via channel
+    messageListener("mesh:catalog:updates", JSON.stringify({
+      action: "CATALOG_ITEM_REMOVED",
+      skuId: "SKU-SYNC-100"
+    }));
+
+    assert.equal(testStore.getSku("SKU-SYNC-100"), undefined);
+  });
 });

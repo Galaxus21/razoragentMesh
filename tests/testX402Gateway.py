@@ -262,3 +262,33 @@ async def testGatewayAppEndpoints() -> None:
         assert respRel.status_code == 200
         assert respRel.json()["totalDebitedPaise"] == 50
         assert respRel.json()["refundedBalancePaise"] == 4950
+
+
+class MockPolicyRedis:
+    """Mock Redis client for merchant policy tests."""
+
+    def __init__(self, data: dict[str, str]) -> None:
+        self._data = data
+
+    async def get(self, key: str) -> Optional[str]:
+        return self._data.get(key)
+
+
+@pytest.mark.asyncio
+async def testMerchantPolicyFloorLookup() -> None:
+    """Verifies that merchant policy floor is retrieved from Redis when available."""
+    import json
+    from razoragentMesh.packages.x402Gateway.src.routes.negotiateRoute import lookupMerchantFloorPolicy
+
+    mockRedis = MockPolicyRedis({
+        "mesh:merchant:policy:did:agent:nexus_merchant": json.dumps({"marginFloorBps": 1200})
+    })
+
+    floorBps = await lookupMerchantFloorPolicy("did:agent:nexus_merchant", redisClient=mockRedis)
+    assert floorBps == 1200
+
+    missingFloor = await lookupMerchantFloorPolicy("did:agent:unknown", redisClient=mockRedis)
+    assert missingFloor is None
+
+    noMerchant = await lookupMerchantFloorPolicy(None, redisClient=mockRedis)
+    assert noMerchant is None

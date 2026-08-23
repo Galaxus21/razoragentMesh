@@ -1,7 +1,9 @@
 """Negotiation and PoW challenge API routes for Layer 2 x402-INR gateway."""
 
+import json
+import os
 import time
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from ..compiler.astContractCompiler import compileCommercialContractAst
@@ -41,6 +43,56 @@ from .escrowRoute import defaultEscrowClient
 negotiateRouter = APIRouter(tags=["negotiate"])
 defaultAntiSpamShield = IngressAntiSpamShield()
 activeNegotiators: Dict[str, RubinsteinStahlNegotiator] = {}
+
+merchantPolicyRedisKeyPrefix: str = "mesh:merchant:policy:"
+defaultMerchantFallbackDid: str = "did:agent:merchant_default"
+defaultPolicyRedisClient: Optional[Any] = None
+
+
+def getPolicyRedisClient() -> Optional[Any]:
+    """Retrieves or initializes Redis client for merchant dynamic policy lookup."""
+    global defaultPolicyRedisClient
+    if defaultPolicyRedisClient is not None:
+        return defaultPolicyRedisClient
+    redisUrl = os.getenv("REDIS_URL")
+    if not redisUrl:
+        return None
+    try:
+        import redis.asyncio as aioredis
+
+        defaultPolicyRedisClient = aioredis.from_url(redisUrl, decode_responses=True)
+        return defaultPolicyRedisClient
+    except Exception:
+        return None
+
+
+async def lookupMerchantFloorPolicy(
+    merchantDid: Optional[str],
+    redisClient: Optional[Any] = None,
+) -> Optional[int]:
+    """Queries Redis for merchant dynamic pricing policy and margin floor in paise/bps."""
+    if not merchantDid:
+        return None
+    client = redisClient if redisClient is not None else getPolicyRedisClient()
+    if client is None:
+        return None
+    try:
+        policyKey = f"{merchantPolicyRedisKeyPrefix}{merchantDid}"
+        rawPolicy = await client.get(policyKey)
+        if not rawPolicy:
+            return None
+        policyData = json.loads(rawPolicy) if isinstance(rawPolicy, (str, bytes)) else rawPolicy
+        if isinstance(policyData, dict):
+            if "marginFloorBps" in policyData:
+                return int(policyData["marginFloorBps"])
+            if "sellerCostFloorPaise" in policyData:
+                return int(policyData["sellerCostFloorPaise"])
+            if "costFloorPaise" in policyData:
+                return int(policyData["costFloorPaise"])
+        return None
+    except Exception:
+        # Fallback gracefully if Redis is unreachable or schema is non-standard
+        return None
 
 
 @negotiateRouter.get(endpointChallenge, response_model=Http402ChallengeResponse)
@@ -84,6 +136,7 @@ def getOrCreateNegotiator(
     skuId: str,
     quantity: int,
     balancePaise: int,
+    sellerCostFloorPaise: Optional[int] = None,
 ) -> RubinsteinStahlNegotiator:
     """Retrieves or instantiates active session negotiator."""
     if sessionKey not in activeNegotiators:
@@ -91,6 +144,7 @@ def getOrCreateNegotiator(
             skuId=skuId,
             quantity=quantity,
             escrowBalancePaise=balancePaise,
+            sellerCostFloorPaise=sellerCostFloorPaise,
         )
     return activeNegotiators[sessionKey]
 
@@ -104,13 +158,14 @@ def compileContractIfConverged(
     if not step.isConverged:
         return None, None
     now = int(time.time())
+    merchantDid = payload.merchantDid or defaultMerchantFallbackDid
     contractAst, astHash = compileCommercialContractAst(
         skuId=payload.skuId,
         quantity=payload.quantity,
         agreedUnitPrice=payload.sellerAskPaise,
         turns=payload.turnNumber,
         buyerDid=payload.buyerAgentDid,
-        merchantDid=payload.merchantDid,
+        merchantDid=merchantDid,
         timestamp=now,
     )
     activeNegotiators.pop(sessionKey, None)
@@ -129,8 +184,17 @@ async def negotiateTurn(
         powChallenge, powSolution, escrowToken, payload.turnNumber
     )
     sessionKey = f"{payload.buyerAgentDid}:{payload.skuId}"
+
+    sellerCostFloor: Optional[int] = None
+    if payload.merchantDid:
+        sellerCostFloor = await lookupMerchantFloorPolicy(payload.merchantDid)
+
     negotiator = getOrCreateNegotiator(
-        sessionKey, payload.skuId, payload.quantity, debitReceipt.remainingBalancePaise
+        sessionKey,
+        payload.skuId,
+        payload.quantity,
+        debitReceipt.remainingBalancePaise,
+        sellerCostFloorPaise=sellerCostFloor,
     )
 
     try:
@@ -159,7 +223,9 @@ __all__ = [
     "compileContractIfConverged",
     "defaultAntiSpamShield",
     "getOrCreateNegotiator",
+    "getPolicyRedisClient",
     "getPowChallenge",
+    "lookupMerchantFloorPolicy",
     "negotiateRouter",
     "negotiateTurn",
     "verifyPoWAndDebitEscrow",

@@ -54,7 +54,7 @@ class NegotiateTurnRequest(BaseModel):
     buyerBidPaise: int = Field(gt=0)
     sellerAskPaise: int = Field(gt=0)
     buyerAgentDid: str = Field(min_length=1)
-    merchantDid: str = Field(min_length=1)
+    merchantDid: Optional[str] = Field(default=None)
 
 
 class NegotiateTurnResponse(BaseModel):

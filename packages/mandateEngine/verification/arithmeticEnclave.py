@@ -41,6 +41,9 @@ def computeLineItemTotal(unitPricePaise: int, quantity: int) -> int:
     return unitPrice * qty
 
 
+computeTotalPaise = computeLineItemTotal
+
+
 def computeGstBreakdown(
     taxableSubtotalPaise: int,
     gstRatePercent: int,

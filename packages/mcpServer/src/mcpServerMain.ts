@@ -33,7 +33,8 @@ export const mcpToolsManifest = [
         sku_id: { type: "string", pattern: "^SKU-[A-Z0-9_-]{3,32}$" },
         quantity: { type: "integer", minimum: 1, maximum: 10000 },
         buyer_agent_id: { type: "string", pattern: "^did:agent:[a-z0-9_\\-\\.:]+$" },
-        delivery_pincode: { type: "string", pattern: "^[1-9][0-9]{5}$" }
+        delivery_pincode: { type: "string", pattern: "^[1-9][0-9]{5}$" },
+        promo_code: { type: "string" }
       }
     }
   },
@@ -161,6 +162,28 @@ export async function handleJsonRpcMessage(
   };
 }
 
+export function initializeCatalogSubscriber(redisUrl?: string): void {
+  const targetUrl = redisUrl ?? process.env.REDIS_URL;
+  if (!targetUrl) {
+    return;
+  }
+  import("ioredis")
+    .then((ioredisModule) => {
+      const RedisClass = ioredisModule.Redis ?? ioredisModule.default;
+      const subscriber = new RedisClass(targetUrl, {
+        retryStrategy: () => null,
+        enableOfflineQueue: false
+      });
+      subscriber.on("error", () => {
+        // Fallback to static fixtures when Redis is offline
+      });
+      defaultCatalogStore.subscribeToCatalogChannel(subscriber);
+    })
+    .catch(() => {
+      // Redis offline -> static fixtures fallback
+    });
+}
+
 export function startMcpServer(): void {
   const lineReader = readline.createInterface({
     input: process.stdin,
@@ -184,6 +207,7 @@ export function startMcpServer(): void {
   });
 }
 
-if (process.argv[1] && process.argv[1].endsWith("mcpServerMain.ts")) {
+if (process.argv[1] && (process.argv[1].endsWith("mcpServerMain.ts") || process.argv[1].endsWith("mcpServerMain.js"))) {
+  initializeCatalogSubscriber();
   startMcpServer();
 }

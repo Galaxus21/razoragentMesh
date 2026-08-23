@@ -55,9 +55,9 @@ describe("SkuQuoter (Tool 1: get_live_sku_quote)", () => {
     assert.equal(quote.tax_breakdown.total_tax_paise, 75600);
   });
 
-  it("should apply volume discount when quantity threshold is exceeded", () => {
-    // 10 units of SKU-CHAIR-001 -> 500 bps discount (5%)
-    // Base unit price: 420000 -> Offered unit price: 399000
+  it("should apply auto discount stacking when quantity threshold is exceeded", () => {
+    // 10 units of SKU-CHAIR-001 -> 500 bps discount (5%) + Festive 10% (capped 2000) + UPI 150
+    // Base unit price: 420000 -> Offered unit price: 396850
     const quote = executeSkuQuote({
       sku_id: "SKU-CHAIR-001",
       quantity: 10,
@@ -66,6 +66,29 @@ describe("SkuQuoter (Tool 1: get_live_sku_quote)", () => {
     });
 
     assert.equal(quote.base_unit_price_paise, 420000);
-    assert.equal(quote.offered_unit_price_paise, 399000);
+    assert.equal(quote.offered_unit_price_paise, 396850);
+    assert.ok(quote.applied_discounts && quote.applied_discounts.length === 3);
+    assert.equal(quote.total_savings_paise, 231500);
+  });
+
+  it("should stack promo code CORP_5PCT when promo_code is provided", () => {
+    const quote = executeSkuQuote({
+      sku_id: "SKU-CHAIR-001",
+      quantity: 1,
+      buyer_agent_id: "did:agent:enterprise-procure-01",
+      delivery_pincode: "560001",
+      promo_code: "CORP_5PCT"
+    });
+
+    // Qty 1 with promo code:
+    // Base: 420000
+    // Vol: 420000 (no vol tier for 1)
+    // Festive 10% cap 2000: 418000 (-2000)
+    // UPI 150: 417850 (-150)
+    // CORP_5PCT 500 bps: floor(417850 * 0.05) = 20892 -> 417850 - 20892 = 396958
+    assert.equal(quote.base_unit_price_paise, 420000);
+    assert.equal(quote.offered_unit_price_paise, 396958);
+    assert.ok(quote.applied_discounts && quote.applied_discounts.length === 3);
+    assert.equal(quote.total_savings_paise, 23042);
   });
 });

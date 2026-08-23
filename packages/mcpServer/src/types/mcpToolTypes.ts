@@ -12,6 +12,24 @@ export interface TaxBreakdown {
   readonly totalTaxPaise: number;
 }
 
+export interface AppliedDiscountItem {
+  readonly type: "VOLUME_TIER" | "CAMPAIGN" | "PAYMENT_RAIL" | "PROMO_CODE";
+  readonly label: string;
+  readonly discountBps?: number;
+  readonly discountPaise?: number;
+}
+
+export interface DiscountStackResult {
+  readonly offeredUnitPricePaise: number;
+  readonly appliedDiscounts: readonly AppliedDiscountItem[];
+  readonly totalSavingsPaise: number;
+}
+
+export interface RedisChannelSubscriber {
+  subscribe(...channels: (string | Buffer)[]): unknown;
+  on(event: string, listener: (...args: any[]) => void): unknown;
+}
+
 export interface CatalogSkuItem {
   readonly skuId: string;
   readonly name: string;

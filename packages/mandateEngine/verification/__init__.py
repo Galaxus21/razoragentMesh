@@ -5,6 +5,7 @@ from .arithmeticEnclave import (
     computeGstBreakdown,
     computeLineItemTotal,
     computeTcsWithholding,
+    computeTotalPaise,
     validateIntegerPaise,
 )
 from .budgetGate import validateBudgetGate
@@ -21,9 +22,11 @@ __all__ = [
     "computeLineItemTotal",
     "computeMandateHash",
     "computeTcsWithholding",
+    "computeTotalPaise",
     "signatureKeys",
     "validateBudgetGate",
     "validateIntegerPaise",
     "verifyMandateChain",
     "verifyMandateHashChain",
 ]
+
