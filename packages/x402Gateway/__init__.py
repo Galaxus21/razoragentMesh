@@ -1,15 +1,10 @@
 """Layer 2: x402Gateway Package - Sybil-Resistant Dynamic Negotiation Protocol."""
 
-from razoragentMesh.packages.x402Gateway.astContractCompiler import (
+from .src.compiler import (
     CommercialContractAst,
     compileCommercialContractAst,
 )
-from razoragentMesh.packages.x402Gateway.bidStateMachine import (
-    NegotiationStatus,
-    NegotiationStepResult,
-    RubinsteinStahlNegotiator,
-)
-from razoragentMesh.packages.x402Gateway.gatewayConstants import (
+from .src.constants import (
     currencyInr,
     defaultGstRatePercent,
     initialEscrowPoolPaise,
@@ -18,7 +13,14 @@ from razoragentMesh.packages.x402Gateway.gatewayConstants import (
     minConcessionPaise,
     protocolName,
 )
-from razoragentMesh.packages.x402Gateway.gatewayExceptions import (
+from .src.escrow import (
+    DebitReceipt,
+    EscrowRefundReceipt,
+    EscrowSession,
+    MicroEscrowClient,
+)
+from .src.gatewayApp import app
+from .src.gatewayExceptions import (
     AstCompilationException,
     EscrowSessionNotFoundException,
     GatewayBaseException,
@@ -30,20 +32,17 @@ from razoragentMesh.packages.x402Gateway.gatewayExceptions import (
     PowChallengeExpiredException,
     PowReplayDetectedException,
 )
-from razoragentMesh.packages.x402Gateway.microEscrowClient import (
-    DebitReceipt,
-    EscrowRefundReceipt,
-    EscrowSession,
-    MicroEscrowClient,
-)
-from razoragentMesh.packages.x402Gateway.proofOfWorkMiddleware import (
+from .src.middleware import (
     Http402ChallengeResponse,
     IngressAntiSpamShield,
     PowVerificationResult,
+    X402ChallengeMiddleware,
     solvePoWChallenge,
 )
-from razoragentMesh.packages.x402Gateway.x402ChallengeMiddleware import (
-    X402ChallengeMiddleware,
+from .src.negotiation import (
+    NegotiationStatus,
+    NegotiationStepResult,
+    RubinsteinStahlNegotiator,
 )
 
 __all__ = [
@@ -69,6 +68,7 @@ __all__ = [
     "PowVerificationResult",
     "RubinsteinStahlNegotiator",
     "X402ChallengeMiddleware",
+    "app",
     "compileCommercialContractAst",
     "currencyInr",
     "defaultGstRatePercent",

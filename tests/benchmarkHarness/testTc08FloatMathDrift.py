@@ -1,15 +1,15 @@
 from typing import Any
 import pytest
 
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,
     computeTcsWithholding,
     validateIntegerPaise,
 )
-from razoragentMesh.packages.mandateEngine.jcsCanonicalizer import canonicalizeJson
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.crypto.jcsCanonicalizer import canonicalizeJson
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     ArithmeticDriftException,
 )
 

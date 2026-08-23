@@ -8,7 +8,7 @@ import {
   toolGetLiveSkuQuote,
   toolReserveInventoryLock,
   toolVerifyShippingSla
-} from "../src/mcpConstants.js";
+} from "../src/constants/protocolConstants.js";
 
 describe("McpServerMain JSON-RPC Dispatcher", () => {
   it("should respond to initialize method with server info and tools capability", async () => {

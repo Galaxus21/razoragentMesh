@@ -1,27 +1,27 @@
 """Unit tests for AP2 Budget Gate and invariant verification."""
 
 import pytest
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,
 )
-from razoragentMesh.packages.mandateEngine.budgetGate import validateBudgetGate
-from razoragentMesh.packages.mandateEngine.cartMandateSchema import (
+from razoragentMesh.packages.mandateEngine.verification.budgetGate import validateBudgetGate
+from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import (
     CartItemSchema,
     CartMandate,
     TaxBreakdownSchema,
 )
-from razoragentMesh.packages.mandateEngine.cryptoKeyUtils import generateKeyPair
-from razoragentMesh.packages.mandateEngine.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.executionMandateSchema import ExecutionMandate
-from razoragentMesh.packages.mandateEngine.intentMandateSchema import IntentMandate
-from razoragentMesh.packages.mandateEngine.mandateFactory import (
+from razoragentMesh.packages.mandateEngine.crypto.cryptoKeyUtils import generateKeyPair
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
+from razoragentMesh.packages.mandateEngine.mandates.executionMandateSchema import ExecutionMandate
+from razoragentMesh.packages.mandateEngine.mandates.intentMandateSchema import IntentMandate
+from razoragentMesh.packages.mandateEngine.mandates.mandateFactory import (
     createSignedCartMandate,
     createSignedExecutionMandate,
     createSignedIntentMandate,
 )
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     ArithmeticEnclaveMismatchException,
     BudgetExceededViolation,
     CategoryNotAuthorizedException,

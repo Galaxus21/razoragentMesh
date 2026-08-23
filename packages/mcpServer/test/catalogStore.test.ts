@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { defaultCatalogStore, CatalogStore } from "../src/catalogStore.js";
-import { SkuNotFoundException } from "../src/mcpTypes.js";
+import { defaultCatalogStore, CatalogStore } from "../src/catalog/catalogStore.js";
+import { SkuNotFoundException } from "../src/types/mcpToolTypes.js";
 
 describe("CatalogStore", () => {
   it("should initialize with at least 20 pre-seeded SKUs", () => {

@@ -15,51 +15,51 @@ import time
 from typing import Any, Dict, List
 import pytest
 
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,
     computeTcsWithholding,
     validateIntegerPaise,
 )
-from razoragentMesh.packages.mandateEngine.budgetGate import validateBudgetGate
-from razoragentMesh.packages.mandateEngine.cartMandateSchema import (
+from razoragentMesh.packages.mandateEngine.verification.budgetGate import validateBudgetGate
+from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import (
     CartItemSchema,
     CartMandate,
     TaxBreakdownSchema,
 )
-from razoragentMesh.packages.mandateEngine.cryptoKeyUtils import (
+from razoragentMesh.packages.mandateEngine.crypto.cryptoKeyUtils import (
     extractPublicKeyFromDid,
     formatDid,
     generateKeyPair,
 )
-from razoragentMesh.packages.mandateEngine.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.ed25519Verifier import Ed25519Verifier
-from razoragentMesh.packages.mandateEngine.executionMandateSchema import ExecutionMandate
-from razoragentMesh.packages.mandateEngine.gstrInvoiceEngine import (
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Verifier import Ed25519Verifier
+from razoragentMesh.packages.mandateEngine.mandates.executionMandateSchema import ExecutionMandate
+from razoragentMesh.packages.mandateEngine.tax.gstrInvoiceEngine import (
     generateGstrInvoice,
     isPlaceOfSupplyIntraState,
 )
-from razoragentMesh.packages.mandateEngine.intentMandateSchema import IntentMandate
-from razoragentMesh.packages.mandateEngine.jcsCanonicalizer import (
+from razoragentMesh.packages.mandateEngine.mandates.intentMandateSchema import IntentMandate
+from razoragentMesh.packages.mandateEngine.crypto.jcsCanonicalizer import (
     canonicalizeAndHash,
     canonicalizeJson,
     computeSha256Digest,
 )
-from razoragentMesh.packages.mandateEngine.mandateFactory import (
+from razoragentMesh.packages.mandateEngine.mandates.mandateFactory import (
     computeMandateHash,
     createSignedCartMandate,
     createSignedExecutionMandate,
     createSignedIntentMandate,
     verifyMandateHashChain,
 )
-from razoragentMesh.packages.mandateEngine.nonceGenerator import generateNonce
-from razoragentMesh.packages.mandateEngine.nonceLedger import NonceLedger
-from razoragentMesh.packages.mandateEngine.razorpayRouteClient import (
+from razoragentMesh.packages.mandateEngine.crypto.nonceGenerator import generateNonce
+from razoragentMesh.packages.mandateEngine.nonce.nonceLedger import NonceLedger
+from razoragentMesh.packages.mandateEngine.settlement.razorpayRouteClient import (
     RazorpayRouteClient,
     RouteTransferRequest,
 )
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     ArithmeticDriftException,
     ArithmeticEnclaveMismatchException,
     BudgetExceededViolation,
@@ -73,7 +73,7 @@ from razoragentMesh.packages.mandateEngine.settlementExceptions import (
     SettlementCompensationTriggeredException,
     TimestampExpiredException,
 )
-from razoragentMesh.packages.mandateEngine.settlementOrchestrator import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementOrchestrator import (
     SettlementOrchestrator,
 )
 

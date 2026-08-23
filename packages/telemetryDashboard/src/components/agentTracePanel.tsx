@@ -2,21 +2,14 @@
 
 import React, { useState } from "react";
 import { ChevronDown, ChevronRight, Clock, Code2, Search, Terminal } from "lucide-react";
-import { TelemetryEvent } from "@/types/telemetryEventTypes";
+import { traceEventTypes } from "@/constants/dashboardConstants";
 import { formatLatency } from "@/lib/currencyUtils";
 import { formatPrettyJson, formatTimestampToTime, getEventStyle } from "@/lib/eventFormatter";
+import { TelemetryEvent } from "@/types/telemetryEventTypes";
 
 export interface AgentTracePanelProps {
   readonly events: ReadonlyArray<TelemetryEvent>;
 }
-
-const traceEventTypes = new Set([
-  "MCP_TOOL_CALL",
-  "MCP_TOOL_RESULT",
-  "INVENTORY_LOCKED",
-  "POW_CHALLENGE_SOLVED",
-  "BUDGET_BLOCKED",
-]);
 
 export function AgentTracePanel({ events }: AgentTracePanelProps): React.JSX.Element {
   const [expandedCallId, setExpandedCallId] = useState<string | null>(null);

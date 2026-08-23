@@ -2,46 +2,13 @@
 
 import React, { useState } from "react";
 import { CheckCircle2, Copy, FileCode, KeyRound, Link2, ShieldCheck, X } from "lucide-react";
-import { MandateKind, MandateSignedPayload, TelemetryEvent } from "@/types/telemetryEventTypes";
+import { copyFeedbackTimeoutMs, defaultMandateChainNodes } from "@/constants/dashboardConstants";
 import { truncateHash } from "@/lib/eventFormatter";
+import { MandateSignedPayload, TelemetryEvent } from "@/types/telemetryEventTypes";
 
 export interface MandateExplorerProps {
   readonly events: ReadonlyArray<TelemetryEvent>;
 }
-
-interface MandateChainNodeConfig {
-  readonly kind: MandateKind;
-  readonly title: string;
-  readonly signerRole: string;
-  readonly description: string;
-}
-
-const mandateNodes: ReadonlyArray<MandateChainNodeConfig> = [
-  {
-    kind: "INTENT",
-    title: "IntentMandate (MI)",
-    signerRole: "User CFO Key (Ed25519)",
-    description: "Delegated budget & category authorization envelope",
-  },
-  {
-    kind: "CART",
-    title: "CartMandate (MC)",
-    signerRole: "Merchant Key (Ed25519)",
-    description: "Itemized pricing, HSN tax breakdown & lock token",
-  },
-  {
-    kind: "EXECUTION",
-    title: "ExecutionMandate (ME)",
-    signerRole: "Buyer Agent Key (Ed25519)",
-    description: "Hash-chain binding H(MI) || H(MC) & replay nonce",
-  },
-  {
-    kind: "AMENDMENT",
-    title: "AmendmentMandate (MA)",
-    signerRole: "Merchant + Agent Re-sign",
-    description: "Patched cart substitution with preserved budget cap",
-  },
-];
 
 export function MandateExplorer({ events }: MandateExplorerProps): React.JSX.Element {
   const [selectedJcs, setSelectedJcs] = useState<{ title: string; jcs: string } | null>(null);
@@ -54,7 +21,7 @@ export function MandateExplorer({ events }: MandateExplorerProps): React.JSX.Ele
   const handleCopy = (hash: string) => {
     navigator.clipboard.writeText(hash);
     setCopiedHash(hash);
-    setTimeout(() => setCopiedHash(null), 2000);
+    setTimeout(() => setCopiedHash(null), copyFeedbackTimeoutMs);
   };
 
   return (
@@ -70,7 +37,7 @@ export function MandateExplorer({ events }: MandateExplorerProps): React.JSX.Ele
       </div>
 
       <div className="mt-3 flex-1 space-y-2.5 overflow-y-auto pr-1 max-h-[380px] custom-scrollbar">
-        {mandateNodes.map((node, index) => {
+        {defaultMandateChainNodes.map((node, index) => {
           const match = signedMandates.find((m) => m.payload.mandateType === node.kind);
           const sampleHash =
             match?.payload.mandateHash ??

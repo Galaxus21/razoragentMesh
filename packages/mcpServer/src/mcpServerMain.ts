@@ -9,29 +9,17 @@ import {
   methodNotFoundErrorCode,
   invalidParamsErrorCode,
   internalErrorCode
-} from "./mcpConstants.js";
-import { executeSkuQuote } from "./skuQuoter.js";
-import { reserveInventoryLock } from "./inventoryLocker.js";
-import { verifyShippingSla } from "./slaVerifier.js";
-import { defaultCatalogStore } from "./catalogStore.js";
+} from "./constants/protocolConstants.js";
+import type {
+  JsonRpcRequest,
+  JsonRpcResponse
+} from "./types/mcpToolTypes.js";
+import { executeSkuQuote } from "./tools/skuQuoter.js";
+import { reserveInventoryLock } from "./tools/inventoryLocker.js";
+import { verifyShippingSla } from "./tools/slaVerifier.js";
+import { defaultCatalogStore } from "./catalog/catalogStore.js";
 
-export interface JsonRpcRequest {
-  readonly jsonrpc: string;
-  readonly id?: string | number | null;
-  readonly method: string;
-  readonly params?: Record<string, unknown>;
-}
-
-export interface JsonRpcResponse {
-  readonly jsonrpc: string;
-  readonly id: string | number | null;
-  readonly result?: unknown;
-  readonly error?: {
-    readonly code: number;
-    readonly message: string;
-    readonly data?: unknown;
-  };
-}
+export type { JsonRpcRequest, JsonRpcResponse };
 
 export const mcpToolsManifest = [
   {

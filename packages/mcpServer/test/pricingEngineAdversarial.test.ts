@@ -6,8 +6,8 @@ import {
   calculateGstBreakdown,
   calculateVolumePricing,
   findMatchingVolumeTier
-} from "../src/pricingEngine.js";
-import { ArithmeticDriftException, VolumeTier } from "../src/mcpTypes.js";
+} from "../src/catalog/pricingEngine.js";
+import { ArithmeticDriftException, VolumeTier } from "../src/types/mcpToolTypes.js";
 
 describe("PricingEngine Adversarial Stress Suite", () => {
   it("should strictly reject any floating-point or non-integer input", () => {

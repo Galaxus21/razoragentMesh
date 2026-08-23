@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { verifyShippingSla } from "../src/slaVerifier.js";
+import { verifyShippingSla } from "../src/tools/slaVerifier.js";
 
 describe("SlaVerifier (Tool 3: verify_shipping_sla)", () => {
   it("should calculate Zone A intra-city standard SLA and cost", () => {

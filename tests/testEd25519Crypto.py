@@ -1,14 +1,14 @@
 """Unit tests for PyNaCl Ed25519 asymmetric cryptography."""
 
 import pytest
-from razoragentMesh.packages.mandateEngine.cryptoKeyUtils import (
+from razoragentMesh.packages.mandateEngine.crypto.cryptoKeyUtils import (
     extractPublicKeyFromDid,
     formatDid,
     generateKeyPair,
 )
-from razoragentMesh.packages.mandateEngine.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.ed25519Verifier import Ed25519Verifier
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Verifier import Ed25519Verifier
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     SignatureVerificationFailedException,
 )
 

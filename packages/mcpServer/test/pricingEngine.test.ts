@@ -4,8 +4,8 @@ import {
   calculateVolumePricing,
   calculateGstBreakdown,
   assertIntegerPaise
-} from "../src/pricingEngine.js";
-import { ArithmeticDriftException } from "../src/mcpTypes.js";
+} from "../src/catalog/pricingEngine.js";
+import { ArithmeticDriftException } from "../src/types/mcpToolTypes.js";
 
 describe("PricingEngine", () => {
   it("should calculate volume pricing with no tiers as full price", () => {

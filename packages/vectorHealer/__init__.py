@@ -1,16 +1,10 @@
 """Layer 3: vectorHealer Package - Sub-300ms Vector Similarity Cart Self-Healing."""
 
-from razoragentMesh.packages.vectorHealer.constraintFilter import (
-    ConstraintEvaluationResult,
-    NegativeConstraintFilter,
-    NegativeConstraintManifest,
-)
-from razoragentMesh.packages.vectorHealer.embeddingProvider import (
-    EmbeddingProvider,
-)
-from razoragentMesh.packages.vectorHealer.healerConstants import (
+from .src.constants import (
     defaultGstRatePercent,
+    defaultMaxSearchCandidates,
     defaultVectorDimension,
+    lockExpiryTtlSeconds,
     maxPriceDeltaPercent,
     minCosineSimilarity,
     modelNameMiniLm,
@@ -18,7 +12,12 @@ from razoragentMesh.packages.vectorHealer.healerConstants import (
     reasonInsufficientStock,
     targetSlaMs,
 )
-from razoragentMesh.packages.vectorHealer.healerExceptions import (
+from .src.constraints import (
+    ConstraintEvaluationResult,
+    NegativeConstraintFilter,
+    NegativeConstraintManifest,
+)
+from .src.healerExceptions import (
     AllergenConstraintViolation,
     BrandExclusionViolation,
     ConstraintViolationException,
@@ -30,14 +29,16 @@ from razoragentMesh.packages.vectorHealer.healerExceptions import (
     SlaExceededViolation,
     WeightLimitExceededViolation,
 )
-from razoragentMesh.packages.vectorHealer.mandatePatcher import (
-    MandatePatcher,
-)
-from razoragentMesh.packages.vectorHealer.oosInterceptor import (
+from .src.interception import (
     OosInterceptor,
     SelfHealingCartEngine,
 )
-from razoragentMesh.packages.vectorHealer.vectorSearcher import (
+from .src.patching import (
+    MandatePatcher,
+    generateCartDiff,
+)
+from .src.search import (
+    EmbeddingProvider,
     ScoredPointCandidate,
     VectorSearcher,
 )
@@ -63,7 +64,10 @@ __all__ = [
     "VectorSearcher",
     "WeightLimitExceededViolation",
     "defaultGstRatePercent",
+    "defaultMaxSearchCandidates",
     "defaultVectorDimension",
+    "generateCartDiff",
+    "lockExpiryTtlSeconds",
     "maxPriceDeltaPercent",
     "minCosineSimilarity",
     "modelNameMiniLm",

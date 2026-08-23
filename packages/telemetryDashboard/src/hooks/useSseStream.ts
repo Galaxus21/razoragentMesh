@@ -2,17 +2,18 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
+  defaultSseUrl,
+  maxEventBufferSize,
+  maxReconnectAttempts,
+  reconnectBackoffFactor,
+  reconnectBaseDelayMs,
+  reconnectMaxDelayMs,
+} from "@/constants/dashboardConstants";
+import {
   SseConnectionState,
   TelemetryEvent,
   TelemetryEventType,
 } from "@/types/telemetryEventTypes";
-
-const maxEventBufferSize = 200;
-const reconnectBaseDelayMs = 1000;
-const reconnectMaxDelayMs = 10000;
-const reconnectBackoffFactor = 1.5;
-const maxReconnectAttempts = 10;
-const defaultSseUrl = "http://localhost:8000/api/v1/telemetry/stream";
 
 export interface UseSseStreamOptions {
   readonly endpointUrl?: string;

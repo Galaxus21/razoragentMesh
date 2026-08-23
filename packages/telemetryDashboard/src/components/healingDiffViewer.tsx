@@ -2,15 +2,23 @@
 
 import React, { useMemo } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, ShieldCheck, Sparkles, Timer } from "lucide-react";
-import { OosHealedPayload, TelemetryEvent } from "@/types/telemetryEventTypes";
+import {
+  defaultCosineSimilarity,
+  defaultHealingDurationMs,
+  defaultHealingSlaThresholdMs,
+  defaultOriginalPricePaise,
+  defaultOriginalSkuId,
+  defaultSubstitutePricePaise,
+  defaultSubstituteSkuId,
+  healingSimilarityThresholdPercentage,
+} from "@/constants/dashboardConstants";
 import { computePercentageDelta, formatLatency, formatPaiseToInr } from "@/lib/currencyUtils";
 import { truncateHash } from "@/lib/eventFormatter";
+import { OosHealedPayload, TelemetryEvent } from "@/types/telemetryEventTypes";
 
 export interface HealingDiffViewerProps {
   readonly events: ReadonlyArray<TelemetryEvent>;
 }
-
-const slaThresholdMs = 300;
 
 export function HealingDiffViewer({ events }: HealingDiffViewerProps): React.JSX.Element {
   const healingPayload = useMemo<OosHealedPayload | null>(() => {
@@ -22,11 +30,11 @@ export function HealingDiffViewer({ events }: HealingDiffViewerProps): React.JSX
     return null;
   }, [events]);
 
-  const originalPricePaise = healingPayload?.originalPricePaise ?? 420000;
-  const substitutePricePaise = healingPayload?.substitutePricePaise ?? 425000;
-  const cosineScore = healingPayload?.cosineSimilarity ?? 0.924;
-  const latencyMs = healingPayload?.healingDurationMs ?? 214;
-  const isSlaMet = latencyMs < slaThresholdMs;
+  const originalPricePaise = healingPayload?.originalPricePaise ?? defaultOriginalPricePaise;
+  const substitutePricePaise = healingPayload?.substitutePricePaise ?? defaultSubstitutePricePaise;
+  const cosineScore = healingPayload?.cosineSimilarity ?? defaultCosineSimilarity;
+  const latencyMs = healingPayload?.healingDurationMs ?? defaultHealingDurationMs;
+  const isSlaMet = latencyMs < defaultHealingSlaThresholdMs;
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-950/70 p-4 shadow-xl backdrop-blur-md">
@@ -58,7 +66,7 @@ export function HealingDiffViewer({ events }: HealingDiffViewerProps): React.JSX
         <div className="rounded-lg border border-rose-900/40 bg-rose-950/20 p-3">
           <div className="flex items-center justify-between text-xs">
             <span className="font-mono font-bold text-rose-400">
-              {healingPayload?.originalSkuId ?? "SKU-101"}
+              {healingPayload?.originalSkuId ?? defaultOriginalSkuId}
             </span>
             <span className="rounded bg-rose-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">
               OUT OF STOCK (0)
@@ -77,7 +85,7 @@ export function HealingDiffViewer({ events }: HealingDiffViewerProps): React.JSX
         <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3">
           <div className="flex items-center justify-between text-xs">
             <span className="font-mono font-bold text-emerald-400">
-              {healingPayload?.substituteSkuId ?? "SKU-104"}
+              {healingPayload?.substituteSkuId ?? defaultSubstituteSkuId}
             </span>
             <span className="rounded bg-emerald-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
               AVAILABLE (25)
@@ -102,7 +110,7 @@ export function HealingDiffViewer({ events }: HealingDiffViewerProps): React.JSX
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-400">Cosine Semantic Similarity:</span>
           <span className="font-mono font-bold text-cyan-300">
-            {(cosineScore * 100).toFixed(1)}% &ge; 85.0% threshold
+            {(cosineScore * 100).toFixed(1)}% &ge; {healingSimilarityThresholdPercentage.toFixed(1)}% threshold
           </span>
         </div>
         <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-950">

@@ -2,9 +2,20 @@
 
 import React, { useMemo } from "react";
 import { CheckCircle, Coins, GitCommit, Layers, TrendingDown } from "lucide-react";
-import { BidTurnCompletedPayload, NegotiationConvergedPayload, TelemetryEvent } from "@/types/telemetryEventTypes";
+import {
+  defaultFallbackAskPaise,
+  defaultFallbackBidPaise,
+  defaultTotalMicroFeesPaise,
+  defaultTurnNumberFallback,
+  negotiationTurnNumbers,
+} from "@/constants/dashboardConstants";
 import { formatPaiseToInr } from "@/lib/currencyUtils";
 import { truncateHash } from "@/lib/eventFormatter";
+import {
+  BidTurnCompletedPayload,
+  NegotiationConvergedPayload,
+  TelemetryEvent,
+} from "@/types/telemetryEventTypes";
 
 export interface NegotiationChartProps {
   readonly events: ReadonlyArray<TelemetryEvent>;
@@ -47,7 +58,7 @@ export function NegotiationChart({ events }: NegotiationChartProps): React.JSX.E
         </div>
         <div className="flex items-center gap-1.5 rounded-md border border-violet-500/30 bg-violet-950/50 px-2 py-0.5 text-xs text-violet-300">
           <Coins className="h-3 w-3 text-amber-400" />
-          <span>Micro-Fee: {formatPaiseToInr(totalMicroFeesPaise || 150)}</span>
+          <span>Micro-Fee: {formatPaiseToInr(totalMicroFeesPaise || defaultTotalMicroFeesPaise)}</span>
         </div>
       </div>
 
@@ -75,7 +86,7 @@ export function NegotiationChart({ events }: NegotiationChartProps): React.JSX.E
         <div className="text-center">
           <span className="text-[10px] text-cyan-400 font-semibold uppercase">Buyer Bid (Bt)</span>
           <p className="font-mono text-sm font-bold text-white">
-            {formatPaiseToInr(latestTurn?.buyerBidPaise ?? 335000)}
+            {formatPaiseToInr(latestTurn?.buyerBidPaise ?? defaultFallbackBidPaise)}
           </p>
         </div>
         <div className="flex flex-col items-center">
@@ -87,7 +98,7 @@ export function NegotiationChart({ events }: NegotiationChartProps): React.JSX.E
         <div className="text-center">
           <span className="text-[10px] text-violet-400 font-semibold uppercase">Seller Ask (St)</span>
           <p className="font-mono text-sm font-bold text-white">
-            {formatPaiseToInr(latestTurn?.sellerAskPaise ?? 335000)}
+            {formatPaiseToInr(latestTurn?.sellerAskPaise ?? defaultFallbackAskPaise)}
           </p>
         </div>
       </div>
@@ -98,10 +109,10 @@ export function NegotiationChart({ events }: NegotiationChartProps): React.JSX.E
           <span>Max N=5 Turns</span>
         </div>
         <div className="space-y-1.5 pt-1">
-          {[1, 2, 3, 4, 5].map((turnNum) => {
+          {negotiationTurnNumbers.map((turnNum) => {
             const turnData = turns.find((t) => t.turnNumber === turnNum);
             const isFinished = !!turnData;
-            const isTarget = isFinished || (turnNum <= (latestTurn?.turnNumber ?? 3));
+            const isTarget = isFinished || (turnNum <= (latestTurn?.turnNumber ?? defaultTurnNumberFallback));
 
             return (
               <div

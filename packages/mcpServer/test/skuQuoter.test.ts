@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { executeSkuQuote } from "../src/skuQuoter.js";
-import { verifyQuoteHash } from "../src/cryptoUtils.js";
-import { defaultMerchantSecretKey } from "../src/mcpConstants.js";
+import { executeSkuQuote } from "../src/tools/skuQuoter.js";
+import { verifyQuoteHash } from "../src/crypto/quoteHashSigner.js";
+import { defaultMerchantSecretKey } from "../src/constants/protocolConstants.js";
 
 describe("SkuQuoter (Tool 1: get_live_sku_quote)", () => {
   it("should generate a valid quote for intra-state buyer with 18% GST (CGST + SGST)", () => {

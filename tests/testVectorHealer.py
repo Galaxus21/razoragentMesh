@@ -4,40 +4,45 @@ import time
 from typing import Any, Dict, List
 import pytest
 
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
 )
-from razoragentMesh.packages.mandateEngine.cartMandateSchema import (
+from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import (
     CartItemSchema,
     TaxBreakdownSchema,
 )
-from razoragentMesh.packages.mandateEngine.cryptoKeyUtils import extractPublicKeyFromDid
-from razoragentMesh.packages.mandateEngine.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.ed25519Verifier import Ed25519Verifier
-from razoragentMesh.packages.mandateEngine.intentMandateSchema import IntentMandate
-from razoragentMesh.packages.mandateEngine.mandateFactory import (
+from razoragentMesh.packages.mandateEngine.crypto.cryptoKeyUtils import extractPublicKeyFromDid
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Verifier import Ed25519Verifier
+from razoragentMesh.packages.mandateEngine.mandates.intentMandateSchema import IntentMandate
+from razoragentMesh.packages.mandateEngine.mandates.mandateFactory import (
     createSignedCartMandate,
     createSignedIntentMandate,
 )
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     BudgetExceededViolation,
 )
-from razoragentMesh.packages.vectorHealer.constraintFilter import (
+from razoragentMesh.packages.vectorHealer.src.constraints import (
     NegativeConstraintFilter,
     NegativeConstraintManifest,
 )
-from razoragentMesh.packages.vectorHealer.embeddingProvider import EmbeddingProvider
-from razoragentMesh.packages.vectorHealer.healerExceptions import (
+from razoragentMesh.packages.vectorHealer.src.healerExceptions import (
     EmbeddingInferenceException,
     NoSubstituteFoundException,
 )
-from razoragentMesh.packages.vectorHealer.mandatePatcher import MandatePatcher
-from razoragentMesh.packages.vectorHealer.oosInterceptor import (
+from razoragentMesh.packages.vectorHealer.src.interception import (
     OosInterceptor,
     SelfHealingCartEngine,
 )
-from razoragentMesh.packages.vectorHealer.vectorSearcher import VectorSearcher
+from razoragentMesh.packages.vectorHealer.src.patching import (
+    MandatePatcher,
+    generateCartDiff,
+)
+from razoragentMesh.packages.vectorHealer.src.search import (
+    EmbeddingProvider,
+    VectorSearcher,
+)
 
 
 def testEmbeddingProviderNormalizationAndCosine() -> None:
@@ -282,3 +287,54 @@ def testOosInterceptorEndToEndHealing(
     }
     assert Ed25519Verifier.verifyPayloadSignature(agentPub, unsignedDict, amendment.agentSignature)
     assert Ed25519Verifier.verifyPayloadSignature(merchantPub, unsignedDict, amendment.merchantSignature)
+
+
+def testGenerateCartDiffCalculation(agentKeyFixtures: Dict[str, Any]) -> None:
+    """Verifies that generateCartDiff accurately computes price delta in paise."""
+    merchantSigner = Ed25519Signer(agentKeyFixtures["merchantNode"]["privateKeyHex"])
+    now = int(time.time())
+    item = CartItemSchema(
+        skuId="SKU-OLD-01",
+        quantity=1,
+        unitPricePaise=50000,
+        hsnCode="8471",
+        gstRatePercent=18,
+        lineTotalPaise=50000,
+    )
+    cart = createSignedCartMandate(
+        cartId="cart_diff_test",
+        merchantSigner=merchantSigner,
+        merchantGstin="29AABCU9603R1ZM",
+        merchantStateCode="29",
+        buyerDeliveryPincode="560001",
+        buyerDeliveryStateCode="29",
+        items=[item],
+        taxableSubtotalPaise=50000,
+        taxBreakdown=TaxBreakdownSchema(
+            cgstPaise=4500,
+            sgstPaise=4500,
+            igstPaise=0,
+            totalTaxPaise=9000,
+        ),
+        shippingPaise=0,
+        discountPaise=0,
+        totalPaise=59000,
+        inventoryLockToken="lock_diff_1",
+        inventoryLockExpiresAt=now + 60,
+        timestamp=now,
+    )
+
+    diffPaise = generateCartDiff(
+        originalCartMandate=cart,
+        failedSkuId="SKU-OLD-01",
+        substituteUnitPricePaise=55000,
+    )
+    assert diffPaise == 5000
+
+    diffNonExistent = generateCartDiff(
+        originalCartMandate=cart,
+        failedSkuId="SKU-UNKNOWN",
+        substituteUnitPricePaise=55000,
+    )
+    assert diffNonExistent == 55000
+

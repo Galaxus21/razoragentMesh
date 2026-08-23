@@ -1,10 +1,10 @@
 """Unit tests for Razorpay Webhook HMAC-SHA256 signature verification."""
 
 import pytest
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     WebhookSignatureVerificationException,
 )
-from razoragentMesh.packages.mandateEngine.webhookVerifier import (
+from razoragentMesh.packages.mandateEngine.settlement.webhookVerifier import (
     computeWebhookSignature,
     verifyRazorpayWebhookSignature,
 )

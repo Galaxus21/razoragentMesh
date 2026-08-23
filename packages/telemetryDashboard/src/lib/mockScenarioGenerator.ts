@@ -1,8 +1,9 @@
+import {
+  defaultBuyerAgentDid,
+  defaultMerchantDid,
+  defaultUserCfoDid,
+} from "@/constants/dashboardConstants";
 import { TelemetryEvent } from "@/types/telemetryEventTypes";
-
-const defaultBuyerAgentDid = "did:agent:procurement-bot-01";
-const defaultUserCfoDid = "did:agent:user-cfo-01";
-const defaultMerchantDid = "did:agent:merchant-nexus-01";
 
 export function createNominalSettlementEvents(sessionId: string): ReadonlyArray<TelemetryEvent> {
   const now = Date.now();

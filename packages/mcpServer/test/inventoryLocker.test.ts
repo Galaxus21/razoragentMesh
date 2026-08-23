@@ -1,9 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { reserveInventoryLock } from "../src/inventoryLocker.js";
-import { verifyLockSignature } from "../src/cryptoUtils.js";
-import { CatalogStore } from "../src/catalogStore.js";
-import { InsufficientStockException } from "../src/mcpTypes.js";
+import { reserveInventoryLock } from "../src/tools/inventoryLocker.js";
+import { verifyLockSignature } from "../src/crypto/lockSignatureGenerator.js";
+import { CatalogStore } from "../src/catalog/catalogStore.js";
+import { InsufficientStockException } from "../src/types/mcpToolTypes.js";
 
 describe("InventoryLocker (Tool 2: reserve_inventory_lock)", () => {
   it("should successfully reserve an inventory lock and return signed token", async () => {

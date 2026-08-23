@@ -1,9 +1,6 @@
 """Layer 4: Cryptographic Settlement Core (mandateEngine)."""
 
-from razoragentMesh.packages.mandateEngine.amendmentMandateSchema import (
-    AmendmentMandate,
-)
-from razoragentMesh.packages.mandateEngine.arithmeticConstants import (
+from .constants.settlementConstants import (
     basisPointsDivisor,
     maxValidGstRate,
     minValidGstRate,
@@ -16,68 +13,7 @@ from razoragentMesh.packages.mandateEngine.arithmeticConstants import (
     validGstRates,
     zeroPaise,
 )
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
-    computeCartSettlementTotal,
-    computeGstBreakdown,
-    computeLineItemTotal,
-    computeTcsWithholding,
-    validateIntegerPaise,
-)
-from razoragentMesh.packages.mandateEngine.budgetGate import validateBudgetGate
-from razoragentMesh.packages.mandateEngine.cartMandateSchema import (
-    CartItemSchema,
-    CartMandate,
-    TaxBreakdownSchema,
-)
-from razoragentMesh.packages.mandateEngine.cryptoKeyUtils import (
-    extractPublicKeyFromDid,
-    formatDid,
-    generateKeyPair,
-)
-from razoragentMesh.packages.mandateEngine.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.ed25519Verifier import Ed25519Verifier
-from razoragentMesh.packages.mandateEngine.executionMandateSchema import (
-    ExecutionMandate,
-)
-from razoragentMesh.packages.mandateEngine.gstrInvoiceEngine import (
-    GstrInvoicePayload,
-    GstrLineItem,
-    generateGstrInvoice,
-    isPlaceOfSupplyIntraState,
-)
-from razoragentMesh.packages.mandateEngine.intentMandateSchema import IntentMandate
-from razoragentMesh.packages.mandateEngine.jcsCanonicalizer import (
-    canonicalizeAndHash,
-    canonicalizeJson,
-    computeSha256Digest,
-)
-from razoragentMesh.packages.mandateEngine.mandateFactory import (
-    computeMandateHash,
-    createSignedAmendmentMandate,
-    createSignedCartMandate,
-    createSignedExecutionMandate,
-    createSignedIntentMandate,
-    verifyMandateHashChain,
-)
-from razoragentMesh.packages.mandateEngine.nonceGenerator import (
-    generateNonce,
-    generateTimestampedNonce,
-)
-from razoragentMesh.packages.mandateEngine.nonceLedger import (
-    NonceLedger,
-    maxNtpDriftToleranceSeconds,
-    minNtpDriftToleranceSeconds,
-    nonceRedisKeyPrefix,
-    nonceTtlSeconds,
-)
-from razoragentMesh.packages.mandateEngine.razorpayRouteClient import (
-    PaymentCaptureResponse,
-    RazorpayRouteClient,
-    RouteTransferRequest,
-    RouteTransferResponse,
-    TransferReversalResponse,
-)
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from .settlement.settlementExceptions import (
     ArithmeticDriftException,
     ArithmeticEnclaveMismatchException,
     BudgetExceededViolation,
@@ -95,23 +31,93 @@ from razoragentMesh.packages.mandateEngine.settlementExceptions import (
     TimestampExpiredException,
     WebhookSignatureVerificationException,
 )
-from razoragentMesh.packages.mandateEngine.settlementOrchestrator import (
-    SettlementOrchestrator,
-    SettlementResult,
-    SplitTransferManifest,
-)
-from razoragentMesh.packages.mandateEngine.stateCodeMapping import (
+from .tax.stateCodeMapping import (
     deriveStateCodeFromPincode,
     pinPrefixToStateCode,
 )
-from razoragentMesh.packages.mandateEngine.telemetryEmitter import (
+from .verification.arithmeticEnclave import (
+    computeCartSettlementTotal,
+    computeGstBreakdown,
+    computeLineItemTotal,
+    computeTcsWithholding,
+    validateIntegerPaise,
+)
+from .tax.gstrInvoiceEngine import (
+    GstrInvoicePayload,
+    GstrLineItem,
+    generateGstrInvoice,
+    isPlaceOfSupplyIntraState,
+)
+from .crypto.cryptoKeyUtils import (
+    extractPublicKeyFromDid,
+    formatDid,
+    generateKeyPair,
+)
+from .crypto.nonceGenerator import (
+    generateNonce,
+    generateTimestampedNonce,
+)
+from .crypto.jcsCanonicalizer import (
+    canonicalizeAndHash,
+    canonicalizeJson,
+    computeSha256Digest,
+)
+from .crypto.ed25519Verifier import Ed25519Verifier
+from .crypto.ed25519Signer import Ed25519Signer
+from .verification.budgetGate import validateBudgetGate
+from .verification.signatureChainVerifier import (
+    verifyMandateChain,
+)
+from .mandates.amendmentMandateSchema import AmendmentMandate
+from .mandates.cartMandateSchema import (
+    CartItemSchema,
+    CartMandate,
+    TaxBreakdownSchema,
+)
+from .mandates.executionMandateSchema import ExecutionMandate
+from .mandates.intentMandateSchema import IntentMandate
+from .mandates.mandateFactory import (
+    computeMandateHash,
+    createSignedAmendmentMandate,
+    createSignedCartMandate,
+    createSignedExecutionMandate,
+    createSignedIntentMandate,
+    verifyMandateHashChain,
+)
+from .nonce.nonceLedger import (
+    NonceLedger,
+    maxNtpDriftToleranceSeconds,
+    minNtpDriftToleranceSeconds,
+    nonceRedisKeyPrefix,
+    nonceTtlSeconds,
+)
+from .telemetryEmitter import (
     TelemetryEventEmitter,
     TelemetryEventModel,
     globalTelemetryEmitter,
 )
-from razoragentMesh.packages.mandateEngine.webhookVerifier import (
+from .settlement.razorpayRouteClient import (
+    PaymentCaptureResponse,
+    RazorpayRouteClient,
+    RouteTransferRequest,
+    RouteTransferResponse,
+    TransferReversalResponse,
+)
+from .settlement.splitManifestBuilder import (
+    SplitTransferManifest,
+    buildSplitManifest,
+    defaultLogisticsAccount,
+    defaultProtocolFeeAccount,
+    defaultProtocolFeePaise,
+)
+from .settlement.twoPhaseCommitSaga import TwoPhaseCommitSaga
+from .settlement.webhookVerifier import (
     computeWebhookSignature,
     verifyRazorpayWebhookSignature,
+)
+from .settlement.settlementOrchestrator import (
+    SettlementOrchestrator,
+    SettlementResult,
 )
 
 __all__ = [
@@ -151,8 +157,10 @@ __all__ = [
     "TelemetryEventModel",
     "TimestampExpiredException",
     "TransferReversalResponse",
+    "TwoPhaseCommitSaga",
     "WebhookSignatureVerificationException",
     "basisPointsDivisor",
+    "buildSplitManifest",
     "canonicalizeAndHash",
     "canonicalizeJson",
     "computeCartSettlementTotal",
@@ -166,6 +174,9 @@ __all__ = [
     "createSignedCartMandate",
     "createSignedExecutionMandate",
     "createSignedIntentMandate",
+    "defaultLogisticsAccount",
+    "defaultProtocolFeeAccount",
+    "defaultProtocolFeePaise",
     "deriveStateCodeFromPincode",
     "extractPublicKeyFromDid",
     "formatDid",
@@ -191,6 +202,7 @@ __all__ = [
     "validateBudgetGate",
     "validateIntegerPaise",
     "validGstRates",
+    "verifyMandateChain",
     "verifyMandateHashChain",
     "verifyRazorpayWebhookSignature",
     "zeroPaise",

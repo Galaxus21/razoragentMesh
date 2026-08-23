@@ -1,12 +1,12 @@
 """Unit tests for RFC 8785 JCS Canonicalization and SHA-256 Hasher."""
 
 import pytest
-from razoragentMesh.packages.mandateEngine.jcsCanonicalizer import (
+from razoragentMesh.packages.mandateEngine.crypto.jcsCanonicalizer import (
     canonicalizeAndHash,
     canonicalizeJson,
     computeSha256Digest,
 )
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     ArithmeticDriftException,
 )
 

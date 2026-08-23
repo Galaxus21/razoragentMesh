@@ -1,15 +1,15 @@
 """Unit tests for Layer 4 Deterministic Arithmetic Enclave."""
 
 import pytest
-from razoragentMesh.packages.mandateEngine.arithmeticConstants import paisePerRupee
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
+from razoragentMesh.packages.mandateEngine.constants.settlementConstants import paisePerRupee
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,
     computeTcsWithholding,
     validateIntegerPaise,
 )
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     ArithmeticDriftException,
 )
 

@@ -2,21 +2,21 @@ import time
 from typing import Any, Dict, List, Optional
 import pytest
 
-from razoragentMesh.packages.mandateEngine.amendmentMandateSchema import AmendmentMandate
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
+from razoragentMesh.packages.mandateEngine.mandates.amendmentMandateSchema import AmendmentMandate
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,
 )
-from razoragentMesh.packages.mandateEngine.cartMandateSchema import (
+from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import (
     CartItemSchema,
     CartMandate,
     TaxBreakdownSchema,
 )
-from razoragentMesh.packages.mandateEngine.cryptoKeyUtils import extractPublicKeyFromDid
-from razoragentMesh.packages.mandateEngine.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.ed25519Verifier import Ed25519Verifier
-from razoragentMesh.packages.mandateEngine.mandateFactory import (
+from razoragentMesh.packages.mandateEngine.crypto.cryptoKeyUtils import extractPublicKeyFromDid
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Verifier import Ed25519Verifier
+from razoragentMesh.packages.mandateEngine.mandates.mandateFactory import (
     createSignedAmendmentMandate,
     createSignedCartMandate,
 )

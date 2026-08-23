@@ -2,6 +2,10 @@
 
 import React from "react";
 import { Activity, Play, RefreshCw, Trash2, Wifi, Zap } from "lucide-react";
+import {
+  connectionStatusColors,
+  connectionStatusLabels,
+} from "@/constants/dashboardConstants";
 import { SseConnectionState } from "@/types/telemetryEventTypes";
 
 export interface DashboardHeaderProps {
@@ -12,20 +16,6 @@ export interface DashboardHeaderProps {
   readonly onClearEvents: () => void;
   readonly onSimulateFlow: () => void;
 }
-
-const connectionStatusLabels: Record<SseConnectionState, string> = {
-  CONNECTED: "LIVE MESH SSE",
-  CONNECTING: "CONNECTING...",
-  DISCONNECTED: "DISCONNECTED",
-  ERROR: "FALLBACK / OFFLINE",
-};
-
-const connectionStatusColors: Record<SseConnectionState, string> = {
-  CONNECTED: "bg-emerald-500 text-emerald-300 border-emerald-500/30",
-  CONNECTING: "bg-amber-500 text-amber-300 border-amber-500/30",
-  DISCONNECTED: "bg-slate-600 text-slate-300 border-slate-600/30",
-  ERROR: "bg-rose-500 text-rose-300 border-rose-500/30",
-};
 
 export function DashboardHeader({
   connectionState,

@@ -2,11 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeQuoteHash,
-  verifyQuoteHash,
+  verifyQuoteHash
+} from "../src/crypto/quoteHashSigner.js";
+import {
   signLockPayload,
   verifyLockSignature,
   generateEd25519KeyPair
-} from "../src/cryptoUtils.js";
+} from "../src/crypto/lockSignatureGenerator.js";
 
 describe("CryptoUtils", () => {
   const sampleQuote = {

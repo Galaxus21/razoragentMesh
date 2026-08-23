@@ -16,67 +16,67 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 # Imports from codebase
-from razoragentMesh.packages.mandateEngine.amendmentMandateSchema import AmendmentMandate
-from razoragentMesh.packages.mandateEngine.arithmeticConstants import (
+from razoragentMesh.packages.mandateEngine.mandates.amendmentMandateSchema import AmendmentMandate
+from razoragentMesh.packages.mandateEngine.constants.settlementConstants import (
     paisePerRupee,
     percentDivisor,
 )
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,
     validateIntegerPaise,
 )
-from razoragentMesh.packages.mandateEngine.cartMandateSchema import (
+from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import (
     CartItemSchema,
     CartMandate,
     TaxBreakdownSchema,
 )
-from razoragentMesh.packages.mandateEngine.cryptoKeyUtils import extractPublicKeyFromDid
-from razoragentMesh.packages.mandateEngine.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.ed25519Verifier import Ed25519Verifier
-from razoragentMesh.packages.mandateEngine.intentMandateSchema import IntentMandate
-from razoragentMesh.packages.mandateEngine.jcsCanonicalizer import (
+from razoragentMesh.packages.mandateEngine.crypto.cryptoKeyUtils import extractPublicKeyFromDid
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Verifier import Ed25519Verifier
+from razoragentMesh.packages.mandateEngine.mandates.intentMandateSchema import IntentMandate
+from razoragentMesh.packages.mandateEngine.crypto.jcsCanonicalizer import (
     canonicalizeJson,
     computeSha256Digest,
 )
-from razoragentMesh.packages.mandateEngine.mandateFactory import (
+from razoragentMesh.packages.mandateEngine.mandates.mandateFactory import (
     createSignedAmendmentMandate,
     createSignedCartMandate,
     createSignedIntentMandate,
 )
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     ArithmeticDriftException,
     BudgetExceededViolation,
 )
-from razoragentMesh.packages.vectorHealer.constraintFilter import (
-    NegativeConstraintFilter,
-    NegativeConstraintManifest,
-)
-from razoragentMesh.packages.vectorHealer.embeddingProvider import EmbeddingProvider
-from razoragentMesh.packages.vectorHealer.healerConstants import (
+from razoragentMesh.packages.vectorHealer.src.constants import (
     maxPriceDeltaPercent,
     minCosineSimilarity,
 )
-from razoragentMesh.packages.vectorHealer.healerExceptions import (
+from razoragentMesh.packages.vectorHealer.src.constraints import (
+    NegativeConstraintFilter,
+    NegativeConstraintManifest,
+)
+from razoragentMesh.packages.vectorHealer.src.healerExceptions import (
     NoSubstituteFoundException,
 )
-from razoragentMesh.packages.vectorHealer.mandatePatcher import MandatePatcher
-from razoragentMesh.packages.vectorHealer.oosInterceptor import OosInterceptor
-from razoragentMesh.packages.vectorHealer.vectorSearcher import (
+from razoragentMesh.packages.vectorHealer.src.interception import OosInterceptor
+from razoragentMesh.packages.vectorHealer.src.patching import MandatePatcher
+from razoragentMesh.packages.vectorHealer.src.search import (
+    EmbeddingProvider,
     ScoredPointCandidate,
     VectorSearcher,
 )
-from razoragentMesh.packages.x402Gateway.astContractCompiler import (
+from razoragentMesh.packages.x402Gateway.src.compiler.astContractCompiler import (
     CommercialContractAst,
     compileCommercialContractAst,
 )
-from razoragentMesh.packages.x402Gateway.bidStateMachine import (
+from razoragentMesh.packages.x402Gateway.src.negotiation.bidStateMachine import (
     NegotiationStatus,
     RubinsteinStahlNegotiator,
 )
-from razoragentMesh.packages.x402Gateway.gatewayApp import app
-from razoragentMesh.packages.x402Gateway.gatewayConstants import (
+from razoragentMesh.packages.x402Gateway.src.gatewayApp import app
+from razoragentMesh.packages.x402Gateway.src.constants.negotiationConstants import (
     headerEscrowToken,
     headerPowChallenge,
     headerPowSolution,
@@ -86,15 +86,15 @@ from razoragentMesh.packages.x402Gateway.gatewayConstants import (
     powLeadingZeros,
     requiredLeadingPrefix,
 )
-from razoragentMesh.packages.x402Gateway.gatewayExceptions import (
+from razoragentMesh.packages.x402Gateway.src.gatewayExceptions import (
     InvalidProofOfWorkException,
     NegotiationExhaustedException,
     NonMonotonicConcessionViolation,
     PowChallengeExpiredException,
     PowReplayDetectedException,
 )
-from razoragentMesh.packages.x402Gateway.microEscrowClient import MicroEscrowClient
-from razoragentMesh.packages.x402Gateway.proofOfWorkMiddleware import (
+from razoragentMesh.packages.x402Gateway.src.escrow.microEscrowClient import MicroEscrowClient
+from razoragentMesh.packages.x402Gateway.src.middleware.proofOfWorkMiddleware import (
     IngressAntiSpamShield,
     solvePoWChallenge,
 )

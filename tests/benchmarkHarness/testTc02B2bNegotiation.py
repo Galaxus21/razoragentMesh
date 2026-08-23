@@ -4,13 +4,13 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 import pytest
 
-from razoragentMesh.packages.mandateEngine.arithmeticEnclave import (
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,
     validateIntegerPaise,
 )
-from razoragentMesh.packages.mandateEngine.jcsCanonicalizer import (
+from razoragentMesh.packages.mandateEngine.crypto.jcsCanonicalizer import (
     canonicalizeJson,
     computeSha256Digest,
 )

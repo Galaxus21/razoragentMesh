@@ -1,17 +1,17 @@
 """Unit tests for Mandate schemas, factory builders, and cryptographic hash chaining."""
 
 import pytest
-from razoragentMesh.packages.mandateEngine.amendmentMandateSchema import AmendmentMandate
-from razoragentMesh.packages.mandateEngine.cartMandateSchema import (
+from razoragentMesh.packages.mandateEngine.mandates.amendmentMandateSchema import AmendmentMandate
+from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import (
     CartItemSchema,
     CartMandate,
     TaxBreakdownSchema,
 )
-from razoragentMesh.packages.mandateEngine.cryptoKeyUtils import generateKeyPair
-from razoragentMesh.packages.mandateEngine.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.executionMandateSchema import ExecutionMandate
-from razoragentMesh.packages.mandateEngine.intentMandateSchema import IntentMandate
-from razoragentMesh.packages.mandateEngine.mandateFactory import (
+from razoragentMesh.packages.mandateEngine.crypto.cryptoKeyUtils import generateKeyPair
+from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
+from razoragentMesh.packages.mandateEngine.mandates.executionMandateSchema import ExecutionMandate
+from razoragentMesh.packages.mandateEngine.mandates.intentMandateSchema import IntentMandate
+from razoragentMesh.packages.mandateEngine.mandates.mandateFactory import (
     computeMandateHash,
     createSignedAmendmentMandate,
     createSignedCartMandate,
@@ -19,7 +19,7 @@ from razoragentMesh.packages.mandateEngine.mandateFactory import (
     createSignedIntentMandate,
     verifyMandateHashChain,
 )
-from razoragentMesh.packages.mandateEngine.settlementExceptions import (
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
     MandateHashChainMismatchException,
 )
 

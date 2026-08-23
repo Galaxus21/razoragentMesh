@@ -2,9 +2,19 @@
 
 import React, { useMemo } from "react";
 import { AlertTriangle, CheckCircle, FileSpreadsheet, Radio, Split, Undo2 } from "lucide-react";
-import { PaymentCapturedPayload, RouteRollbackTriggeredPayload, TelemetryEvent } from "@/types/telemetryEventTypes";
+import {
+  defaultGstrInvoiceHash,
+  defaultPaymentId,
+  defaultSettledAmountPaise,
+  defaultTransfers,
+} from "@/constants/dashboardConstants";
 import { formatPaiseToInr } from "@/lib/currencyUtils";
 import { truncateHash } from "@/lib/eventFormatter";
+import {
+  PaymentCapturedPayload,
+  RouteRollbackTriggeredPayload,
+  TelemetryEvent,
+} from "@/types/telemetryEventTypes";
 
 export interface WebhookFeedProps {
   readonly events: ReadonlyArray<TelemetryEvent>;
@@ -26,26 +36,7 @@ export function WebhookFeed({ events }: WebhookFeedProps): React.JSX.Element {
     return { paymentPayload: payment, rollbackPayload: rollback };
   }, [events]);
 
-  const transfers = paymentPayload?.transfers ?? [
-    {
-      transferId: "trf_merchant_001",
-      recipientAccountId: "acc_merchant_nexus_01",
-      amountPaise: 380000,
-      feePaise: 0,
-    },
-    {
-      transferId: "trf_platform_002",
-      recipientAccountId: "acc_razoragent_protocol",
-      amountPaise: 2000,
-      feePaise: 0,
-    },
-    {
-      transferId: "trf_logistics_003",
-      recipientAccountId: "acc_delhivery_direct",
-      amountPaise: 38000,
-      feePaise: 0,
-    },
-  ];
+  const transfers = paymentPayload?.transfers ?? defaultTransfers;
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-950/70 p-4 shadow-xl backdrop-blur-md">
@@ -81,7 +72,7 @@ export function WebhookFeed({ events }: WebhookFeedProps): React.JSX.Element {
           <span className="font-mono text-slate-400">
             Payment ID:{" "}
             <span className="font-bold text-white">
-              {paymentPayload?.paymentId ?? "pay_A2A_Live_982341"}
+              {paymentPayload?.paymentId ?? defaultPaymentId}
             </span>
           </span>
           <span className="flex items-center gap-1 rounded bg-emerald-950 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
@@ -91,7 +82,7 @@ export function WebhookFeed({ events }: WebhookFeedProps): React.JSX.Element {
         <div className="mt-2 flex items-center justify-between font-mono text-xs">
           <span className="text-slate-400">Settled Amount:</span>
           <span className="text-sm font-bold text-emerald-400">
-            {formatPaiseToInr(paymentPayload?.amountPaise ?? 420000)}
+            {formatPaiseToInr(paymentPayload?.amountPaise ?? defaultSettledAmountPaise)}
           </span>
         </div>
       </div>
@@ -127,10 +118,7 @@ export function WebhookFeed({ events }: WebhookFeedProps): React.JSX.Element {
             <span>GSTR-1 Invoicing Hash:</span>
           </div>
           <span className="text-cyan-300">
-            {truncateHash(
-              paymentPayload?.gstrInvoiceHash ??
-                "0xfa9812bc67de45fe9812bc67de45fe9812bc67de45fe"
-            )}
+            {truncateHash(paymentPayload?.gstrInvoiceHash ?? defaultGstrInvoiceHash)}
           </span>
         </div>
       </div>

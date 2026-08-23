@@ -4,16 +4,16 @@ import time
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from razoragentMesh.packages.x402Gateway.astContractCompiler import (
+from razoragentMesh.packages.x402Gateway.src.compiler.astContractCompiler import (
     CommercialContractAst,
     compileCommercialContractAst,
 )
-from razoragentMesh.packages.x402Gateway.bidStateMachine import (
+from razoragentMesh.packages.x402Gateway.src.negotiation.bidStateMachine import (
     NegotiationStatus,
     RubinsteinStahlNegotiator,
 )
-from razoragentMesh.packages.x402Gateway.gatewayApp import app
-from razoragentMesh.packages.x402Gateway.gatewayConstants import (
+from razoragentMesh.packages.x402Gateway.src.gatewayApp import app
+from razoragentMesh.packages.x402Gateway.src.constants.negotiationConstants import (
     headerEscrowToken,
     headerPowChallenge,
     headerPowSolution,
@@ -21,7 +21,7 @@ from razoragentMesh.packages.x402Gateway.gatewayConstants import (
     maxNegotiationTurns,
     microFeePerTurnPaise,
 )
-from razoragentMesh.packages.x402Gateway.gatewayExceptions import (
+from razoragentMesh.packages.x402Gateway.src.gatewayExceptions import (
     EscrowSessionNotFoundException,
     InsufficientEscrowBalanceException,
     InvalidProofOfWorkException,
@@ -29,8 +29,8 @@ from razoragentMesh.packages.x402Gateway.gatewayExceptions import (
     NonMonotonicConcessionViolation,
     PowReplayDetectedException,
 )
-from razoragentMesh.packages.x402Gateway.microEscrowClient import MicroEscrowClient
-from razoragentMesh.packages.x402Gateway.proofOfWorkMiddleware import (
+from razoragentMesh.packages.x402Gateway.src.escrow.microEscrowClient import MicroEscrowClient
+from razoragentMesh.packages.x402Gateway.src.middleware.proofOfWorkMiddleware import (
     IngressAntiSpamShield,
     solvePoWChallenge,
 )
