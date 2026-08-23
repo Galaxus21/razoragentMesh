@@ -1,0 +1,36 @@
+{
+  "name": "razoragent-mesh-mcp-server",
+  "version": "2.0.0",
+  "description": "Layer 1 MCP Discovery and Inventory Server for RazorAgent Mesh",
+  "main": "dist/mcpServerMain.js",
+  "types": "dist/mcpServerMain.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/mcpServerMain.js",
+    "dev": "tsx src/mcpServerMain.ts",
+    "test": "node --test --import tsx test/**/*.test.ts"
+  },
+  "keywords": [
+    "mcp",
+    "agentic-commerce",
+    "razorpay",
+    "json-rpc",
+    "inventory-lock"
+  ],
+  "author": "RazorAgent Mesh Team",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.5.0",
+    "ioredis": "^5.4.1",
+    "tweetnacl": "^1.0.3",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}

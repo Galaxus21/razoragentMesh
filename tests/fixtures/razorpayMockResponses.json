@@ -1,0 +1,88 @@
+{
+  "transferSuccess": {
+    "id": "trf_test123456789",
+    "entity": "transfer",
+    "status": "processed",
+    "source": "pay_order_nominal_001",
+    "recipient": "acc_merchant_nexus_01",
+    "amount": 380000,
+    "currency": "INR",
+    "fee": 0,
+    "tax": 0,
+    "on_hold": false,
+    "settlement_status": "settled",
+    "created_at": 1755936000
+  },
+  "transferLogisticsSuccess": {
+    "id": "trf_logistics_456789",
+    "entity": "transfer",
+    "status": "processed",
+    "source": "pay_order_nominal_001",
+    "recipient": "acc_logistics_delhivery_01",
+    "amount": 38000,
+    "currency": "INR",
+    "fee": 0,
+    "tax": 0,
+    "on_hold": false,
+    "settlement_status": "settled",
+    "created_at": 1755936000
+  },
+  "transferPlatformFeeSuccess": {
+    "id": "trf_platform_fee_789012",
+    "entity": "transfer",
+    "status": "processed",
+    "source": "pay_order_nominal_001",
+    "recipient": "acc_platform_treasury_01",
+    "amount": 2000,
+    "currency": "INR",
+    "fee": 0,
+    "tax": 0,
+    "on_hold": false,
+    "settlement_status": "settled",
+    "created_at": 1755936000
+  },
+  "transferReversalSuccess": {
+    "id": "rtrn_rev_987654321",
+    "entity": "reversal",
+    "transfer_id": "trf_test123456789",
+    "amount": 380000,
+    "currency": "INR",
+    "status": "processed",
+    "created_at": 1755936010
+  },
+  "paymentCapturedWebhook": {
+    "entity": "event",
+    "account_id": "acc_platform_treasury_01",
+    "event": "payment.captured",
+    "contains": [
+      "payment"
+    ],
+    "payload": {
+      "payment": {
+        "entity": {
+          "id": "pay_test_capture_999",
+          "entity": "payment",
+          "amount": 420000,
+          "currency": "INR",
+          "status": "captured",
+          "order_id": "order_test_mesh_001",
+          "method": "upi",
+          "captured": true,
+          "created_at": 1755936000
+        }
+      }
+    },
+    "created_at": 1755936000
+  },
+  "upiPreAuthReceipt": {
+    "id": "auth_upi_session_888",
+    "entity": "authorization",
+    "amount": 5000,
+    "currency": "INR",
+    "status": "authorized",
+    "buyer_agent_id": "did:agent:0f0376d33cd2497a",
+    "available_balance_paise": 5000,
+    "held_paise": 5000,
+    "created_at": 1755936000
+  }
+}

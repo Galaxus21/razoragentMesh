@@ -1,0 +1,32 @@
+{
+  "userCfo": {
+    "did": "did:agent:007648450647ff8204c5e48a85b787dad7afbea63f657b24a567d10b8a6d1fe1",
+    "publicKeyHex": "007648450647ff8204c5e48a85b787dad7afbea63f657b24a567d10b8a6d1fe1",
+    "privateKeyHex": "ec89f8790fa0bc33882dd0c02c67a79a0a68f6976f52010b7e656564db3c9f8a",
+    "seedHex": "ec89f8790fa0bc33882dd0c02c67a79a0a68f6976f52010b7e656564db3c9f8a"
+  },
+  "buyerAgent": {
+    "did": "did:agent:0f0376d33cd2497a9cdaeccc04435b0019de3718a17f512cda031876abfeaaca",
+    "publicKeyHex": "0f0376d33cd2497a9cdaeccc04435b0019de3718a17f512cda031876abfeaaca",
+    "privateKeyHex": "ad1b82a9cce6d36564c79f026ff7479072875d80cb85b5b95a3478df90572270",
+    "seedHex": "ad1b82a9cce6d36564c79f026ff7479072875d80cb85b5b95a3478df90572270"
+  },
+  "merchantNode": {
+    "did": "did:agent:0181d684e27ffcd72b56476a3030b7f9f54162268ffbc505a5474f38fec88910",
+    "publicKeyHex": "0181d684e27ffcd72b56476a3030b7f9f54162268ffbc505a5474f38fec88910",
+    "privateKeyHex": "ac262c2b5daf3f4272ed052f7b331cbb6152588ae58dfb022f71c7b8a2c45364",
+    "seedHex": "ac262c2b5daf3f4272ed052f7b331cbb6152588ae58dfb022f71c7b8a2c45364"
+  },
+  "attackerNode": {
+    "did": "did:agent:3b950b3e53918b471345f2fc927b9a320daa609c17f766a26019e87ffcc1dc9b",
+    "publicKeyHex": "3b950b3e53918b471345f2fc927b9a320daa609c17f766a26019e87ffcc1dc9b",
+    "privateKeyHex": "6b9f06cfafa2621131b65131d23ef93a3897efc6fe85488b9e7af97f36ce7dde",
+    "seedHex": "6b9f06cfafa2621131b65131d23ef93a3897efc6fe85488b9e7af97f36ce7dde"
+  },
+  "platformNode": {
+    "did": "did:agent:2c2b40979220bcd0c9f366d8f22771fb2d8e53161d6d0be4a72d7956d7dd2d11",
+    "publicKeyHex": "2c2b40979220bcd0c9f366d8f22771fb2d8e53161d6d0be4a72d7956d7dd2d11",
+    "privateKeyHex": "83f3fc446a354457c5229ef1c5a321cdf72ff208d94ed161d75a58a616c5d08f",
+    "seedHex": "83f3fc446a354457c5229ef1c5a321cdf72ff208d94ed161d75a58a616c5d08f"
+  }
+}
