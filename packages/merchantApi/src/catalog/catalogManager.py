@@ -27,16 +27,20 @@ class CatalogManager:
         action: str,
         skuId: str,
         merchantDid: str,
+        item: Optional[dict[str, Any]] = None,
     ) -> None:
         """Emits catalog mutation notifications onto pub/sub channel for indexers."""
         if not hasattr(self.redisClient, "publish"):
             return
-        eventPayload = json.dumps({
+        payloadDict: dict[str, Any] = {
             "action": action,
             "skuId": skuId,
             "merchantDid": merchantDid,
             "timestamp": int(time.time()),
-        })
+        }
+        if item is not None:
+            payloadDict["item"] = item
+        eventPayload = json.dumps(payloadDict)
         await self.redisClient.publish(redisCatalogUpdatesChannel, eventPayload)
 
     async def upsertSku(self, listing: UniversalProductListing) -> None:
@@ -51,7 +55,19 @@ class CatalogManager:
 
         serializedListing = listing.model_dump_json()
         await self.redisClient.set(key, serializedListing)
-        await self._publishEvent(action, listing.skuId, listing.merchantDid)
+        itemPayload = {
+            "skuId": listing.skuId,
+            "name": listing.title,
+            "category": listing.category,
+            "description": listing.description,
+            "hsnCode": listing.hsnCode,
+            "gstRatePercent": listing.gstRatePercent,
+            "baseUnitPricePaise": listing.baseUnitPricePaise,
+            "availableStock": listing.availableStock,
+            "volumeTiers": [tier.model_dump() for tier in listing.volumeTiers],
+            "originPincode": listing.originPincode,
+        }
+        await self._publishEvent(action, listing.skuId, listing.merchantDid, item=itemPayload)
 
     async def removeSku(self, skuId: str, merchantDid: str) -> bool:
         """Deletes SKU from Redis storage and publishes catalog removal event."""
@@ -108,8 +124,10 @@ class CatalogManager:
         await manager.upsertSku(listing)
         merchantKey = f"{redisMerchantCatalogPrefix}{listing.merchantDid}:{listing.skuId}"
         stockKey = f"{redisCatalogKeyPrefix}{listing.skuId}:stock"
+        inventoryStockKey = f"inventory:stock:{listing.skuId}"
         await redisClient.set(merchantKey, listing.model_dump_json())
         await redisClient.set(stockKey, str(listing.availableStock))
+        await redisClient.set(inventoryStockKey, str(listing.availableStock))
 
     @staticmethod
     async def getListing(
@@ -140,11 +158,13 @@ class CatalogManager:
         removed = await manager.removeSku(skuId, merchantDid)
         merchantKey = f"{redisMerchantCatalogPrefix}{merchantDid}:{skuId}"
         stockKey = f"{redisCatalogKeyPrefix}{skuId}:stock"
+        inventoryStockKey = f"inventory:stock:{skuId}"
         if hasattr(redisClient, "delete"):
-            await redisClient.delete(merchantKey, stockKey)
+            await redisClient.delete(merchantKey, stockKey, inventoryStockKey)
         elif hasattr(redisClient, "store") and isinstance(redisClient.store, dict):
             redisClient.store.pop(merchantKey, None)
             redisClient.store.pop(stockKey, None)
+            redisClient.store.pop(inventoryStockKey, None)
         return removed
 
     @staticmethod
@@ -169,7 +189,7 @@ class CatalogManager:
                 "baseUnitPricePaise": updatedPrice,
             }
         )
-        await manager.upsertSku(updatedListing)
+        await CatalogManager.upsertListing(redisClient, updatedListing)
         return True
 
 

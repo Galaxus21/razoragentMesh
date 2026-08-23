@@ -1,5 +1,4 @@
-"""Shopify store webhook adapter translating Shopify product variants into UniversalProductListings."""
-
+from decimal import Decimal
 from typing import Any, Optional
 
 from ..constants.merchantConstants import (
@@ -11,6 +10,8 @@ from ..schemas.bulkIngestSchema import ShopifyWebhookPayload
 from ..schemas.universalProductSchema import (
     ApparelFacet,
     FmcgFacet,
+    JewelryFacet,
+    PharmaFacet,
     ProductAttributes,
     UniversalProductListing,
 )
@@ -41,25 +42,77 @@ def _extractShopifyAllergens(tags: Optional[str]) -> list[str]:
 
 
 def _buildFacets(
+    product: ShopifyWebhookPayload,
     variant: dict[str, Any],
     allergens: list[str],
-) -> tuple[Optional[ApparelFacet], Optional[FmcgFacet]]:
-    """Constructs Apparel and FMCG domain facets for Shopify variant."""
+) -> tuple[
+    Optional[ApparelFacet],
+    Optional[FmcgFacet],
+    Optional[JewelryFacet],
+    Optional[PharmaFacet],
+    str,
+]:
+    """Constructs multi-industry domain facets and infers category for Shopify variant."""
+    tagsLower = (product.tags or "").lower()
     size = variant.get("option1")
     color = variant.get("option2")
 
+    category = "apparel"
+    if "jewelry" in tagsLower or "gold" in tagsLower or "silver" in tagsLower:
+        category = "jewelry"
+    elif "pharma" in tagsLower or "medicine" in tagsLower or "drug" in tagsLower:
+        category = "pharma"
+    elif "fmcg" in tagsLower or "food" in tagsLower or "grocery" in tagsLower:
+        category = "fmcg"
+
     apparel = None
-    if size:
+    if category == "apparel" or size or color:
+        fabric = []
+        if "cotton" in tagsLower:
+            fabric.append("cotton")
+        if "polyester" in tagsLower:
+            fabric.append("polyester")
         apparel = ApparelFacet(
-            size=str(size).strip(),
+            size=str(size).strip() if size else None,
             color=str(color).strip() if color else None,
+            fabric=fabric,
         )
 
     fmcg = None
-    if allergens:
-        fmcg = FmcgFacet(allergens=allergens)
+    if category == "fmcg" or allergens:
+        fmcg = FmcgFacet(
+            allergens=allergens,
+            isVeg="nonveg" not in tagsLower,
+        )
 
-    return apparel, fmcg
+    jewelry = None
+    if category == "jewelry":
+        purity: Any = 22
+        if "18k" in tagsLower or "18 karat" in tagsLower:
+            purity = 18
+        elif "24k" in tagsLower or "24 karat" in tagsLower:
+            purity = 24
+        grams = Decimal(str(variant.get("grams", 5000))) / Decimal("1000") if variant.get("grams") else Decimal("5.0")
+        if grams <= 0:
+            grams = Decimal("5.0")
+        jewelry = JewelryFacet(
+            purityCarat=purity,
+            grossWeightGrams=grams,
+        )
+
+    pharma = None
+    if category == "pharma":
+        salt = "Paracetamol"
+        for part in (product.tags or "").split(","):
+            if part.strip().lower().startswith("salt:"):
+                salt = part.strip().split(":", 1)[1].strip()
+        pharma = PharmaFacet(
+            activeSalt=salt,
+            dosageMg=500,
+            prescriptionRequired="prescription" in tagsLower or "rx" in tagsLower,
+        )
+
+    return apparel, fmcg, jewelry, pharma, category
 
 
 def mapShopifyVariantToSku(
@@ -77,14 +130,14 @@ def mapShopifyVariantToSku(
     stock = int(variant.get("inventory_quantity") or 0)
 
     allergens = _extractShopifyAllergens(product.tags)
-    apparelFacet, fmcgFacet = _buildFacets(variant, allergens)
+    apparelFacet, fmcgFacet, jewelryFacet, pharmaFacet, category = _buildFacets(product, variant, allergens)
 
     return UniversalProductListing(
         skuId=skuId,
         merchantDid=merchantDid,
         title=product.title,
         description=product.body_html or product.title,
-        category="apparel",
+        category=category,
         hsnCode=defaultHsnCode,
         gstRatePercent=defaultGstRate,
         baseUnitPricePaise=pricePaise,
@@ -92,6 +145,8 @@ def mapShopifyVariantToSku(
         originPincode=originPincode,
         apparelFacet=apparelFacet,
         fmcgFacet=fmcgFacet,
+        jewelryFacet=jewelryFacet,
+        pharmaFacet=pharmaFacet,
     )
 
 

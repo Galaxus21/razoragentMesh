@@ -308,3 +308,102 @@ def testNegotiationPolicySchema() -> None:
             createdAtTimestamp=1700000000,
             updatedAtTimestamp=1700000000,
         )
+
+
+def testFacetAdversarialBounds() -> None:
+    """Test adversarial and boundary conditions for polymorphic domain facets."""
+    # Invalid carat (e.g. 14, 20)
+    with pytest.raises(ValidationError):
+        JewelryFacet(
+            purityCarat=14,  # type: ignore[arg-type]
+            grossWeightGrams=Decimal("10.0"),
+        )
+
+    # Sub-threshold gross weight (< 0.01g)
+    with pytest.raises(ValidationError):
+        JewelryFacet(
+            purityCarat=22,
+            grossWeightGrams=Decimal("0.001"),
+        )
+
+    # Negative pharma dosage
+    with pytest.raises(ValidationError):
+        PharmaFacet(
+            activeSalt="Paracetamol",
+            dosageMg=-10,
+        )
+
+    # Invalid FMCG shelf life (0 or negative)
+    with pytest.raises(ValidationError):
+        FmcgFacet(
+            shelfLifeDays=0,
+        )
+
+    # Invalid volume tier discount (> 10000 bps)
+    with pytest.raises(ValidationError):
+        VolumeTier(minQuantity=5, discountBps=15000)
+
+    # Invalid volume tier minQuantity (0)
+    with pytest.raises(ValidationError):
+        VolumeTier(minQuantity=0, discountBps=500)
+
+
+def testMultiIndustryNegativeConstraintFilter() -> None:
+    """Test material, active pharma salt, OTC, and veg negative constraint filtering."""
+    from razoragentMesh.packages.vectorHealer.src.constraints.negativeManifestSchema import (
+        NegativeConstraintManifest,
+    )
+    from razoragentMesh.packages.vectorHealer.src.constraints.constraintFilter import (
+        NegativeConstraintFilter,
+    )
+
+    manifest = NegativeConstraintManifest(
+        excludedMaterials=["polyester", "leather"],
+        excludedActiveSalts=["pseudoephedrine"],
+        requireOtcOnly=True,
+        requireVeg=True,
+    )
+    cFilter = NegativeConstraintFilter(manifest)
+
+    # Candidate 1: Polyester fabric violation
+    res1 = cFilter.evaluateCandidate({
+        "skuId": "SKU-SHIRT-01",
+        "apparelFacet": {"fabric": ["cotton", "polyester"]},
+    })
+    assert not res1.isAllowed
+    assert res1.rejectionReason == "MATERIAL_EXCLUDED:polyester"
+
+    # Candidate 2: Excluded active salt
+    res2 = cFilter.evaluateCandidate({
+        "skuId": "SKU-COLD-01",
+        "pharmaFacet": {"activeSalt": "Pseudoephedrine HCl", "prescriptionRequired": False},
+    })
+    assert not res2.isAllowed
+    assert res2.rejectionReason == "ACTIVE_SALT_EXCLUDED:pseudoephedrine"
+
+    # Candidate 3: Prescription required when requireOtcOnly is True
+    res3 = cFilter.evaluateCandidate({
+        "skuId": "SKU-RX-01",
+        "pharmaFacet": {"activeSalt": "Amoxicillin", "prescriptionRequired": True},
+    })
+    assert not res3.isAllowed
+    assert res3.rejectionReason == "PRESCRIPTION_REQUIRED_BREACH"
+
+    # Candidate 4: Non-veg food when requireVeg is True
+    res4 = cFilter.evaluateCandidate({
+        "skuId": "SKU-FOOD-01",
+        "fmcgFacet": {"isVeg": False, "allergens": []},
+    })
+    assert not res4.isAllowed
+    assert res4.rejectionReason == "NON_VEG_EXCLUDED"
+
+    # Candidate 5: Compliant candidate passes all checks
+    res5 = cFilter.evaluateCandidate({
+        "skuId": "SKU-ORGANIC-01",
+        "apparelFacet": {"fabric": ["100% organic cotton"]},
+        "fmcgFacet": {"isVeg": True, "allergens": []},
+        "pharmaFacet": {"activeSalt": "Paracetamol", "prescriptionRequired": False},
+    })
+    assert res5.isAllowed
+    assert res5.rejectionReason is None
+

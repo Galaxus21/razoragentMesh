@@ -187,7 +187,13 @@ async def negotiateTurn(
 
     sellerCostFloor: Optional[int] = None
     if payload.merchantDid:
-        sellerCostFloor = await lookupMerchantFloorPolicy(payload.merchantDid)
+        policyValue = await lookupMerchantFloorPolicy(payload.merchantDid)
+        if policyValue is not None:
+            if policyValue <= 10000 and payload.sellerAskPaise > 0:
+                # Interpret <= 10000 as marginFloorBps and derive lower bound price in paise
+                sellerCostFloor = (payload.sellerAskPaise * (10000 - policyValue)) // 10000
+            else:
+                sellerCostFloor = policyValue
 
     negotiator = getOrCreateNegotiator(
         sessionKey,

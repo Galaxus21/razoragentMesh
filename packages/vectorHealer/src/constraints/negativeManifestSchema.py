@@ -11,6 +11,10 @@ class NegativeConstraintManifest(BaseModel):
 
     excludedAllergens: List[str] = Field(default_factory=list)
     excludedBrands: List[str] = Field(default_factory=list)
+    excludedMaterials: List[str] = Field(default_factory=list)
+    excludedActiveSalts: List[str] = Field(default_factory=list)
+    requireOtcOnly: bool = False
+    requireVeg: bool = False
     maxWeightGrams: Optional[int] = Field(default=None)
     maxDimensionCm: Optional[Dict[str, int]] = Field(default=None)
     maxSlaHours: Optional[int] = Field(default=None)

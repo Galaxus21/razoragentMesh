@@ -12,6 +12,7 @@ skuIdRegexPattern: str = r"^SKU-[A-Z0-9_-]{3,32}$"
 hsnCodeRegexPattern: str = r"^[0-9]{4,8}$"
 ansiEscapeRegexPattern: str = r"\x1b\[[0-9;]*[a-zA-Z]"
 markdownLinkRegexPattern: str = r"\[([^\]]+)\]\([^\)]+\)"
+markdownEmptyAltImageRegexPattern: str = r"!\s*\[\s*\]\s*\([^\)]*\)"
 htmlTagRegexPattern: str = r"<[^>]+>"
 
 zeroWidthCodePoints: frozenset[int] = frozenset({

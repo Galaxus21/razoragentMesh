@@ -11,6 +11,7 @@ from razoragentMesh.packages.catalogSanitizer.ingressShieldExceptions import (
 from razoragentMesh.packages.catalogSanitizer.sanitizerConstants import (
     ansiEscapeRegexPattern,
     htmlTagRegexPattern,
+    markdownEmptyAltImageRegexPattern,
     markdownLinkRegexPattern,
     maxDescriptionLength,
     maxTitleLength,
@@ -20,6 +21,9 @@ from razoragentMesh.packages.catalogSanitizer.sanitizerConstants import (
 from razoragentMesh.packages.catalogSanitizer.sanitizedSkuQuoteSchema import (
     SanitizedSkuQuote,
     TaxBreakdownSchema,
+)
+from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
+    ArithmeticDriftException,
 )
 
 
@@ -41,10 +45,11 @@ def stripAnsiEscapes(inputString: str) -> str:
 
 
 def stripMarkdownAndHtml(inputString: str) -> str:
-    """Strips HTML tags and flattens Markdown link syntax to anchor text."""
+    """Strips HTML tags, empty-alt images, and flattens Markdown link syntax to anchor text."""
     if not inputString:
         return ""
-    textWithoutLinks = re.sub(markdownLinkRegexPattern, r"\1", inputString)
+    textWithoutEmptyImages = re.sub(markdownEmptyAltImageRegexPattern, "", inputString)
+    textWithoutLinks = re.sub(markdownLinkRegexPattern, r"\1", textWithoutEmptyImages)
     return re.sub(htmlTagRegexPattern, "", textWithoutLinks)
 
 
@@ -92,7 +97,17 @@ def _buildTaxBreakdown(rawTax: Any) -> TaxBreakdownSchema:
     cgstPaise = _validateStrictInteger(cgst or 0, "cgstPaise")
     sgstPaise = _validateStrictInteger(sgst or 0, "sgstPaise")
     igstPaise = _validateStrictInteger(igst or 0, "igstPaise")
-    totalTaxPaise = _validateStrictInteger(total or (cgstPaise + sgstPaise + igstPaise), "totalTaxPaise")
+    computedTotalTaxPaise = cgstPaise + sgstPaise + igstPaise
+    totalTaxPaise = _validateStrictInteger(
+        total if total is not None else computedTotalTaxPaise,
+        "totalTaxPaise",
+    )
+
+    if totalTaxPaise != computedTotalTaxPaise:
+        raise ArithmeticDriftException(
+            f"Tax breakdown arithmetic drift: totalTaxPaise ({totalTaxPaise}) != "
+            f"cgstPaise ({cgstPaise}) + sgstPaise ({sgstPaise}) + igstPaise ({igstPaise})"
+        )
 
     return TaxBreakdownSchema(
         cgstPaise=cgstPaise,

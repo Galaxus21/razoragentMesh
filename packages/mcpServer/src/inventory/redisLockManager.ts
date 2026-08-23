@@ -17,9 +17,9 @@ export interface LockRecordPayload {
   readonly expiresAtUnixMs: number;
 }
 
-export const stockKeyPrefix = "inventory:stock:";
-export const lockKeyPrefix = "inventory:lock:";
-export const globalFencingKey = "inventory:fencing:global";
+export const stockKeyPrefix = "{inventory}:stock:";
+export const lockKeyPrefix = "{inventory}:lock:";
+export const globalFencingKey = "{inventory}:fencing:global";
 export const initialInMemoryFencingCounter = 1000;
 export const failureFencingToken = 0;
 export const luaKeysCount = 3;

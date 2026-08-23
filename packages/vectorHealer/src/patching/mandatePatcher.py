@@ -59,7 +59,12 @@ class MandatePatcher:
 
         newTaxable = computeLineItemTotal(substituteUnitPricePaise, requestedQuantity)
         newGst = computeGstBreakdown(newTaxable, substituteGstRatePercent, isIntraState=True)
-        newTotal = computeCartSettlementTotal(newTaxable, newGst["totalTaxPaise"])
+        newTotal = computeCartSettlementTotal(
+            taxableSubtotalPaise=newTaxable,
+            totalTaxPaise=newGst["totalTaxPaise"],
+            shippingPaise=originalCartMandate.shippingPaise,
+            discountPaise=originalCartMandate.discountPaise,
+        )
 
         if intentMandate is not None and newTotal > intentMandate.maxBudgetPaise:
             raise BudgetExceededViolation(

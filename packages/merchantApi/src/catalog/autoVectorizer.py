@@ -51,12 +51,17 @@ def _extractFacetedSegments(listing: UniversalProductListing) -> List[str]:
 
     if getattr(listing, "apparelFacet", None) is not None:
         af = listing.apparelFacet
-        segments.append(f"Size {af.size}")
+        if af.size:
+            segments.append(f"Size {af.size}")
         if af.color:
             segments.append(af.color)
         if af.fabric:
             fab = ", ".join(af.fabric) if isinstance(af.fabric, list) else str(af.fabric)
             segments.append(f"Fabric: {fab}")
+        if af.fitType:
+            segments.append(f"{af.fitType} Fit")
+        if af.gender:
+            segments.append(f"{af.gender}")
 
     if getattr(listing, "pharmaFacet", None) is not None:
         pf = listing.pharmaFacet
@@ -72,6 +77,8 @@ def _extractFacetedSegments(listing: UniversalProductListing) -> List[str]:
             segments.append(f"Allergens: {allg}")
         if ff.isVeg:
             segments.append("Veg")
+        if ff.shelfLifeDays:
+            segments.append(f"Shelf Life: {ff.shelfLifeDays} days")
 
     return segments
 
@@ -193,6 +200,10 @@ class AutoVectorizer:
             "isAvailable": isAvailable,
             "currency": listing.currency,
             "description": listing.description,
+            "apparelFacet": listing.apparelFacet.model_dump() if listing.apparelFacet else None,
+            "fmcgFacet": listing.fmcgFacet.model_dump() if listing.fmcgFacet else None,
+            "jewelryFacet": listing.jewelryFacet.model_dump(mode="json") if listing.jewelryFacet else None,
+            "pharmaFacet": listing.pharmaFacet.model_dump() if listing.pharmaFacet else None,
         }
 
         if hasattr(self.qdrantClient, "upsert"):

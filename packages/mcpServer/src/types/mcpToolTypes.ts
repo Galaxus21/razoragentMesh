@@ -89,29 +89,42 @@ export const taxBreakdownSchema = z.object({
   totalTaxPaise: z.number().int().min(0)
 });
 
-export const catalogSkuItemSchema = z.object({
-  skuId: z.string().min(1),
-  name: z.string().min(1),
-  category: z.string().min(1),
-  description: z.string().min(1),
-  hsnCode: z.string().regex(/^[0-9]{4,8}$/),
-  gstRatePercent: z.number().min(0).max(100),
-  baseUnitPricePaise: z.number().int().min(0),
-  availableStock: z.number().int().min(0),
-  volumeTiers: z.array(volumeTierSchema),
-  embeddingVector: z.array(z.number()).optional(),
-  allergens: z.array(z.string()).optional(),
-  brand: z.string().optional(),
-  weightGrams: z.number().int().min(1).optional(),
-  dimensionsCm: z
-    .object({
-      length: z.number().positive(),
-      width: z.number().positive(),
-      height: z.number().positive()
-    })
-    .optional(),
-  originPincode: z.string().regex(/^[1-9][0-9]{5}$/).optional()
-});
+export const catalogSkuItemSchema = z.preprocess(
+  (val: unknown) => {
+    if (val && typeof val === "object") {
+      const obj = val as Record<string, unknown>;
+      return {
+        ...obj,
+        name: obj.name ?? obj.title ?? obj.skuId,
+        volumeTiers: obj.volumeTiers ?? []
+      };
+    }
+    return val;
+  },
+  z.object({
+    skuId: z.string().min(1),
+    name: z.string().min(1),
+    category: z.string().min(1),
+    description: z.string().min(1),
+    hsnCode: z.string().regex(/^[0-9]{4,8}$/),
+    gstRatePercent: z.number().min(0).max(100),
+    baseUnitPricePaise: z.number().int().min(0),
+    availableStock: z.number().int().min(0),
+    volumeTiers: z.array(volumeTierSchema),
+    embeddingVector: z.array(z.number()).optional(),
+    allergens: z.array(z.string()).optional(),
+    brand: z.string().optional(),
+    weightGrams: z.number().int().min(1).optional(),
+    dimensionsCm: z
+      .object({
+        length: z.number().positive(),
+        width: z.number().positive(),
+        height: z.number().positive()
+      })
+      .optional(),
+    originPincode: z.string().regex(/^[1-9][0-9]{5}$/).optional()
+  })
+);
 
 export class ArithmeticDriftException extends Error {
   readonly code = "ARITHMETIC_DRIFT";

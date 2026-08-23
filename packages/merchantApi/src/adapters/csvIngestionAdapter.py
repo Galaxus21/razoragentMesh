@@ -1,6 +1,7 @@
 """CSV Ingestion Adapter for parsing batch product catalogs into Universal Product Listings."""
 
 import csv
+from decimal import Decimal
 import io
 import json
 from typing import Any, Optional
@@ -17,6 +18,8 @@ from ..schemas.bulkIngestSchema import (
 from ..schemas.universalProductSchema import (
     ApparelFacet,
     FmcgFacet,
+    JewelryFacet,
+    PharmaFacet,
     UniversalProductListing,
     VolumeTier,
 )
@@ -36,8 +39,15 @@ def _extractVolumeTiers(tiersRaw: Optional[str]) -> list[VolumeTier]:
         return []
 
 
-def _extractFacets(row: dict[str, Any]) -> tuple[Optional[ApparelFacet], Optional[FmcgFacet]]:
-    """Extracts Apparel and FMCG domain facets from CSV dictionary."""
+def _extractFacets(
+    row: dict[str, Any],
+) -> tuple[
+    Optional[ApparelFacet],
+    Optional[FmcgFacet],
+    Optional[JewelryFacet],
+    Optional[PharmaFacet],
+]:
+    """Extracts Apparel, FMCG, Jewelry, and Pharma domain facets from CSV dictionary."""
     allergens: list[str] = []
     rawAllergens = row.get("allergens")
     if rawAllergens:
@@ -47,17 +57,54 @@ def _extractFacets(row: dict[str, Any]) -> tuple[Optional[ApparelFacet], Optiona
     apparel = None
     size = row.get("size")
     color = row.get("color")
-    if size:
+    fabricRaw = row.get("fabric") or row.get("material")
+    fabric = [f.strip() for f in str(fabricRaw).split(",") if f.strip()] if fabricRaw else []
+    if size or color or fabric:
         apparel = ApparelFacet(
-            size=str(size).strip(),
+            size=str(size).strip() if size else None,
             color=str(color).strip() if color else None,
+            fabric=fabric,
         )
 
     fmcg = None
-    if allergens or row.get("isVeg") is not None:
-        fmcg = FmcgFacet(allergens=allergens)
+    if allergens or row.get("isVeg") is not None or row.get("fssaiNumber"):
+        fmcg = FmcgFacet(
+            allergens=allergens,
+            isVeg=str(row.get("isVeg", "true")).lower() in ("true", "1", "yes"),
+            fssaiNumber=str(row["fssaiNumber"]).strip() if row.get("fssaiNumber") else None,
+        )
 
-    return apparel, fmcg
+    jewelry = None
+    caratRaw = row.get("purityCarat") or row.get("carat")
+    weightRaw = row.get("grossWeightGrams") or row.get("weightGrams")
+    if caratRaw and weightRaw:
+        try:
+            caratVal = int(float(str(caratRaw).strip()))
+            if caratVal in (18, 22, 24):
+                jewelry = JewelryFacet(
+                    purityCarat=caratVal,  # type: ignore[arg-type]
+                    grossWeightGrams=Decimal(str(weightRaw).strip()),
+                    hallmarkNumber=str(row["hallmarkNumber"]).strip() if row.get("hallmarkNumber") else None,
+                )
+        except Exception:
+            pass
+
+    pharma = None
+    activeSalt = row.get("activeSalt") or row.get("salt")
+    if activeSalt:
+        try:
+            dosage = int(float(str(row.get("dosageMg") or 0).strip()))
+            rxReq = str(row.get("prescriptionRequired", "false")).lower() in ("true", "1", "yes")
+            pharma = PharmaFacet(
+                activeSalt=str(activeSalt).strip(),
+                dosageMg=dosage,
+                schedule=str(row["schedule"]).strip() if row.get("schedule") else None,
+                prescriptionRequired=rxReq,
+            )
+        except Exception:
+            pass
+
+    return apparel, fmcg, jewelry, pharma
 
 
 def parseCsvRow(row: dict[str, Any], merchantDid: str) -> Optional[UniversalProductListing]:
@@ -85,7 +132,7 @@ def parseCsvRow(row: dict[str, Any], merchantDid: str) -> Optional[UniversalProd
         description = str(row.get("description") or title).strip()
 
         volumeTiers = _extractVolumeTiers(row.get("volumeTiersJson"))
-        apparelFacet, fmcgFacet = _extractFacets(row)
+        apparelFacet, fmcgFacet, jewelryFacet, pharmaFacet = _extractFacets(row)
 
         return UniversalProductListing(
             skuId=skuId,
@@ -101,6 +148,8 @@ def parseCsvRow(row: dict[str, Any], merchantDid: str) -> Optional[UniversalProd
             volumeTiers=volumeTiers,
             apparelFacet=apparelFacet,
             fmcgFacet=fmcgFacet,
+            jewelryFacet=jewelryFacet,
+            pharmaFacet=pharmaFacet,
         )
     except Exception:
         return None

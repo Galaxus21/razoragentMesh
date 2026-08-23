@@ -24,12 +24,24 @@ from ..schemas.x402ChallengeSchema import (
 )
 
 
-def solvePoWChallenge(challenge: str) -> int:
+powEscalatedLeadingZeros: int = 5
+powHighLoadThreshold: int = 100
+
+
+def evaluateDynamicDifficulty(clientIp: str, requestCount: int) -> int:
+    """Evaluates dynamic PoW leading zero difficulty based on client request count."""
+    if requestCount >= powHighLoadThreshold:
+        return powEscalatedLeadingZeros
+    return powLeadingZeros
+
+
+def solvePoWChallenge(challenge: str, difficultyZeros: int = powLeadingZeros) -> int:
     """Finds integer nonce yielding required leading hex zeros for given challenge."""
+    targetPrefix = "0" * difficultyZeros
     nonce = 0
     while True:
         candidateBytes = f"{challenge}:{nonce}".encode("utf-8")
-        if hashlib.sha256(candidateBytes).hexdigest().startswith(requiredLeadingPrefix):
+        if hashlib.sha256(candidateBytes).hexdigest().startswith(targetPrefix):
             return nonce
         nonce += 1
 
@@ -40,24 +52,46 @@ class IngressAntiSpamShield:
     def __init__(self, redisClient: Optional[Any] = None) -> None:
         self._redisClient = redisClient
         self.activeChallenges: Dict[str, int] = {}
+        self.challengeDifficulties: Dict[str, int] = {}
         self.authorizedEscrowTokens: Dict[str, int] = {}
         self.consumedChallenges: Dict[str, int] = {}
         self.llmInvocationsCount = 0
+        self._ipRequestCounts: Dict[str, int] = {}
 
-    def generateChallenge(self, clientIp: str) -> Http402ChallengeResponse:
-        """Generates a fresh PoW challenge token with 5-minute expiry."""
+    def evaluateDynamicDifficulty(self, clientIp: str, requestCount: int = 0) -> int:
+        """Evaluates PoW difficulty for client IP based on request load."""
+        effectiveCount = requestCount if requestCount > 0 else self._ipRequestCounts.get(clientIp, 0)
+        return evaluateDynamicDifficulty(clientIp, effectiveCount)
+
+    def generateChallenge(
+        self, clientIp: str, requestCount: Optional[int] = None
+    ) -> Http402ChallengeResponse:
+        """Generates a fresh PoW challenge token with 5-minute expiry and dynamic difficulty."""
         uniqueId = uuid.uuid4().hex
         now = int(time.time())
         tokenBytes = f"challenge:{clientIp}:{uniqueId}:{now}".encode("utf-8")
         challenge = hashlib.sha256(tokenBytes).hexdigest()[:32]
         self.activeChallenges[challenge] = now + powChallengeTtlSeconds
-        return Http402ChallengeResponse(challengeToken=challenge)
 
-    def verifyPoWSolution(self, challenge: str, nonce: int) -> bool:
-        """Verifies candidate nonce against challenge string for 4 leading zeros."""
+        self._ipRequestCounts[clientIp] = self._ipRequestCounts.get(clientIp, 0) + 1
+        effectiveCount = requestCount if requestCount is not None else self._ipRequestCounts[clientIp]
+        difficulty = self.evaluateDynamicDifficulty(clientIp, effectiveCount)
+        self.challengeDifficulties[challenge] = difficulty
+
+        return Http402ChallengeResponse(
+            challengeToken=challenge,
+            powDifficultyZeros=difficulty,
+        )
+
+    def verifyPoWSolution(
+        self, challenge: str, nonce: int, difficultyZeros: Optional[int] = None
+    ) -> bool:
+        """Verifies candidate nonce against challenge string for leading zeros."""
+        targetZeros = difficultyZeros or self.challengeDifficulties.get(challenge, powLeadingZeros)
+        targetPrefix = "0" * targetZeros
         candidateBytes = f"{challenge}:{nonce}".encode("utf-8")
         digestHex = hashlib.sha256(candidateBytes).hexdigest()
-        return digestHex.startswith(requiredLeadingPrefix)
+        return digestHex.startswith(targetPrefix)
 
     def _checkChallengeLiveness(self, challengeToken: str, now: int) -> None:
         """Validates challenge token existence and expiration."""
@@ -66,6 +100,7 @@ class IngressAntiSpamShield:
         expiresAt = self.activeChallenges[challengeToken]
         if now > expiresAt:
             self.activeChallenges.pop(challengeToken, None)
+            self.challengeDifficulties.pop(challengeToken, None)
             raise PowChallengeExpiredException("Challenge token has expired")
 
     def _checkReplay(self, challengeToken: str) -> None:
@@ -73,19 +108,27 @@ class IngressAntiSpamShield:
         if challengeToken in self.consumedChallenges:
             raise PowReplayDetectedException("Challenge token already consumed")
 
-    def validatePoWSubmission(self, challengeToken: str, nonce: int) -> PowVerificationResult:
+    def validatePoWSubmission(
+        self,
+        challengeToken: str,
+        nonce: int,
+        requiredDifficulty: Optional[int] = None,
+    ) -> PowVerificationResult:
         """Executes full verification workflow: liveness, solution check, and replay guard."""
         now = int(time.time())
         self._checkReplay(challengeToken)
         self._checkChallengeLiveness(challengeToken, now)
 
+        targetZeros = requiredDifficulty or self.challengeDifficulties.get(challengeToken, powLeadingZeros)
+        targetPrefix = "0" * targetZeros
         candidateBytes = f"{challengeToken}:{nonce}".encode("utf-8")
         digestHex = hashlib.sha256(candidateBytes).hexdigest()
-        if not digestHex.startswith(requiredLeadingPrefix):
+        if not digestHex.startswith(targetPrefix):
             raise InvalidProofOfWorkException("Proof-of-work solution did not satisfy difficulty target")
 
         self.consumedChallenges[challengeToken] = now + powReplayCacheTtlSeconds
         self.activeChallenges.pop(challengeToken, None)
+        self.challengeDifficulties.pop(challengeToken, None)
 
         return PowVerificationResult(
             isValid=True,
@@ -125,5 +168,8 @@ __all__ = [
     "Http402ChallengeResponse",
     "IngressAntiSpamShield",
     "PowVerificationResult",
+    "evaluateDynamicDifficulty",
+    "powEscalatedLeadingZeros",
+    "powHighLoadThreshold",
     "solvePoWChallenge",
 ]
