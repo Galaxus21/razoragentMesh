@@ -1,5 +1,13 @@
 """Schemas package for Layer 2 x402Gateway."""
 
+from .alertSchema import (
+    PriceDropAlert,
+    PriceDropAlertCancelResponse,
+    PriceDropAlertRegisterRequest,
+    PriceDropAlertResponse,
+    PriceDropDispatchResult,
+    PriceDropWebhookPayload,
+)
 from .bidRequestSchema import (
     EscrowCreateRequest,
     NegotiateTurnRequest,
@@ -22,4 +30,10 @@ __all__ = [
     "NegotiationStatus",
     "NegotiationStepResult",
     "PowVerificationResult",
+    "PriceDropAlert",
+    "PriceDropAlertCancelResponse",
+    "PriceDropAlertRegisterRequest",
+    "PriceDropAlertResponse",
+    "PriceDropDispatchResult",
+    "PriceDropWebhookPayload",
 ]

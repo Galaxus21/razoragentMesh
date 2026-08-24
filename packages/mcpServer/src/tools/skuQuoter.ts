@@ -17,8 +17,11 @@ import {
   calculateVolumePricing,
   calculateGstBreakdown,
   computeAutoDiscountStack,
+  evaluateScheduledPromotions,
   zeroPaise,
-  AppliedDiscountItem
+  AppliedDiscountItem,
+  UpcomingPromotion,
+  VolumeTier
 } from "../catalog/pricingEngine.js";
 import { computeQuoteHash } from "../crypto/quoteHashSigner.js";
 
@@ -42,6 +45,32 @@ export function normalizeQuoteRequest(rawInput: unknown): SkuQuoteRequest {
   return skuQuoteRequestSchema.parse(normalized);
 }
 
+function resolveUnitPriceAndDiscounts(
+  baseUnitPricePaise: number,
+  quantity: number,
+  volumeTiers: readonly VolumeTier[],
+  promoCode?: string
+): {
+  offeredUnitPricePaise: number;
+  appliedDiscounts: AppliedDiscountItem[];
+  totalSavingsPaise: number;
+} {
+  if (quantity > 1 || Boolean(promoCode)) {
+    const discountResult = computeAutoDiscountStack(baseUnitPricePaise, quantity, volumeTiers, promoCode);
+    return {
+      offeredUnitPricePaise: discountResult.offeredUnitPricePaise,
+      appliedDiscounts: [...discountResult.appliedDiscounts],
+      totalSavingsPaise: discountResult.totalSavingsPaise
+    };
+  }
+  const pricing = calculateVolumePricing(baseUnitPricePaise, quantity, volumeTiers);
+  return {
+    offeredUnitPricePaise: pricing.offeredUnitPricePaise,
+    appliedDiscounts: [],
+    totalSavingsPaise: pricing.totalBasePaise - pricing.totalOfferedPaise
+  };
+}
+
 export function executeSkuQuote(
   rawRequest: unknown,
   catalogStore: CatalogStore = defaultCatalogStore,
@@ -51,37 +80,15 @@ export function executeSkuQuote(
   const sku = catalogStore.getRequiredSku(request.sku_id);
   const buyerState = resolveStateFromPincode(request.delivery_pincode);
 
-  let offeredUnitPricePaise = sku.baseUnitPricePaise;
-  let appliedDiscounts: AppliedDiscountItem[] = [];
-  let totalSavingsPaise = zeroPaise;
-
-  if (request.quantity > 1 || Boolean(request.promo_code)) {
-    const discountResult = computeAutoDiscountStack(
-      sku.baseUnitPricePaise,
-      request.quantity,
-      sku.volumeTiers,
-      request.promo_code
-    );
-    offeredUnitPricePaise = discountResult.offeredUnitPricePaise;
-    appliedDiscounts = [...discountResult.appliedDiscounts];
-    totalSavingsPaise = discountResult.totalSavingsPaise;
-  } else {
-    const pricing = calculateVolumePricing(
-      sku.baseUnitPricePaise,
-      request.quantity,
-      sku.volumeTiers
-    );
-    offeredUnitPricePaise = pricing.offeredUnitPricePaise;
-    totalSavingsPaise = pricing.totalBasePaise - pricing.totalOfferedPaise;
-  }
+  const { offeredUnitPricePaise, appliedDiscounts, totalSavingsPaise } = resolveUnitPriceAndDiscounts(
+    sku.baseUnitPricePaise,
+    request.quantity,
+    sku.volumeTiers,
+    request.promo_code
+  );
 
   const taxableSubtotalPaise = offeredUnitPricePaise * request.quantity;
-  const tax = calculateGstBreakdown(
-    taxableSubtotalPaise,
-    sku.gstRatePercent,
-    defaultMerchantState,
-    buyerState
-  );
+  const tax = calculateGstBreakdown(taxableSubtotalPaise, sku.gstRatePercent, defaultMerchantState, buyerState);
 
   const currentUnixSeconds = Math.floor(Date.now() / millisPerSecond);
   const quoteExpiryTimestamp = currentUnixSeconds + quoteValiditySeconds;
@@ -97,6 +104,14 @@ export function executeSkuQuote(
     },
     secretKey
   );
+
+  let upcomingPromotions: UpcomingPromotion[] | undefined = undefined;
+  if (sku.promotions && sku.promotions.length > 0) {
+    const evaluated = evaluateScheduledPromotions(sku.baseUnitPricePaise, sku.promotions, currentUnixSeconds);
+    if (evaluated.upcomingPromotions.length > 0) {
+      upcomingPromotions = [...evaluated.upcomingPromotions];
+    }
+  }
 
   const response: SkuQuoteResponse = {
     sku_id: sku.skuId,
@@ -115,7 +130,8 @@ export function executeSkuQuote(
     quote_expiry_timestamp: quoteExpiryTimestamp,
     quote_hash: quoteHash,
     applied_discounts: appliedDiscounts,
-    total_savings_paise: totalSavingsPaise
+    total_savings_paise: totalSavingsPaise,
+    ...(upcomingPromotions && upcomingPromotions.length > 0 ? { upcoming_promotions: upcomingPromotions } : {})
   };
 
   return skuQuoteResponseSchema.parse(response);

@@ -30,6 +30,32 @@ export interface RedisChannelSubscriber {
   on(event: string, listener: (...args: any[]) => void): unknown;
 }
 
+export interface ScheduledPromotion {
+  readonly campaignId: string;
+  readonly name: string;
+  readonly startsAtUnix: number;
+  readonly endsAtUnix: number;
+  readonly discountBps?: number;
+  readonly discountPaise?: number;
+  readonly fixedPricePaise?: number;
+  readonly limitedStockAllocated?: number;
+}
+
+export interface UpcomingPromotion {
+  readonly campaign_id: string;
+  readonly name: string;
+  readonly starts_at_unix: number;
+  readonly ends_at_unix: number;
+  readonly expected_unit_price_paise: number;
+  readonly expected_savings_paise: number;
+  readonly limited_stock_allocated?: number;
+}
+
+export interface EvaluatedPromotionsResult {
+  readonly activePromotions: readonly UpcomingPromotion[];
+  readonly upcomingPromotions: readonly UpcomingPromotion[];
+}
+
 export interface CatalogSkuItem {
   readonly skuId: string;
   readonly name: string;
@@ -40,6 +66,7 @@ export interface CatalogSkuItem {
   readonly baseUnitPricePaise: number;
   readonly availableStock: number;
   readonly volumeTiers: VolumeTier[];
+  readonly promotions?: readonly ScheduledPromotion[];
   readonly embeddingVector?: number[];
   readonly allergens?: string[];
   readonly brand?: string;
@@ -89,6 +116,35 @@ export const taxBreakdownSchema = z.object({
   totalTaxPaise: z.number().int().min(0)
 });
 
+export const scheduledPromotionSchema = z.preprocess(
+  (val: unknown) => {
+    if (val && typeof val === "object") {
+      const obj = val as Record<string, unknown>;
+      return {
+        campaignId: obj.campaignId ?? obj.campaign_id,
+        name: obj.name,
+        startsAtUnix: obj.startsAtUnix ?? obj.starts_at_unix,
+        endsAtUnix: obj.endsAtUnix ?? obj.ends_at_unix,
+        discountBps: obj.discountBps ?? obj.discount_bps,
+        discountPaise: obj.discountPaise ?? obj.discount_paise,
+        fixedPricePaise: obj.fixedPricePaise ?? obj.fixed_price_paise,
+        limitedStockAllocated: obj.limitedStockAllocated ?? obj.limited_stock_allocated
+      };
+    }
+    return val;
+  },
+  z.object({
+    campaignId: z.string().min(1),
+    name: z.string().min(1),
+    startsAtUnix: z.number().int().positive(),
+    endsAtUnix: z.number().int().positive(),
+    discountBps: z.number().int().min(0).max(10000).optional(),
+    discountPaise: z.number().int().min(0).optional(),
+    fixedPricePaise: z.number().int().min(0).optional(),
+    limitedStockAllocated: z.number().int().min(0).optional()
+  })
+);
+
 export const catalogSkuItemSchema = z.preprocess(
   (val: unknown) => {
     if (val && typeof val === "object") {
@@ -96,7 +152,8 @@ export const catalogSkuItemSchema = z.preprocess(
       return {
         ...obj,
         name: obj.name ?? obj.title ?? obj.skuId,
-        volumeTiers: obj.volumeTiers ?? []
+        volumeTiers: obj.volumeTiers ?? [],
+        promotions: obj.promotions ?? []
       };
     }
     return val;
@@ -111,6 +168,7 @@ export const catalogSkuItemSchema = z.preprocess(
     baseUnitPricePaise: z.number().int().min(0),
     availableStock: z.number().int().min(0),
     volumeTiers: z.array(volumeTierSchema),
+    promotions: z.array(scheduledPromotionSchema).optional(),
     embeddingVector: z.array(z.number()).optional(),
     allergens: z.array(z.string()).optional(),
     brand: z.string().optional(),

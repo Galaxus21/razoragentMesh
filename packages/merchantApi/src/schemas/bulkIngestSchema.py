@@ -22,6 +22,7 @@ class CsvIngestRow(BaseModel):
     availableStock: int
     moq: int = defaultMoq
     volumeTiersJson: Optional[str] = None
+    promotionsJson: Optional[str] = None
     allergens: Optional[str] = None
     brand: Optional[str] = None
     weightGrams: Optional[int] = None

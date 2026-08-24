@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { executeSkuQuote } from "../src/tools/skuQuoter.js";
 import { verifyQuoteHash } from "../src/crypto/quoteHashSigner.js";
 import { defaultMerchantSecretKey } from "../src/constants/protocolConstants.js";
+import { CatalogStore } from "../src/catalog/catalogStore.js";
 
 describe("SkuQuoter (Tool 1: get_live_sku_quote)", () => {
   it("should generate a valid quote for intra-state buyer with 18% GST (CGST + SGST)", () => {
@@ -90,5 +91,60 @@ describe("SkuQuoter (Tool 1: get_live_sku_quote)", () => {
     assert.equal(quote.offered_unit_price_paise, 396958);
     assert.ok(quote.applied_discounts && quote.applied_discounts.length === 3);
     assert.equal(quote.total_savings_paise, 23042);
+  });
+
+  it("should attach upcoming_promotions in quote when SKU has future promotions configured", () => {
+    const currentUnix = Math.floor(Date.now() / 1000);
+    const customCatalogStore = new CatalogStore();
+
+    customCatalogStore.addSku({
+      skuId: "SKU-PROMO-TEST",
+      name: "Promotional Office Desk",
+      category: "Office Furniture",
+      description: "Motorized standing desk with future flash sale",
+      hsnCode: "94031000",
+      gstRatePercent: 18,
+      baseUnitPricePaise: 500000,
+      availableStock: 25,
+      volumeTiers: [],
+      promotions: [
+        {
+          campaignId: "CAMP-FUTURE-40",
+          name: "Future 40% Drop",
+          startsAtUnix: currentUnix + 7200,
+          endsAtUnix: currentUnix + 14400,
+          discountBps: 4000,
+          limitedStockAllocated: 10
+        }
+      ]
+    });
+
+    const quote = executeSkuQuote(
+      {
+        sku_id: "SKU-PROMO-TEST",
+        quantity: 1,
+        buyer_agent_id: "did:agent:enterprise-procure-01",
+        delivery_pincode: "560001"
+      },
+      customCatalogStore
+    );
+
+    assert.ok(quote.upcoming_promotions && quote.upcoming_promotions.length === 1);
+    const upcoming = quote.upcoming_promotions[0];
+    assert.equal(upcoming.campaign_id, "CAMP-FUTURE-40");
+    assert.equal(upcoming.expected_unit_price_paise, 300000);
+    assert.equal(upcoming.expected_savings_paise, 200000);
+    assert.equal(upcoming.limited_stock_allocated, 10);
+  });
+
+  it("should omit upcoming_promotions when SKU has no promotions configured", () => {
+    const quote = executeSkuQuote({
+      sku_id: "SKU-CHAIR-001",
+      quantity: 1,
+      buyer_agent_id: "did:agent:enterprise-procure-01",
+      delivery_pincode: "560001"
+    });
+
+    assert.equal(quote.upcoming_promotions, undefined);
   });
 });

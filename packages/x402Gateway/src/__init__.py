@@ -1,5 +1,12 @@
-"""Layer 2: x402Gateway Source Package."""
-
+from .alerts import (
+    PriceDropAlert,
+    PriceDropAlertCancelResponse,
+    PriceDropAlertManager,
+    PriceDropAlertRegisterRequest,
+    PriceDropAlertResponse,
+    PriceDropDispatchResult,
+    PriceDropWebhookPayload,
+)
 from .compiler import (
     CommercialContractAst,
     canonicalizeJson,
@@ -79,6 +86,8 @@ from .negotiation import (
     validateMonotonicity,
 )
 from .routes import (
+    alertsRouter,
+    defaultAlertManager,
     escrowRouter,
     negotiateRouter,
 )
@@ -115,8 +124,16 @@ __all__ = [
     "PowChallengeExpiredException",
     "PowReplayDetectedException",
     "PowVerificationResult",
+    "PriceDropAlert",
+    "PriceDropAlertCancelResponse",
+    "PriceDropAlertManager",
+    "PriceDropAlertRegisterRequest",
+    "PriceDropAlertResponse",
+    "PriceDropDispatchResult",
+    "PriceDropWebhookPayload",
     "RubinsteinStahlNegotiator",
     "X402ChallengeMiddleware",
+    "alertsRouter",
     "app",
     "basisPointsDivisor",
     "canonicalizeJson",
@@ -128,6 +145,7 @@ __all__ = [
     "computeSpread",
     "createGatewayApp",
     "currencyInr",
+    "defaultAlertManager",
     "defaultClientHost",
     "defaultGatewaySecret",
     "defaultGstRatePercent",

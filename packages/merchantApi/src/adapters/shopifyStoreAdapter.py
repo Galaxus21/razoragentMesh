@@ -1,4 +1,6 @@
 from decimal import Decimal
+import re
+import time
 from typing import Any, Optional
 
 from ..constants.merchantConstants import (
@@ -13,12 +15,77 @@ from ..schemas.universalProductSchema import (
     JewelryFacet,
     PharmaFacet,
     ProductAttributes,
+    ScheduledPromotionSchema,
     UniversalProductListing,
 )
 from .csvIngestionAdapter import normalizeInrToPaise
 
 allergensTagPrefix: str = "allergens:"
 allergenTagPrefix: str = "allergen:"
+promoTagPrefix: str = "promo:"
+defaultPromotionDurationSeconds: int = 86400 * 30  # 30 days
+defaultNamedPromoDiscountBps: int = 1000  # 10%
+maxPromotionBps: int = 10000
+minPromotionBps: int = 0
+bpsPerPercent: int = 100
+
+
+def _extractShopifyPromotions(tags: Optional[str]) -> list[ScheduledPromotionSchema]:
+    """Extracts scheduled promotions from Shopify product tag annotations."""
+    if not tags or not tags.strip():
+        return []
+    promotions: list[ScheduledPromotionSchema] = []
+    currentUnix = int(time.time())
+
+    for part in tags.split(","):
+        cleanPart = part.strip()
+        if not cleanPart.lower().startswith(promoTagPrefix):
+            continue
+
+        promoContent = cleanPart[len(promoTagPrefix):].strip()
+        segments = promoContent.split(":")
+
+        if len(segments) >= 4:
+            try:
+                cId = segments[0].strip()
+                rawBps = int(segments[1].strip())
+                bps = min(maxPromotionBps, max(minPromotionBps, rawBps))
+                starts = int(segments[2].strip())
+                ends = int(segments[3].strip())
+                if ends > starts:
+                    promotions.append(
+                        ScheduledPromotionSchema(
+                            campaignId=cId,
+                            name=cId,
+                            startsAtUnix=starts,
+                            endsAtUnix=ends,
+                            discountBps=bps,
+                        )
+                    )
+                    continue
+            except Exception:
+                pass
+
+        try:
+            tagName = segments[0].strip()
+            if not tagName:
+                continue
+            match = re.search(r"(\d+)$", tagName)
+            discountBps = int(match.group(1)) * bpsPerPercent if match else defaultNamedPromoDiscountBps
+            clampedBps = min(maxPromotionBps, max(minPromotionBps, discountBps))
+            promotions.append(
+                ScheduledPromotionSchema(
+                    campaignId=f"shopify-{tagName.lower()}",
+                    name=tagName,
+                    startsAtUnix=currentUnix,
+                    endsAtUnix=currentUnix + defaultPromotionDurationSeconds,
+                    discountBps=clampedBps,
+                )
+            )
+        except Exception:
+            pass
+
+    return promotions
 
 
 def _extractShopifyAllergens(tags: Optional[str]) -> list[str]:
@@ -131,6 +198,7 @@ def mapShopifyVariantToSku(
 
     allergens = _extractShopifyAllergens(product.tags)
     apparelFacet, fmcgFacet, jewelryFacet, pharmaFacet, category = _buildFacets(product, variant, allergens)
+    promotions = _extractShopifyPromotions(product.tags)
 
     return UniversalProductListing(
         skuId=skuId,
@@ -143,6 +211,7 @@ def mapShopifyVariantToSku(
         baseUnitPricePaise=pricePaise,
         availableStock=stock,
         originPincode=originPincode,
+        promotions=promotions,
         apparelFacet=apparelFacet,
         fmcgFacet=fmcgFacet,
         jewelryFacet=jewelryFacet,

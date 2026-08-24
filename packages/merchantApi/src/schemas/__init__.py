@@ -24,6 +24,7 @@ from .universalProductSchema import (
     JewelryFacet,
     PharmaFacet,
     ProductAttributes,
+    ScheduledPromotionSchema,
     UniversalProductListing,
     VolumeTier,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "NegotiationPolicy",
     "PharmaFacet",
     "ProductAttributes",
+    "ScheduledPromotionSchema",
     "ShopifyWebhookPayload",
     "SupportedOracleFeedSymbol",
     "UniversalProductListing",

@@ -1,5 +1,11 @@
 """Routes package for Layer 2 x402Gateway."""
 
+from .alertsRoute import (
+    alertsRouter,
+    cancelPriceDropAlert,
+    defaultAlertManager,
+    registerPriceDropAlert,
+)
 from .escrowRoute import (
     createEscrowSession,
     defaultEscrowClient,
@@ -19,8 +25,11 @@ from .negotiateRoute import (
 
 __all__ = [
     "activeNegotiators",
+    "alertsRouter",
+    "cancelPriceDropAlert",
     "compileContractIfConverged",
     "createEscrowSession",
+    "defaultAlertManager",
     "defaultAntiSpamShield",
     "defaultEscrowClient",
     "escrowRouter",
@@ -28,6 +37,7 @@ __all__ = [
     "getPowChallenge",
     "negotiateRouter",
     "negotiateTurn",
+    "registerPriceDropAlert",
     "releaseEscrow",
     "verifyPoWAndDebitEscrow",
 ]

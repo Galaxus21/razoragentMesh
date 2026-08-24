@@ -20,6 +20,7 @@ from ..schemas.universalProductSchema import (
     FmcgFacet,
     JewelryFacet,
     PharmaFacet,
+    ScheduledPromotionSchema,
     UniversalProductListing,
     VolumeTier,
 )
@@ -37,6 +38,50 @@ def _extractVolumeTiers(tiersRaw: Optional[str]) -> list[VolumeTier]:
         return [VolumeTier(**tier) for tier in parsed]
     except Exception:
         return []
+
+
+def _extractPromotions(promotionsRaw: Optional[str]) -> list[ScheduledPromotionSchema]:
+    """Parses promotions JSON array with key normalization and schema validation."""
+    if not promotionsRaw or not str(promotionsRaw).strip():
+        return []
+    rawStr = str(promotionsRaw).strip()
+    try:
+        parsed = json.loads(rawStr)
+    except Exception:
+        if '\\"' in rawStr:
+            try:
+                parsed = json.loads(rawStr.replace('\\"', '"'))
+            except Exception as err:
+                raise ValueError(f"Malformed promotions JSON: {rawStr}") from err
+        else:
+            raise ValueError(f"Malformed promotions JSON: {rawStr}")
+    if not isinstance(parsed, list):
+        raise ValueError("Promotions JSON must be a list of promotion objects")
+    promotions: list[ScheduledPromotionSchema] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            raise ValueError("Promotion array entry must be an object")
+        campaignId = str(item.get("campaignId") or item.get("campaign_id") or "PROMO_CAMPAIGN").strip()
+        name = str(item.get("name") or item.get("campaign_name") or campaignId).strip()
+        startsAt = int(item["startsAtUnix"]) if "startsAtUnix" in item and item["startsAtUnix"] is not None else int(item.get("starts_at_unix", 0))
+        endsAt = int(item["endsAtUnix"]) if "endsAtUnix" in item and item["endsAtUnix"] is not None else int(item.get("ends_at_unix", 0))
+        discountBps = int(item["discountBps"]) if "discountBps" in item and item["discountBps"] is not None else (int(item["discount_bps"]) if "discount_bps" in item and item["discount_bps"] is not None else None)
+        discountPaise = int(item["discountPaise"]) if "discountPaise" in item and item["discountPaise"] is not None else (int(item["discount_paise"]) if "discount_paise" in item and item["discount_paise"] is not None else None)
+        fixedPrice = int(item["fixedPricePaise"]) if "fixedPricePaise" in item and item["fixedPricePaise"] is not None else (int(item["fixed_price_paise"]) if "fixed_price_paise" in item and item["fixed_price_paise"] is not None else None)
+        limitedStock = int(item["limitedStockAllocated"]) if "limitedStockAllocated" in item and item["limitedStockAllocated"] is not None else (int(item["limited_stock_allocated"]) if "limited_stock_allocated" in item and item["limited_stock_allocated"] is not None else None)
+
+        promo = ScheduledPromotionSchema(
+            campaignId=campaignId,
+            name=name,
+            startsAtUnix=startsAt,
+            endsAtUnix=endsAt,
+            discountBps=discountBps,
+            discountPaise=discountPaise,
+            fixedPricePaise=fixedPrice,
+            limitedStockAllocated=limitedStock,
+        )
+        promotions.append(promo)
+    return promotions
 
 
 def _extractFacets(
@@ -132,6 +177,7 @@ def parseCsvRow(row: dict[str, Any], merchantDid: str) -> Optional[UniversalProd
         description = str(row.get("description") or title).strip()
 
         volumeTiers = _extractVolumeTiers(row.get("volumeTiersJson"))
+        promotions = _extractPromotions(row.get("promotionsJson") or row.get("promotions"))
         apparelFacet, fmcgFacet, jewelryFacet, pharmaFacet = _extractFacets(row)
 
         return UniversalProductListing(
@@ -146,6 +192,7 @@ def parseCsvRow(row: dict[str, Any], merchantDid: str) -> Optional[UniversalProd
             availableStock=stock,
             originPincode=originPincode,
             volumeTiers=volumeTiers,
+            promotions=promotions,
             apparelFacet=apparelFacet,
             fmcgFacet=fmcgFacet,
             jewelryFacet=jewelryFacet,

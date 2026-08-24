@@ -18,6 +18,7 @@ from razoragentMesh.packages.merchantApi import (
     MerchantRegistrationRequest,
     NegotiationPolicy,
     PharmaFacet,
+    ScheduledPromotionSchema,
     ShopifyWebhookPayload,
     SupportedOracleFeedSymbol,
     UniversalProductListing,
@@ -406,4 +407,95 @@ def testMultiIndustryNegativeConstraintFilter() -> None:
     })
     assert res5.isAllowed
     assert res5.rejectionReason is None
+
+
+def testScheduledPromotionSchema() -> None:
+    """Test ScheduledPromotionSchema validation, invariants, and immutability."""
+    # 1. Valid BPS discount
+    promoBps = ScheduledPromotionSchema(
+        campaignId="CAMPAIGN-01",
+        name="Flash Sale 30%",
+        startsAtUnix=1700000000,
+        endsAtUnix=1700100000,
+        discountBps=3000,
+    )
+    assert promoBps.campaignId == "CAMPAIGN-01"
+    assert promoBps.discountBps == 3000
+    assert promoBps.discountPaise is None
+
+    # 2. Valid Paise discount
+    promoPaise = ScheduledPromotionSchema(
+        campaignId="CAMPAIGN-02",
+        name="Flat 500 Off",
+        startsAtUnix=1700000000,
+        endsAtUnix=1700050000,
+        discountPaise=50000,
+    )
+    assert promoPaise.discountPaise == 50000
+
+    # 3. Valid Fixed Price
+    promoFixed = ScheduledPromotionSchema(
+        campaignId="CAMPAIGN-03",
+        name="Special Price 3500",
+        startsAtUnix=1700000000,
+        endsAtUnix=1700080000,
+        fixedPricePaise=350000,
+        limitedStockAllocated=10,
+    )
+    assert promoFixed.fixedPricePaise == 350000
+    assert promoFixed.limitedStockAllocated == 10
+
+    # 4. Invariant: endsAtUnix <= startsAtUnix must raise ValidationError
+    with pytest.raises(ValidationError):
+        ScheduledPromotionSchema(
+            campaignId="CAMPAIGN-ERR-01",
+            name="Invalid Time",
+            startsAtUnix=1700000000,
+            endsAtUnix=1700000000,
+            discountBps=1000,
+        )
+
+    with pytest.raises(ValidationError):
+        ScheduledPromotionSchema(
+            campaignId="CAMPAIGN-ERR-02",
+            name="Inverted Time",
+            startsAtUnix=1700100000,
+            endsAtUnix=1700000000,
+            discountBps=1000,
+        )
+
+    # 5. Invariant: At least one discount field required
+    with pytest.raises(ValidationError):
+        ScheduledPromotionSchema(
+            campaignId="CAMPAIGN-ERR-03",
+            name="No Discount",
+            startsAtUnix=1700000000,
+            endsAtUnix=1700100000,
+        )
+
+    # 6. Extra fields forbidden
+    with pytest.raises(ValidationError):
+        ScheduledPromotionSchema(
+            campaignId="CAMPAIGN-ERR-04",
+            name="Extra Field",
+            startsAtUnix=1700000000,
+            endsAtUnix=1700100000,
+            discountBps=1000,
+            extraProperty="forbidden",  # type: ignore[call-arg]
+        )
+
+    # 7. Discount BPS bounds (0 <= discountBps <= 10000)
+    with pytest.raises(ValidationError):
+        ScheduledPromotionSchema(
+            campaignId="CAMPAIGN-ERR-05",
+            name="Excessive Bps",
+            startsAtUnix=1700000000,
+            endsAtUnix=1700100000,
+            discountBps=15000,
+        )
+
+    # 8. Immutability
+    with pytest.raises(ValidationError):
+        promoBps.discountBps = 2000  # type: ignore[misc]
+
 

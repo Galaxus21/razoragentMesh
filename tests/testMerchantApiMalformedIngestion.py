@@ -193,3 +193,34 @@ def testTc16CsvIngestionFaultIsolation() -> None:
     assert listings[0].baseUnitPricePaise == 49900
     assert listings[1].skuId == "SKU-CSV-02"
     assert listings[1].baseUnitPricePaise == 129950
+
+
+def testTc16CsvPromotionsFaultIsolation() -> None:
+    """TC-16: CSV ingestion isolates malformed promotionsJson into failedSkuIds without halting batch."""
+    csvData = (
+        "skuId,title,category,basePriceInr,availableStock,hsnCode,promotionsJson\n"
+        'SKU-PROMO-OK1,Valid Item 1,electronics,1000.00,10,84713010,"[{""campaignId"": ""P1"", ""startsAtUnix"": 1000, ""endsAtUnix"": 2000, ""discountBps"": 1000}]"\n'
+        'SKU-PROMO-BADJSON,Bad JSON Item,electronics,1000.00,10,84713010,"not a valid json string"\n'
+        'SKU-PROMO-BADTIME,Inverted Time Item,electronics,1000.00,10,84713010,"[{""campaignId"": ""P2"", ""startsAtUnix"": 2000, ""endsAtUnix"": 1000, ""discountBps"": 1000}]"\n'
+        'SKU-PROMO-OK2,Valid Item 2,electronics,2000.00,10,84713010,"[{""campaignId"": ""P3"", ""startsAtUnix"": 1000, ""endsAtUnix"": 2000, ""fixedPricePaise"": 150000}]"\n'
+        'SKU-PROMO-NODISC,No Discount Item,electronics,1000.00,10,84713010,"[{""campaignId"": ""P4"", ""startsAtUnix"": 1000, ""endsAtUnix"": 2000}]"\n'
+        'SKU-PROMO-NONDICT,Non Object Item,electronics,1000.00,10,84713010,"[""not_an_object""]"\n'
+    )
+
+    listings, result = ingestCsvContent(csvData, sampleMerchantDidTc15)
+
+    assert result.totalRowsProcessed == 6
+    assert result.successCount == 2
+    assert result.failureCount == 4
+    assert len(listings) == 2
+
+    assert "SKU-PROMO-BADJSON" in result.failedSkuIds
+    assert "SKU-PROMO-BADTIME" in result.failedSkuIds
+    assert "SKU-PROMO-NODISC" in result.failedSkuIds
+    assert "SKU-PROMO-NONDICT" in result.failedSkuIds
+
+    assert listings[0].skuId == "SKU-PROMO-OK1"
+    assert len(listings[0].promotions) == 1
+    assert listings[1].skuId == "SKU-PROMO-OK2"
+    assert len(listings[1].promotions) == 1
+

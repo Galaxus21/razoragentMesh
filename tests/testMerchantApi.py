@@ -299,3 +299,81 @@ def testMerchantApiRoutes() -> None:
         resDel = client.delete(f"/api/v1/merchant/{merchantDid}/catalog/SKU-API-001")
         assert resDel.status_code == 200
         assert resDel.json()["status"] == "deleted"
+
+
+def testCsvIngestionWithPromotions() -> None:
+    """Verifies CSV parsing with scheduled promotional campaigns."""
+    csvData = (
+        "skuId,title,description,category,brand,hsnCode,gstRatePercent,basePriceInr,availableStock,originPincode,promotionsJson\n"
+        'SKU-PROMO-01,Promo Shirt,Flash sale shirt,apparel,BrandX,6109,5,499.00,100,560001,"[{""campaignId"": ""FLASH30"", ""name"": ""Flash 30% Off"", ""startsAtUnix"": 1700000000, ""endsAtUnix"": 1700100000, ""discountBps"": 3000}]"\n'
+        'SKU-PROMO-02,Promo Chair,Office Chair,furniture,ComfortCo,9403,18,4200.00,50,560001,"[{""campaign_id"": ""SPECIAL700"", ""campaign_name"": ""Special Flat 700"", ""starts_at_unix"": 1700000000, ""ends_at_unix"": 1700050000, ""fixed_price_paise"": 350000}]"\n'
+        "SKU-NO-PROMO,Plain Item,Regular item,apparel,BrandX,6109,5,100.00,10,560001,\n"
+    )
+    listings, result = ingestCsvContent(csvData, testMerchantDid)
+
+    assert result.totalRowsProcessed == 3
+    assert result.successCount == 3
+    assert result.failureCount == 0
+    assert len(listings) == 3
+
+    # Check first listing with BPS promotion
+    listing1 = listings[0]
+    assert listing1.skuId == "SKU-PROMO-01"
+    assert len(listing1.promotions) == 1
+    promo1 = listing1.promotions[0]
+    assert promo1.campaignId == "FLASH30"
+    assert promo1.name == "Flash 30% Off"
+    assert promo1.startsAtUnix == 1700000000
+    assert promo1.endsAtUnix == 1700100000
+    assert promo1.discountBps == 3000
+
+    # Check second listing with snake_case fixedPricePaise promotion
+    listing2 = listings[1]
+    assert listing2.skuId == "SKU-PROMO-02"
+    assert len(listing2.promotions) == 1
+    promo2 = listing2.promotions[0]
+    assert promo2.campaignId == "SPECIAL700"
+    assert promo2.fixedPricePaise == 350000
+
+    # Check third listing with no promotions
+    listing3 = listings[2]
+    assert listing3.skuId == "SKU-NO-PROMO"
+    assert len(listing3.promotions) == 0
+
+
+def testShopifyStoreAdapterWithPromotions() -> None:
+    """Verifies Shopify webhook mapping with parameterized and named promo tags."""
+    payload = ShopifyWebhookPayload(
+        id=123456789,
+        title="Promotional Ergonomic Chair",
+        body_html="<p>Comfortable office chair</p>",
+        tags="promo:FLASH30:3000:1700000000:1700100000, promo:FESTIVE10, cotton, allergens:dust",
+        variants=[
+            {
+                "id": 555,
+                "price": "4200.00",
+                "inventory_quantity": 25,
+            }
+        ],
+    )
+    listings = processShopifyWebhook(payload, testMerchantDid)
+    assert len(listings) == 1
+    listing = listings[0]
+    assert listing.skuId == "SHOPIFY-123456789-555"
+    assert listing.baseUnitPricePaise == 420000
+    assert len(listing.promotions) == 2
+
+    # Promo 1: Parameterized tag
+    p1 = listing.promotions[0]
+    assert p1.campaignId == "FLASH30"
+    assert p1.discountBps == 3000
+    assert p1.startsAtUnix == 1700000000
+    assert p1.endsAtUnix == 1700100000
+
+    # Promo 2: Named tag (FESTIVE10 -> 1000 bps)
+    p2 = listing.promotions[1]
+    assert p2.campaignId == "shopify-festive10"
+    assert p2.name == "FESTIVE10"
+    assert p2.discountBps == 1000
+    assert p2.endsAtUnix > p2.startsAtUnix
+

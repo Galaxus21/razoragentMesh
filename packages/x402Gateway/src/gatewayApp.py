@@ -10,6 +10,10 @@ from .constants.negotiationConstants import (
     endpointHealth,
     protocolName,
 )
+from .routes.alertsRoute import (
+    alertsRouter,
+    defaultAlertManager,
+)
 from .routes.escrowRoute import (
     defaultEscrowClient,
     escrowRouter,
@@ -28,6 +32,7 @@ class GatewayState:
         self.escrowClient = defaultEscrowClient
         self.antiSpamShield = defaultAntiSpamShield
         self.activeNegotiators = activeNegotiators
+        self.alertManager = defaultAlertManager
 
 
 gatewayState = GatewayState()
@@ -68,6 +73,7 @@ def createGatewayApp() -> FastAPI:
 
     gatewayApp.include_router(escrowRouter)
     gatewayApp.include_router(negotiateRouter)
+    gatewayApp.include_router(alertsRouter)
 
     return gatewayApp
 
@@ -76,6 +82,7 @@ app = createGatewayApp()
 
 __all__ = [
     "GatewayState",
+    "alertsRouter",
     "app",
     "createGatewayApp",
     "gatewayState",

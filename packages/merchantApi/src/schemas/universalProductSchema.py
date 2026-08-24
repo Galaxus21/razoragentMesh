@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 from typing import Literal, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..constants.merchantConstants import (
     hsnCodeMaxLength,
@@ -26,6 +26,43 @@ minAvailableStock: int = 0
 defaultMinimumOrderQuantity: int = 1
 minOrderQuantityLimit: int = 1
 defaultCurrencyInr: Literal["INR"] = "INR"
+minPromotionStartsAtUnix: int = 0
+minPromotionDurationSeconds: int = 1
+minPromotionDiscountPaise: int = 0
+minPromotionFixedPricePaise: int = 0
+minPromotionLimitedStock: int = 0
+
+
+class ScheduledPromotionSchema(BaseModel):
+    """Scheduled promotional flash sale campaign with temporal and discount bounds."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    campaignId: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    startsAtUnix: int = Field(ge=minPromotionStartsAtUnix)
+    endsAtUnix: int = Field(gt=minPromotionStartsAtUnix)
+    discountBps: Optional[int] = Field(default=None, ge=minDiscountBps, le=maxDiscountBps)
+    discountPaise: Optional[int] = Field(default=None, ge=minPromotionDiscountPaise)
+    fixedPricePaise: Optional[int] = Field(default=None, ge=minPromotionFixedPricePaise)
+    limitedStockAllocated: Optional[int] = Field(default=None, ge=minPromotionLimitedStock)
+
+    @model_validator(mode="after")
+    def validatePromotionInvariants(self) -> "ScheduledPromotionSchema":
+        """Enforces temporal bounds and at least one discount/price definition."""
+        if self.endsAtUnix <= self.startsAtUnix:
+            raise ValueError(
+                f"Invalid temporal window: endsAtUnix ({self.endsAtUnix}) must be strictly greater than startsAtUnix ({self.startsAtUnix})"
+            )
+        if (
+            self.discountBps is None
+            and self.discountPaise is None
+            and self.fixedPricePaise is None
+        ):
+            raise ValueError(
+                "At least one of discountBps, discountPaise, or fixedPricePaise must be specified."
+            )
+        return self
 
 
 class VolumeTier(BaseModel):
@@ -115,6 +152,7 @@ class UniversalProductListing(BaseModel):
         default=defaultMinimumOrderQuantity,
         ge=minOrderQuantityLimit,
     )
+    promotions: list[ScheduledPromotionSchema] = Field(default_factory=list)
     jewelryFacet: Optional[JewelryFacet] = None
     apparelFacet: Optional[ApparelFacet] = None
     pharmaFacet: Optional[PharmaFacet] = None
@@ -127,6 +165,7 @@ __all__ = [
     "JewelryFacet",
     "PharmaFacet",
     "ProductAttributes",
+    "ScheduledPromotionSchema",
     "UniversalProductListing",
     "VolumeTier",
     "defaultCurrencyInr",
@@ -140,6 +179,11 @@ __all__ = [
     "minGrossWeightGrams",
     "minGstRatePercent",
     "minOrderQuantityLimit",
+    "minPromotionDiscountPaise",
+    "minPromotionDurationSeconds",
+    "minPromotionFixedPricePaise",
+    "minPromotionLimitedStock",
+    "minPromotionStartsAtUnix",
     "minShelfLifeDays",
     "minVolumeQuantity",
 ]

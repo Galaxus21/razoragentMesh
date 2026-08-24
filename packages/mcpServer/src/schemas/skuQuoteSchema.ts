@@ -24,6 +24,18 @@ export const appliedDiscountItemSchema = z.object({
 
 export type AppliedDiscountItemSchema = z.infer<typeof appliedDiscountItemSchema>;
 
+export const upcomingPromotionSchema = z.object({
+  campaign_id: z.string().min(1),
+  name: z.string().min(1),
+  starts_at_unix: z.number().int().positive(),
+  ends_at_unix: z.number().int().positive(),
+  expected_unit_price_paise: z.number().int().min(0),
+  expected_savings_paise: z.number().int().min(0),
+  limited_stock_allocated: z.number().int().min(0).optional()
+});
+
+export type UpcomingPromotionSchema = z.infer<typeof upcomingPromotionSchema>;
+
 export const skuQuoteResponseSchema = z.object({
   sku_id: z.string(),
   available_stock: z.number().int().min(0),
@@ -41,7 +53,8 @@ export const skuQuoteResponseSchema = z.object({
   quote_expiry_timestamp: z.number().int().positive(),
   quote_hash: z.string().min(1),
   applied_discounts: z.array(appliedDiscountItemSchema).optional(),
-  total_savings_paise: z.number().int().min(0).optional()
+  total_savings_paise: z.number().int().min(0).optional(),
+  upcoming_promotions: z.array(upcomingPromotionSchema).optional()
 });
 
 export type SkuQuoteResponse = z.infer<typeof skuQuoteResponseSchema>;
