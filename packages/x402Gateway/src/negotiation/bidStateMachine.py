@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import validateIntegerPaise
+from ..constants.arithmeticUtils import validateIntegerPaise
 from ..constants.negotiationConstants import (
     maxNegotiationTurns,
     microFeePerTurnPaise,

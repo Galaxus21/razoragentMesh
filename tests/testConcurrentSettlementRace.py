@@ -79,57 +79,52 @@ def _buildRaceMandateTriplet(
 ) -> Tuple[IntentMandate, CartMandate, ExecutionMandate]:
     """Builds unique signed mandate chain for a race test participant."""
     intentM = createSignedIntentMandate(
-        mandateId=f"M-I-RACE-{index}",
-        userSigner=userSigner,
-        delegatedAgentDid=agentSigner.getAgentDid(),
-        maxBudgetPaise=500000,
+        mandateId=f"M-I-RACE-{index}", userSigner=userSigner,
+        delegatedAgentDid=agentSigner.getAgentDid(), maxBudgetPaise=500000,
         upiCircleDelegationToken=f"upi_tok_race_{index}",
-        singleTransactionLimitPaise=500000,
-        validUntilTimestamp=2000000000,
+        singleTransactionLimitPaise=500000, validUntilTimestamp=2000000000,
     )
-
     item = CartItemSchema(
-        skuId=f"SKU-RACE-{index}",
-        quantity=1,
-        unitPricePaise=taxableSubtotalTc13,
-        hsnCode="84713010",
-        gstRatePercent=18,
-        lineTotalPaise=taxableSubtotalTc13,
+        skuId=f"SKU-RACE-{index}", quantity=1, unitPricePaise=taxableSubtotalTc13,
+        hsnCode="84713010", gstRatePercent=18, lineTotalPaise=taxableSubtotalTc13,
     )
-    taxBreakdown = TaxBreakdownSchema(
-        cgstPaise=9000,
-        sgstPaise=9000,
-        igstPaise=0,
-        totalTaxPaise=taxPaiseTc13,
-    )
+    taxBreakdown = TaxBreakdownSchema(cgstPaise=9000, sgstPaise=9000, igstPaise=0, totalTaxPaise=taxPaiseTc13)
     cartM = createSignedCartMandate(
-        cartId=f"M-C-RACE-{index}",
-        merchantSigner=merchantSigner,
-        merchantGstin="29AAAAA0000A1Z5",
-        merchantStateCode="29",
-        buyerDeliveryPincode="560001",
-        buyerDeliveryStateCode="29",
-        items=[item],
-        taxableSubtotalPaise=taxableSubtotalTc13,
-        taxBreakdown=taxBreakdown,
-        shippingPaise=shippingPaiseTc13,
-        discountPaise=0,
-        totalPaise=grossSettlementPaiseTc13,
-        inventoryLockToken=f"lock_race_{index}",
-        inventoryLockExpiresAt=2000000000,
+        cartId=f"M-C-RACE-{index}", merchantSigner=merchantSigner,
+        merchantGstin="29AAAAA0000A1ZY", merchantStateCode="29",
+        buyerDeliveryPincode="560001", buyerDeliveryStateCode="29",
+        items=[item], taxableSubtotalPaise=taxableSubtotalTc13,
+        taxBreakdown=taxBreakdown, shippingPaise=shippingPaiseTc13,
+        discountPaise=0, totalPaise=grossSettlementPaiseTc13,
+        inventoryLockToken=f"lock_race_{index}", inventoryLockExpiresAt=2000000000,
     )
-
     execM = createSignedExecutionMandate(
-        executionId=f"M-E-RACE-{index}",
-        buyerAgentSigner=agentSigner,
-        intentMandate=intentM,
-        cartMandate=cartM,
+        executionId=f"M-E-RACE-{index}", buyerAgentSigner=agentSigner,
+        intentMandate=intentM, cartMandate=cartM,
         settlementAmountPaise=grossSettlementPaiseTc13,
-        upiCircleToken=f"upi_tok_race_{index}",
-        timestamp=fixedServerTimeTc13,
+        upiCircleToken=f"upi_tok_race_{index}", timestamp=fixedServerTimeTc13,
         nonce=f"nonce_tc13_race_{index}",
     )
     return intentM, cartM, execM
+
+
+async def _runSingleRaceSaga(
+    idx: int, failingIndex: int, routeClient: RazorpayRouteClient,
+    nonceLedger: NonceLedger, signers: Tuple[Ed25519Signer, Ed25519Signer, Ed25519Signer],
+) -> Any:
+    logisticsAcc = failingLogisticsAccountTc13 if idx == failingIndex else standardLogisticsAccountTc13
+    orchestrator = SettlementOrchestrator(
+        routeClient=routeClient, nonceLedger=nonceLedger,
+        protocolFeeAccount=protocolFeeAccountTc13, protocolFeePaise=protocolFeePaiseTc13,
+        logisticsAccount=logisticsAcc,
+    )
+    uSigner, mSigner, aSigner = signers
+    intentM, cartM, execM = _buildRaceMandateTriplet(idx, uSigner, mSigner, aSigner)
+    return await orchestrator.executeSettlementSaga(
+        intentMandate=intentM, cartMandate=cartM, executionMandate=execM,
+        merchantAccount=f"acc_merchant_{idx}", paymentId=f"pay_race_{idx}",
+        serverTime=fixedServerTimeTc13,
+    )
 
 
 @pytest.mark.asyncio
@@ -140,50 +135,26 @@ async def testTc13ConcurrentTwoPhaseCommitSettlementRaceAndRollback() -> None:
     routeClient = RazorpayRouteClient(isMockMode=True)
     routeClient.simulatedFailureAccount = failingLogisticsAccountTc13
 
-    uPriv, _ = generateKeyPair()
-    mPriv, _ = generateKeyPair()
-    aPriv, _ = generateKeyPair()
-    uSigner = Ed25519Signer(uPriv)
-    mSigner = Ed25519Signer(mPriv)
-    aSigner = Ed25519Signer(aPriv)
-
+    signers = (
+        Ed25519Signer(generateKeyPair()[0]),
+        Ed25519Signer(generateKeyPair()[0]),
+        Ed25519Signer(generateKeyPair()[0]),
+    )
     failingIndex = 2
-
-    async def executeSingleSaga(idx: int) -> SettlementResult:
-        logisticsAcc = failingLogisticsAccountTc13 if idx == failingIndex else standardLogisticsAccountTc13
-        orchestrator = SettlementOrchestrator(
-            routeClient=routeClient,
-            nonceLedger=nonceLedger,
-            protocolFeeAccount=protocolFeeAccountTc13,
-            protocolFeePaise=protocolFeePaiseTc13,
-            logisticsAccount=logisticsAcc,
-        )
-        intentM, cartM, execM = _buildRaceMandateTriplet(idx, uSigner, mSigner, aSigner)
-        return await orchestrator.executeSettlementSaga(
-            intentMandate=intentM,
-            cartMandate=cartM,
-            executionMandate=execM,
-            merchantAccount=f"acc_merchant_{idx}",
-            paymentId=f"pay_race_{idx}",
-            serverTime=fixedServerTimeTc13,
-        )
-
-    results = await asyncio.gather(*[executeSingleSaga(i) for i in range(5)], return_exceptions=True)
+    tasks = [_runSingleRaceSaga(i, failingIndex, routeClient, nonceLedger, signers) for i in range(5)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
     for idx, res in enumerate(results):
         if idx == failingIndex:
             assert isinstance(res, SettlementCompensationTriggeredException)
         else:
-            assert isinstance(res, SettlementResult)
-            assert res.status == "captured"
+            assert isinstance(res, SettlementResult) and res.status == "captured"
 
-    # LIFO Reversal assertion: 2 successful transfers in failing saga were reversed
     assert len(routeClient._reversals) == 2
-
-    # Nonce invalidation assertion: Phase 1 consumed the nonce, replay must be blocked
     failedNonce = f"nonce_tc13_race_{failingIndex}"
     with pytest.raises(NonceReplayException):
         await nonceLedger.validateAndRecordNonce(failedNonce, fixedServerTimeTc13, fixedServerTimeTc13)
+
 
 
 def testTc14SplitManifestBoundaryAndNegativeValueInjection() -> None:

@@ -3,7 +3,13 @@
 # Network & Server Configuration
 merchantApiDefaultPort: int = 4002
 
+# Application & API Metadata
+defaultApiTitle: str = "RazorAgent Merchant API"
+defaultApiVersion: str = "2.0.0"
+
 # Redis Key Prefixes & Channels
+inventoryStockPrefix: str = "inventory:stock:"
+merchantKeypairPrefix: str = "mesh:merchant:keypair:"
 redisCatalogHashKeyPrefix: str = "mesh:catalog:"
 redisMerchantPolicyKeyPrefix: str = "mesh:merchant:policy:"
 redisCatalogUpdatesChannel: str = "mesh:catalog:updates"
@@ -40,6 +46,13 @@ defaultGstRatePercent: int = 18
 zeroRatedGstPercent: int = 0
 jewelryGstRatePercent: int = 3
 
+# Vertical & Category Defaults
+defaultVerticalApparel: str = "apparel"
+defaultVerticalGeneral: str = "general"
+defaultVerticalFmcg: str = "fmcg"
+defaultVerticalJewelry: str = "jewelry"
+defaultVerticalPharma: str = "pharma"
+
 # Ingestion Batch & Catalog Field Size Limits
 maxCsvRowsPerBatch: int = 500
 maxSkuTitleLength: int = 150
@@ -56,17 +69,21 @@ defaultVectorDimension: int = 384
 modelNameMiniLm: str = "all-MiniLM-L6-v2"
 modelNameBgeSmall: str = "BAAI/bge-small-en-v1.5"
 
-# Financial Unit Divisors & Zero Paired Primitives
+# Financial Unit Divisors & Rate Limits
 paisePerRupee: int = 100
 basisPointsDivisor: int = 10000
 percentDivisor: int = 100
 zeroPaise: int = 0
+rateLimitBurst1000: int = 1000
+rateLimitMax100M: int = 100000000
 
 __all__ = [
     "basisPointsDivisor",
     "catalogUpdateActionAdded",
     "catalogUpdateActionRemoved",
     "catalogUpdateActionUpdated",
+    "defaultApiTitle",
+    "defaultApiVersion",
     "defaultCollectionName",
     "defaultCurrency",
     "defaultGstRatePercent",
@@ -74,6 +91,11 @@ __all__ = [
     "defaultOriginPincode",
     "defaultQuoteTtlSeconds",
     "defaultVectorDimension",
+    "defaultVerticalApparel",
+    "defaultVerticalFmcg",
+    "defaultVerticalGeneral",
+    "defaultVerticalJewelry",
+    "defaultVerticalPharma",
     "didMerchantPrefix",
     "gstCharsTable",
     "gstinLength",
@@ -81,12 +103,14 @@ __all__ = [
     "hsnCodeMaxLength",
     "hsnCodeMinLength",
     "hsnCodeRegexPattern",
+    "inventoryStockPrefix",
     "jewelryGstRatePercent",
     "maxCsvRowsPerBatch",
     "maxHsnCodeLength",
     "maxSkuDescriptionLength",
     "maxSkuTitleLength",
     "merchantApiDefaultPort",
+    "merchantKeypairPrefix",
     "minHsnCodeLength",
     "minRazorpayAccountIdLength",
     "modelNameBgeSmall",
@@ -94,6 +118,8 @@ __all__ = [
     "paisePerRupee",
     "percentDivisor",
     "pinCodeRegexPattern",
+    "rateLimitBurst1000",
+    "rateLimitMax100M",
     "razorpayRouteAccountPrefix",
     "redisCatalogHashKeyPrefix",
     "redisCatalogKeyPrefix",

@@ -8,6 +8,7 @@ from ..constants.merchantConstants import (
     catalogUpdateActionAdded,
     catalogUpdateActionRemoved,
     catalogUpdateActionUpdated,
+    inventoryStockPrefix,
     redisCatalogHashKeyPrefix,
     redisCatalogKeyPrefix,
     redisCatalogUpdatesChannel,
@@ -100,8 +101,8 @@ class CatalogManager:
             candidateKeys = await self.redisClient.keys(f"{redisCatalogHashKeyPrefix}*")
         elif hasattr(self.redisClient, "store") and isinstance(self.redisClient.store, dict):
             candidateKeys = [
-                k for k in self.redisClient.store.keys()
-                if k.startswith(redisCatalogHashKeyPrefix)
+                redisKey for redisKey in self.redisClient.store.keys()
+                if redisKey.startswith(redisCatalogHashKeyPrefix)
             ]
 
         matchingSkus: List[str] = []
@@ -124,7 +125,7 @@ class CatalogManager:
         await manager.upsertSku(listing)
         merchantKey = f"{redisMerchantCatalogPrefix}{listing.merchantDid}:{listing.skuId}"
         stockKey = f"{redisCatalogKeyPrefix}{listing.skuId}:stock"
-        inventoryStockKey = f"inventory:stock:{listing.skuId}"
+        inventoryStockKey = f"{inventoryStockPrefix}{listing.skuId}"
         await redisClient.set(merchantKey, listing.model_dump_json())
         await redisClient.set(stockKey, str(listing.availableStock))
         await redisClient.set(inventoryStockKey, str(listing.availableStock))
@@ -158,7 +159,7 @@ class CatalogManager:
         removed = await manager.removeSku(skuId, merchantDid)
         merchantKey = f"{redisMerchantCatalogPrefix}{merchantDid}:{skuId}"
         stockKey = f"{redisCatalogKeyPrefix}{skuId}:stock"
-        inventoryStockKey = f"inventory:stock:{skuId}"
+        inventoryStockKey = f"{inventoryStockPrefix}{skuId}"
         if hasattr(redisClient, "delete"):
             await redisClient.delete(merchantKey, stockKey, inventoryStockKey)
         elif hasattr(redisClient, "store") and isinstance(redisClient.store, dict):

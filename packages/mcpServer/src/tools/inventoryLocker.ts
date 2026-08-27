@@ -45,65 +45,74 @@ export async function reserveInventoryLock(
   rawRequest: unknown,
   options: LockOptions = {}
 ): Promise<InventoryLockResponse> {
+  const { request, store } = _validateLockRequest(rawRequest, options.catalogStore);
+  const { lockToken, expiresAtUnixMs, fencingToken } = await _executeAtomicReservation(
+    request,
+    store,
+    options
+  );
+  return _buildLockResponse(request, lockToken, fencingToken, expiresAtUnixMs, options.privateKeyHex);
+}
+
+function _validateLockRequest(
+  rawRequest: unknown,
+  catalogStore?: CatalogStore
+): { request: InventoryLockRequest; store: CatalogStore } {
   const request = normalizeLockRequest(rawRequest);
-  const store = options.catalogStore ?? defaultCatalogStore;
+  const store = catalogStore ?? defaultCatalogStore;
   const sku = store.getSku(request.sku_id);
 
   if (!sku) {
     throw new SkuNotFoundException(request.sku_id);
   }
 
+  return { request, store };
+}
+
+async function _executeAtomicReservation(
+  request: InventoryLockRequest,
+  store: CatalogStore,
+  options: LockOptions
+): Promise<{ lockToken: string; expiresAtUnixMs: number; fencingToken: number }> {
   const lockToken = uuidv4();
   const expiresAtUnixMs = Date.now() + request.lock_ttl_seconds * millisPerSecond;
   const lockRecord = JSON.stringify({
-    lockToken,
-    skuId: request.sku_id,
-    quantity: request.quantity,
-    buyerAgentId: request.buyer_agent_id,
-    quoteHash: request.quote_hash,
-    expiresAtUnixMs
+    lockToken, skuId: request.sku_id, quantity: request.quantity,
+    buyerAgentId: request.buyer_agent_id, quoteHash: request.quote_hash, expiresAtUnixMs
   });
 
   const lockResult = options.redisClient
     ? await executeRedisLock(
-        options.redisClient,
-        request.sku_id,
-        request.quantity,
-        request.lock_ttl_seconds,
-        lockToken,
-        lockRecord
+        options.redisClient, request.sku_id, request.quantity,
+        request.lock_ttl_seconds, lockToken, lockRecord
       )
     : defaultInMemoryLocker.executeLock(
-        store,
-        request.sku_id,
-        request.quantity,
-        request.lock_ttl_seconds,
-        lockToken
+        store, request.sku_id, request.quantity, request.lock_ttl_seconds, lockToken
       );
 
   if (!lockResult.success) {
-    throw new InsufficientStockException(
-      request.sku_id,
-      request.quantity,
-      lockResult.remainingStock
-    );
+    throw new InsufficientStockException(request.sku_id, request.quantity, lockResult.remainingStock);
   }
 
-  const privateKey = options.privateKeyHex ?? defaultMerchantPrivateKeyHex;
+  return { lockToken, expiresAtUnixMs, fencingToken: lockResult.fencingToken };
+}
+
+function _buildLockResponse(
+  request: InventoryLockRequest,
+  lockToken: string,
+  fencingToken: number,
+  expiresAtUnixMs: number,
+  privateKeyHex?: string
+): InventoryLockResponse {
+  const privateKey = privateKeyHex ?? defaultMerchantPrivateKeyHex;
   const signature = signLockPayload(
-    {
-      lockToken,
-      fencingToken: lockResult.fencingToken,
-      skuId: request.sku_id,
-      quantityLocked: request.quantity,
-      expiresAtUnixMs
-    },
+    { lockToken, fencingToken, skuId: request.sku_id, quantityLocked: request.quantity, expiresAtUnixMs },
     privateKey
   );
 
   const response: InventoryLockResponse = {
     lock_token: lockToken,
-    fencing_token: lockResult.fencingToken,
+    fencing_token: fencingToken,
     sku_id: request.sku_id,
     quantity_locked: request.quantity,
     expires_at_unix_ms: expiresAtUnixMs,

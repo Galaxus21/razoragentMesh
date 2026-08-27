@@ -22,36 +22,33 @@ services:
       - "6334:6334"
     volumes:
       - qdrantData:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
     networks:
       - meshNetwork
 
-  mcpServer:
+  mcp-server:
     build:
       context: ./packages/mcpServer
       dockerfile: Dockerfile
+    image: razoragent_mcp_server:latest
     container_name: razoragent_mcp_server
     ports:
       - "4001:4001"
     environment:
       - PORT=4001
       - REDIS_URL=redis://redis:6379/0
-      - MERCHANT_PRIVATE_KEY_HEX=${MERCHANT_PRIVATE_KEY_HEX}
-      - HMAC_SECRET_KEY=${HMAC_SECRET_KEY}
+      - MERCHANT_PRIVATE_KEY_HEX=${MERCHANT_PRIVATE_KEY_HEX:-}
+      - HMAC_SECRET_KEY=${HMAC_SECRET_KEY:-}
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - meshNetwork
 
-  merchantApi:
+  merchant-api:
     build:
-      context: ./packages/merchantApi
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/merchantApi/Dockerfile
+    image: razoragent_merchant_api:latest
     container_name: razoragent_merchant_api
     ports:
       - "4002:4002"
@@ -60,49 +57,64 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
-      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
-      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
     depends_on:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     networks:
       - meshNetwork
 
-  mandateEngine:
+  mandate-engine:
     build:
       context: ./packages/mandateEngine
       dockerfile: Dockerfile
+    image: razoragent_mandate_engine:latest
     container_name: razoragent_mandate_engine
     ports:
       - "8000:8000"
     environment:
       - PORT=8000
       - REDIS_URL=redis://redis:6379/0
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
-      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
     depends_on:
       redis:
-        condition: service_healthy
-      qdrant:
         condition: service_healthy
     networks:
       - meshNetwork
 
-  telemetryDashboard:
+  x402-gateway:
+    build:
+      context: .
+      dockerfile: packages/x402Gateway/Dockerfile
+    image: razoragent_x402_gateway:latest
+    container_name: razoragent_x402_gateway
+    ports:
+      - "4003:4003"
+    environment:
+      - PORT=4003
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - meshNetwork
+
+  telemetry-dashboard:
     build:
       context: ./packages/telemetryDashboard
       dockerfile: Dockerfile
+    image: razoragent_telemetry_dashboard:latest
     container_name: razoragent_telemetry_dashboard
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_TELEMETRY_SSE_URL=http://localhost:8000/api/v1/telemetry/stream
     depends_on:
-      - mandateEngine
+      - mandate-engine
     networks:
       - meshNetwork
 

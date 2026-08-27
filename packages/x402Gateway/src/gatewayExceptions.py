@@ -45,7 +45,15 @@ class InvalidBidPayloadException(GatewayBaseException):
     """Raised when input bid payload fails domain or schema validation."""
 
 
+try:
+    from razoragentMesh.packages.mandateEngine import ArithmeticDriftException
+except Exception:
+    class ArithmeticDriftException(GatewayBaseException):
+        """Raised when financial float drift or integer violation is detected."""
+
+
 __all__ = [
+    "ArithmeticDriftException",
     "AstCompilationException",
     "EscrowSessionNotFoundException",
     "GatewayBaseException",

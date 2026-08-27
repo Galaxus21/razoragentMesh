@@ -50,35 +50,44 @@ All 10 benchmark scenarios are implemented under `tests/benchmarkHarness/` with 
 ## 3. Quickstart & Installation
 
 ### Prerequisites
-- Python 3.13+ (or 3.11+)
-- Node.js 22+ LTS
 - Docker & Docker Compose
+- (Optional for running tests locally: Python 3.13+ and Node.js 22+)
 
-### 1. Clone & Configure Environment
+### 1. Launch Full Stack with Docker Compose
+From inside `razoragentMesh/`, launch the entire container topology:
+
 ```bash
-cp .env.example .env
-```
-
-### 2. Run Test Suite & Benchmark Harness
-```bash
-# Run all 10 adversarial benchmark scenarios
-python -m pytest tests/benchmarkHarness/ -v
-
-# Run multi-layer end-to-end integration tests
-python -m pytest tests/integration/ -v
-```
-
-### 3. One-Command Docker Startup
-```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 Services exposed:
-- **Telemetry Dashboard:** `http://localhost:3000`
-- **Mandate Settlement Engine:** `http://localhost:8000`
-- **MCP Server:** `http://localhost:4001`
-- **Qdrant Vector DB:** `http://localhost:6333`
+- **Telemetry Dashboard & SKU Studio:** [http://localhost:3000](http://localhost:3000)
+- **Mandate Settlement Engine API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Merchant Onboarding & Bullion API Docs:** [http://localhost:4002/docs](http://localhost:4002/docs)
+- **x402 Dynamic Negotiation Gateway Docs:** [http://localhost:4003/docs](http://localhost:4003/docs)
+- **MCP Discovery Server (JSON-RPC 2.0):** `http://localhost:4001`
+- **Qdrant Vector DB Console:** [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
 - **Redis Nonce Ledger:** `localhost:6379`
+
+To stop all services:
+```bash
+docker compose down
+```
+
+### 2. Run Test Suites & Invariant Benchmarks (1,497 Tests)
+```bash
+# Python Backend Core & Python Buyer SDK (1,241 tests)
+python -m pytest tests/ packages/buyerSdkPy/tests/ -q --tb=short
+
+# MCP Server Discovery Tools (112 tests)
+Push-Location packages/mcpServer; npm test; Pop-Location
+
+# TypeScript Buyer SDK (91 tests)
+Push-Location packages/buyerSdkTs; npm test; Pop-Location
+
+# Telemetry Dashboard & SKU Studio (53 tests)
+Push-Location packages/telemetryDashboard; npm test; Pop-Location
+```
 
 ---
 

@@ -14,16 +14,30 @@ import {
 } from "../schemas/skuQuoteSchema.js";
 import { defaultCatalogStore, CatalogStore } from "../catalog/catalogStore.js";
 import {
-  calculateVolumePricing,
   calculateGstBreakdown,
   computeAutoDiscountStack,
   evaluateScheduledPromotions,
-  zeroPaise,
   AppliedDiscountItem,
+  ScheduledPromotion,
   UpcomingPromotion,
-  VolumeTier
+  TaxBreakdown
 } from "../catalog/pricingEngine.js";
+import { CatalogSkuItem } from "../types/mcpToolTypes.js";
 import { computeQuoteHash } from "../crypto/quoteHashSigner.js";
+
+export interface SkuQuotePricingResult {
+  readonly offeredUnitPricePaise: number;
+  readonly appliedDiscounts: AppliedDiscountItem[];
+  readonly totalSavingsPaise: number;
+  readonly tax: TaxBreakdown;
+}
+
+export interface SignAndPackageQuoteParams {
+  readonly request: SkuQuoteRequest;
+  readonly sku: CatalogSkuItem;
+  readonly pricing: SkuQuotePricingResult;
+  readonly secretKey?: string;
+}
 
 export const pincodePrefixLength = 2;
 
@@ -45,94 +59,87 @@ export function normalizeQuoteRequest(rawInput: unknown): SkuQuoteRequest {
   return skuQuoteRequestSchema.parse(normalized);
 }
 
-function resolveUnitPriceAndDiscounts(
-  baseUnitPricePaise: number,
-  quantity: number,
-  volumeTiers: readonly VolumeTier[],
-  promoCode?: string
-): {
-  offeredUnitPricePaise: number;
-  appliedDiscounts: AppliedDiscountItem[];
-  totalSavingsPaise: number;
-} {
-  if (quantity > 1 || Boolean(promoCode)) {
-    const discountResult = computeAutoDiscountStack(baseUnitPricePaise, quantity, volumeTiers, promoCode);
-    return {
-      offeredUnitPricePaise: discountResult.offeredUnitPricePaise,
-      appliedDiscounts: [...discountResult.appliedDiscounts],
-      totalSavingsPaise: discountResult.totalSavingsPaise
-    };
-  }
-  const pricing = calculateVolumePricing(baseUnitPricePaise, quantity, volumeTiers);
-  return {
-    offeredUnitPricePaise: pricing.offeredUnitPricePaise,
-    appliedDiscounts: [],
-    totalSavingsPaise: pricing.totalBasePaise - pricing.totalOfferedPaise
-  };
-}
-
 export function executeSkuQuote(
   rawRequest: unknown,
   catalogStore: CatalogStore = defaultCatalogStore,
   secretKey?: string
 ): SkuQuoteResponse {
+  const { request, sku, buyerState } = _resolveCatalogItem(rawRequest, catalogStore);
+  const pricing = _computeQuoteWithDiscounts(sku, request.quantity, request.promo_code, buyerState);
+  return _signAndPackageQuote({ request, sku, pricing, secretKey });
+}
+
+function _resolveCatalogItem(
+  rawRequest: unknown,
+  catalogStore: CatalogStore
+): { request: SkuQuoteRequest; sku: CatalogSkuItem; buyerState: string } {
   const request = normalizeQuoteRequest(rawRequest);
   const sku = catalogStore.getRequiredSku(request.sku_id);
   const buyerState = resolveStateFromPincode(request.delivery_pincode);
+  return { request, sku, buyerState };
+}
 
-  const { offeredUnitPricePaise, appliedDiscounts, totalSavingsPaise } = resolveUnitPriceAndDiscounts(
-    sku.baseUnitPricePaise,
-    request.quantity,
-    sku.volumeTiers,
-    request.promo_code
-  );
-
-  const taxableSubtotalPaise = offeredUnitPricePaise * request.quantity;
+function _computeQuoteWithDiscounts(
+  sku: CatalogSkuItem,
+  quantity: number,
+  promoCode: string | undefined,
+  buyerState: string
+): SkuQuotePricingResult {
+  const discountResult = computeAutoDiscountStack(sku.baseUnitPricePaise, quantity, sku.volumeTiers, promoCode);
+  const taxableSubtotalPaise = discountResult.offeredUnitPricePaise * quantity;
   const tax = calculateGstBreakdown(taxableSubtotalPaise, sku.gstRatePercent, defaultMerchantState, buyerState);
 
+  return {
+    offeredUnitPricePaise: discountResult.offeredUnitPricePaise,
+    appliedDiscounts: [...discountResult.appliedDiscounts],
+    totalSavingsPaise: discountResult.totalSavingsPaise,
+    tax
+  };
+}
+
+function _signAndPackageQuote(params: SignAndPackageQuoteParams): SkuQuoteResponse {
+  const { request, sku, pricing, secretKey } = params;
   const currentUnixSeconds = Math.floor(Date.now() / millisPerSecond);
   const quoteExpiryTimestamp = currentUnixSeconds + quoteValiditySeconds;
-
   const quoteHash = computeQuoteHash(
     {
-      skuId: sku.skuId,
-      quantity: request.quantity,
-      offeredUnitPricePaise,
-      totalTaxPaise: tax.totalTaxPaise,
-      quoteExpiryTimestamp,
-      buyerAgentId: request.buyer_agent_id
+      skuId: sku.skuId, quantity: request.quantity, offeredUnitPricePaise: pricing.offeredUnitPricePaise,
+      totalTaxPaise: pricing.tax.totalTaxPaise, quoteExpiryTimestamp, buyerAgentId: request.buyer_agent_id
     },
     secretKey
   );
 
-  let upcomingPromotions: UpcomingPromotion[] | undefined = undefined;
-  if (sku.promotions && sku.promotions.length > 0) {
-    const evaluated = evaluateScheduledPromotions(sku.baseUnitPricePaise, sku.promotions, currentUnixSeconds);
-    if (evaluated.upcomingPromotions.length > 0) {
-      upcomingPromotions = [...evaluated.upcomingPromotions];
-    }
-  }
-
+  const upcomingPromotions = _resolveUpcomingPromotions(sku.baseUnitPricePaise, sku.promotions, currentUnixSeconds);
   const response: SkuQuoteResponse = {
     sku_id: sku.skuId,
     available_stock: sku.availableStock,
     base_unit_price_paise: sku.baseUnitPricePaise,
-    offered_unit_price_paise: offeredUnitPricePaise,
+    offered_unit_price_paise: pricing.offeredUnitPricePaise,
     currency: currencyInr,
     hsn_code: sku.hsnCode,
     gst_rate_percent: sku.gstRatePercent,
     tax_breakdown: {
-      cgst_paise: tax.cgstPaise,
-      sgst_paise: tax.sgstPaise,
-      igst_paise: tax.igstPaise,
-      total_tax_paise: tax.totalTaxPaise
+      cgst_paise: pricing.tax.cgstPaise, sgst_paise: pricing.tax.sgstPaise,
+      igst_paise: pricing.tax.igstPaise, total_tax_paise: pricing.tax.totalTaxPaise
     },
     quote_expiry_timestamp: quoteExpiryTimestamp,
     quote_hash: quoteHash,
-    applied_discounts: appliedDiscounts,
-    total_savings_paise: totalSavingsPaise,
+    applied_discounts: pricing.appliedDiscounts,
+    total_savings_paise: pricing.totalSavingsPaise,
     ...(upcomingPromotions && upcomingPromotions.length > 0 ? { upcoming_promotions: upcomingPromotions } : {})
   };
 
   return skuQuoteResponseSchema.parse(response);
+}
+
+function _resolveUpcomingPromotions(
+  baseUnitPricePaise: number,
+  promotions: readonly ScheduledPromotion[] | undefined,
+  currentUnixSeconds: number
+): UpcomingPromotion[] | undefined {
+  if (!promotions || promotions.length === 0) {
+    return undefined;
+  }
+  const evaluated = evaluateScheduledPromotions(baseUnitPricePaise, promotions, currentUnixSeconds);
+  return evaluated.upcomingPromotions.length > 0 ? [...evaluated.upcomingPromotions] : undefined;
 }

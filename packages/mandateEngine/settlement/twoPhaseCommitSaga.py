@@ -1,7 +1,15 @@
 """Two-Phase Commit (2PC) state machine logic with rollback compensation."""
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
+if TYPE_CHECKING:
+    from .compensationDlq import CompensationDlq
+
+from ..constants.settlementConstants import (
+    purposeLogisticsSlaSettlement as logisticsPurpose,
+    purposeMerchantNetSettlement as merchantPurpose,
+    purposeProtocolFee as protocolPurpose,
+)
 from ..crypto.cryptoKeyUtils import extractPublicKeyFromDid
 from ..crypto.ed25519Verifier import Ed25519Verifier
 from ..mandates.cartMandateSchema import CartMandate
@@ -14,13 +22,10 @@ from .razorpayRouteClient import (
     RazorpayRouteClient,
     RouteTransferRequest,
     RouteTransferResponse,
+    TransferReversalResponse,
 )
 from .settlementExceptions import SettlementCompensationTriggeredException
 from .splitManifestBuilder import SplitTransferManifest
-
-merchantPurpose: str = "merchant_net_settlement"
-protocolPurpose: str = "protocol_fee"
-logisticsPurpose: str = "logistics_sla_settlement"
 
 
 class TwoPhaseCommitSaga:
@@ -30,9 +35,11 @@ class TwoPhaseCommitSaga:
         self,
         routeClient: RazorpayRouteClient,
         nonceLedger: NonceLedger,
+        dlq: Optional["CompensationDlq"] = None,
     ) -> None:
         self._routeClient = routeClient
         self._nonceLedger = nonceLedger
+        self._dlq = dlq
 
     def verifyMandateSignatures(
         self,
@@ -65,10 +72,61 @@ class TwoPhaseCommitSaga:
             raiseOnFailure=True,
         )
 
-    async def compensateTransfers(self, completedTransfers: list[RouteTransferResponse]) -> None:
-        """Rollback compensation: reverses all successful transfers in LIFO order."""
-        for trf in reversed(completedTransfers):
-            await self._routeClient.reverseTransfer(trf.id, trf.amount)
+    async def compensateTransfers(
+        self,
+        completedTransfers: list[RouteTransferResponse],
+        failureReason: str = "2PC split transfer failed",
+        paymentId: Optional[str] = None,
+        dlq: Optional["CompensationDlq"] = None,
+    ) -> list[Optional[TransferReversalResponse]]:
+        """Rollback compensation: reverses all successful transfers in LIFO order.
+
+        If a reversal fails (e.g. Route API timeout or 5xx):
+        - If DLQ is configured, enqueues an immutable CompensationEvent to the DLQ.
+        - Continues reversing remaining completed transfers without early abort.
+        """
+        effectiveDlq = dlq if dlq is not None else self._dlq
+        reversals: list[Optional[TransferReversalResponse]] = []
+
+        for completedTransfer in reversed(completedTransfers):
+            if effectiveDlq is not None:
+                try:
+                    if await effectiveDlq.isAlreadyCompensated(completedTransfer.id):
+                        continue
+                except Exception:
+                    pass
+
+            try:
+                reversalRes = await self._routeClient.reverseTransfer(
+                    transferId=completedTransfer.id,
+                    amountPaise=completedTransfer.amount,
+                )
+                if effectiveDlq is not None:
+                    try:
+                        await effectiveDlq.markCompensated(completedTransfer.id, reversalId=reversalRes.id)
+                    except Exception:
+                        pass
+                reversals.append(reversalRes)
+            except Exception as revErr:
+                if effectiveDlq is not None:
+                    try:
+                        await effectiveDlq.enqueueReversal(
+                            transferId=completedTransfer.id,
+                            amountPaise=completedTransfer.amount,
+                            recipientAccountId=completedTransfer.account,
+                            paymentId=paymentId,
+                            reason=f"2PC reversal failure: {str(revErr)} (trigger: {failureReason})",
+                            metadata={
+                                "currency": completedTransfer.currency,
+                                "originalError": str(revErr),
+                                "failureReason": failureReason,
+                            },
+                        )
+                    except Exception:
+                        pass
+                reversals.append(None)
+
+        return reversals
 
     def buildTransferRequests(
         self,
@@ -104,38 +162,48 @@ class TwoPhaseCommitSaga:
     async def executeSplitPhase(
         self,
         transferRequests: list[RouteTransferRequest],
+        paymentId: Optional[str] = None,
+        dlq: Optional["CompensationDlq"] = None,
     ) -> list[RouteTransferResponse]:
         """Executes transfers sequentially with rollback on any failure."""
         completed: list[RouteTransferResponse] = []
         try:
-            for req in transferRequests:
-                res = await self._routeClient.createTransfer(req)
-                completed.append(res)
+            for transferRequest in transferRequests:
+                transferResponse = await self._routeClient.createTransfer(transferRequest)
+                completed.append(transferResponse)
             return completed
         except Exception as err:
-            await self.compensateTransfers(completed)
+            if paymentId is None and transferRequests and transferRequests[0].notes:
+                paymentId = transferRequests[0].notes.get("paymentId")
+
+            await self.compensateTransfers(
+                completedTransfers=completed,
+                failureReason=str(err),
+                paymentId=paymentId,
+                dlq=dlq,
+            )
             raise SettlementCompensationTriggeredException(
                 f"2PC Transfer failed: triggered rollback of {len(completed)} transfers: {str(err)}"
             ) from err
 
     async def verifyAndCapturePhase(
         self,
-        intentM: IntentMandate,
-        cartM: CartMandate,
-        execM: ExecutionMandate,
+        intentMandate: IntentMandate,
+        cartMandate: CartMandate,
+        executionMandate: ExecutionMandate,
         paymentId: str,
         serverTime: Optional[int] = None,
     ) -> None:
         """Performs Phase 1 nonce, signature, hash chain, budget gate checks and capture."""
         await self._nonceLedger.validateAndRecordNonce(
-            nonce=execM.nonce,
-            timestamp=execM.timestamp,
+            nonce=executionMandate.nonce,
+            timestamp=executionMandate.timestamp,
             serverTime=serverTime,
         )
-        self.verifyMandateSignatures(intentM, cartM, execM)
-        verifyMandateChain(intentM, cartM, execM)
-        validateBudgetGate(intentM, cartM, execM, serverTime)
+        self.verifyMandateSignatures(intentMandate, cartMandate, executionMandate)
+        verifyMandateChain(intentMandate, cartMandate, executionMandate)
+        validateBudgetGate(intentMandate, cartMandate, executionMandate, serverTime)
         await self._routeClient.capturePayment(
             paymentId=paymentId,
-            amountPaise=execM.settlementAmountPaise,
+            amountPaise=executionMandate.settlementAmountPaise,
         )

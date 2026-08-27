@@ -2,9 +2,10 @@
 
 import time
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from ..constants.merchantConstants import redisMerchantPolicyKeyPrefix
+from ..exceptions.merchantExceptions import PolicyNotFoundException
 from ..schemas.policySchema import NegotiationPolicy
 from .dependencies import getRedisClient
 
@@ -49,10 +50,7 @@ async def getPolicy(
     policyKey = f"{redisMerchantPolicyKeyPrefix}{merchantDid}"
     rawPayload = await redis.get(policyKey)
     if not rawPayload:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Negotiation policy not configured for merchant '{merchantDid}'",
-        )
+        raise PolicyNotFoundException(f"Negotiation policy not configured for merchant '{merchantDid}'")
 
     rawText = rawPayload.decode("utf-8") if isinstance(rawPayload, bytes) else str(rawPayload)
     return NegotiationPolicy.model_validate_json(rawText)

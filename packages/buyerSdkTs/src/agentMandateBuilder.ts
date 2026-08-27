@@ -1,0 +1,274 @@
+import { v4 as uuidv4 } from "uuid";
+import {
+  defaultCurrency,
+  defaultIntentValiditySeconds,
+  mandateAmendPrefix,
+  mandateCartPrefix,
+  mandateExecPrefix,
+  mandateIntentPrefix,
+  millisPerSecond,
+  signatureFieldKeys
+} from "./sdkConstants.js";
+import { AgentKeyManager } from "./agentKeyManager.js";
+import { canonicalizeJson, computeSha256Digest } from "./jcsCanonicalizer.js";
+import {
+  ArithmeticDriftException,
+  MandateVerificationError,
+  type AmendmentMandate,
+  type CartItem,
+  type CartMandate,
+  type ExecutionMandate,
+  type IntentMandate,
+  type TaxBreakdown
+} from "./types.js";
+
+export interface CreateIntentMandateParams {
+  readonly mandateId?: string;
+  readonly delegatedAgentDid: string;
+  readonly maxBudgetPaise: number;
+  readonly upiCircleDelegationToken: string;
+  readonly singleTransactionLimitPaise: number;
+  readonly authorizedCategories?: readonly string[];
+  readonly validUntilTimestamp?: number;
+  readonly nonce?: string;
+  readonly timestamp?: number;
+}
+
+export interface CreateCartMandateParams {
+  readonly cartId?: string;
+  readonly merchantGstin: string;
+  readonly merchantStateCode: string;
+  readonly buyerDeliveryPincode: string;
+  readonly buyerDeliveryStateCode: string;
+  readonly items: readonly CartItem[];
+  readonly taxableSubtotalPaise: number;
+  readonly taxBreakdown: TaxBreakdown;
+  readonly shippingPaise?: number;
+  readonly discountPaise?: number;
+  readonly totalPaise: number;
+  readonly inventoryLockToken: string;
+  readonly inventoryLockExpiresAt: number;
+  readonly nonce?: string;
+  readonly timestamp?: number;
+}
+
+export interface CreateExecutionMandateParams {
+  readonly executionId?: string;
+  readonly intentMandate: IntentMandate;
+  readonly cartMandate: CartMandate;
+  readonly settlementAmountPaise: number;
+  readonly upiCircleToken: string;
+  readonly nonce?: string;
+  readonly timestamp?: number;
+}
+
+export interface CreateAmendmentMandateParams {
+  readonly amendmentId?: string;
+  readonly previousCartMandate: CartMandate;
+  readonly newCartMandate: CartMandate;
+  readonly substitutedSkuMapping: Readonly<Record<string, string>>;
+  readonly priceDeltaPaise: number;
+  readonly amendmentReason: string;
+  readonly nonce?: string;
+  readonly timestamp?: number;
+}
+
+export function computeMandateHash(mandate: Record<string, unknown>): string {
+  const unsignedDict: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(mandate)) {
+    if (!(signatureFieldKeys as readonly string[]).includes(key)) {
+      unsignedDict[key] = value;
+    }
+  }
+  const canonicalBytes = canonicalizeJson(unsignedDict);
+  return computeSha256Digest(canonicalBytes);
+}
+
+export function createSignedIntentMandate(
+  params: CreateIntentMandateParams,
+  userSigner: AgentKeyManager
+): IntentMandate {
+  if (params.maxBudgetPaise <= 0 || params.singleTransactionLimitPaise <= 0) {
+    throw new ArithmeticDriftException("Budget ceiling and transaction limit must be positive integer paise");
+  }
+  const ts = params.timestamp ?? Math.floor(Date.now() / millisPerSecond);
+  const nonce = params.nonce ?? uuidv4().replace(/-/g, "");
+  const mandateId = params.mandateId ?? `${mandateIntentPrefix}${uuidv4().replace(/-/g, "").slice(0, 16)}`;
+  const validUntil = params.validUntilTimestamp ?? ts + defaultIntentValiditySeconds;
+  const categories = params.authorizedCategories ?? [];
+
+  const unsignedPayload = {
+    authorizedCategories: categories,
+    currency: defaultCurrency,
+    delegatedAgentDid: params.delegatedAgentDid,
+    mandateId,
+    maxBudgetPaise: params.maxBudgetPaise,
+    nonce,
+    singleTransactionLimitPaise: params.singleTransactionLimitPaise,
+    timestamp: ts,
+    upiCircleDelegationToken: params.upiCircleDelegationToken,
+    userDid: userSigner.getAgentDid(),
+    validUntilTimestamp: validUntil
+  };
+
+  const userSignature = userSigner.signPayload(unsignedPayload);
+  return { ...unsignedPayload, userSignature };
+}
+
+export const createIntentMandate = createSignedIntentMandate;
+
+export function createSignedCartMandate(
+  params: CreateCartMandateParams,
+  merchantSigner: AgentKeyManager
+): CartMandate {
+  if (params.items.length === 0) {
+    throw new Error("Cart must contain at least one item");
+  }
+  const ts = params.timestamp ?? Math.floor(Date.now() / millisPerSecond);
+  const nonce = params.nonce ?? uuidv4().replace(/-/g, "");
+  const cartId = params.cartId ?? `${mandateCartPrefix}${uuidv4().replace(/-/g, "").slice(0, 16)}`;
+
+  const unsignedPayload = {
+    buyerDeliveryPincode: params.buyerDeliveryPincode,
+    buyerDeliveryStateCode: params.buyerDeliveryStateCode,
+    cartId,
+    discountPaise: params.discountPaise ?? 0,
+    inventoryLockExpiresAt: params.inventoryLockExpiresAt,
+    inventoryLockToken: params.inventoryLockToken,
+    items: params.items,
+    merchantDid: merchantSigner.getAgentDid(),
+    merchantGstin: params.merchantGstin,
+    merchantStateCode: params.merchantStateCode,
+    nonce,
+    shippingPaise: params.shippingPaise ?? 0,
+    taxBreakdown: params.taxBreakdown,
+    taxableSubtotalPaise: params.taxableSubtotalPaise,
+    timestamp: ts,
+    totalPaise: params.totalPaise
+  };
+
+  const merchantSignature = merchantSigner.signPayload(unsignedPayload);
+  return { ...unsignedPayload, merchantSignature };
+}
+
+export const createCartMandate = createSignedCartMandate;
+
+export function createSignedExecutionMandate(
+  params: CreateExecutionMandateParams,
+  buyerAgentSigner: AgentKeyManager
+): ExecutionMandate {
+  const ts = params.timestamp ?? Math.floor(Date.now() / millisPerSecond);
+  const nonce = params.nonce ?? uuidv4().replace(/-/g, "");
+  const executionId = params.executionId ?? `${mandateExecPrefix}${uuidv4().replace(/-/g, "").slice(0, 16)}`;
+
+  const intentMandateHash = computeMandateHash(params.intentMandate as unknown as Record<string, unknown>);
+  const cartMandateHash = computeMandateHash(params.cartMandate as unknown as Record<string, unknown>);
+
+  const unsignedPayload = {
+    buyerAgentDid: buyerAgentSigner.getAgentDid(),
+    cartMandateHash,
+    currency: defaultCurrency,
+    executionId,
+    intentMandateHash,
+    nonce,
+    settlementAmountPaise: params.settlementAmountPaise,
+    timestamp: ts,
+    upiCircleToken: params.upiCircleToken
+  };
+
+  const agentSignature = buyerAgentSigner.signPayload(unsignedPayload);
+  return { ...unsignedPayload, agentSignature };
+}
+
+export const createExecutionMandate = createSignedExecutionMandate;
+
+export function createSignedAmendmentMandate(
+  params: CreateAmendmentMandateParams,
+  buyerAgentSigner: AgentKeyManager,
+  merchantSigner: AgentKeyManager
+): AmendmentMandate {
+  const ts = params.timestamp ?? Math.floor(Date.now() / millisPerSecond);
+  const nonce = params.nonce ?? uuidv4().replace(/-/g, "");
+  const amendmentId = params.amendmentId ?? `${mandateAmendPrefix}${uuidv4().replace(/-/g, "").slice(0, 16)}`;
+
+  const previousCartMandateHash = computeMandateHash(params.previousCartMandate as unknown as Record<string, unknown>);
+  const newCartMandateHash = computeMandateHash(params.newCartMandate as unknown as Record<string, unknown>);
+
+  const unsignedPayload = {
+    amendmentId,
+    amendmentReason: params.amendmentReason,
+    newCartMandateHash,
+    nonce,
+    previousCartMandateHash,
+    priceDeltaPaise: params.priceDeltaPaise,
+    substitutedSkuMapping: params.substitutedSkuMapping,
+    timestamp: ts
+  };
+
+  const canonicalBytes = canonicalizeJson(unsignedPayload);
+  const agentSignature = buyerAgentSigner.signCanonicalBytes(canonicalBytes);
+  const merchantSignature = merchantSigner.signCanonicalBytes(canonicalBytes);
+
+  return { ...unsignedPayload, agentSignature, merchantSignature };
+}
+
+export const createAmendmentMandate = createSignedAmendmentMandate;
+
+export function verifyMandateChain(
+  intentMandate: IntentMandate,
+  cartMandate: CartMandate,
+  executionMandate: ExecutionMandate
+): boolean {
+  _verifyIntentSignature(intentMandate, executionMandate);
+  _verifyCartSignature(cartMandate, executionMandate);
+  _verifyChainLinkage(intentMandate, cartMandate, executionMandate);
+  return true;
+}
+
+function _verifyIntentSignature(intentMandate: IntentMandate, executionMandate: ExecutionMandate): void {
+  const computedIntentHash = computeMandateHash(intentMandate as unknown as Record<string, unknown>);
+  if (computedIntentHash !== executionMandate.intentMandateHash) {
+    throw new MandateVerificationError(
+      `Intent mandate hash mismatch: expected ${computedIntentHash}, got ${executionMandate.intentMandateHash}`
+    );
+  }
+}
+
+function _verifyCartSignature(cartMandate: CartMandate, executionMandate: ExecutionMandate): void {
+  const computedCartHash = computeMandateHash(cartMandate as unknown as Record<string, unknown>);
+  if (computedCartHash !== executionMandate.cartMandateHash) {
+    throw new MandateVerificationError(
+      `Cart mandate hash mismatch: expected ${computedCartHash}, got ${executionMandate.cartMandateHash}`
+    );
+  }
+}
+
+function _verifyChainLinkage(
+  intentMandate: IntentMandate,
+  cartMandate: CartMandate,
+  executionMandate: ExecutionMandate
+): void {
+  if (executionMandate.settlementAmountPaise !== cartMandate.totalPaise) {
+    throw new MandateVerificationError(
+      `Settlement amount ${executionMandate.settlementAmountPaise} does not match cart total ${cartMandate.totalPaise}`
+    );
+  }
+
+  if (cartMandate.totalPaise > intentMandate.maxBudgetPaise) {
+    throw new MandateVerificationError(
+      `Cart total ${cartMandate.totalPaise} exceeds intent max budget ${intentMandate.maxBudgetPaise}`
+    );
+  }
+
+  if (cartMandate.totalPaise > intentMandate.singleTransactionLimitPaise) {
+    throw new MandateVerificationError(
+      `Cart total ${cartMandate.totalPaise} exceeds single transaction limit ${intentMandate.singleTransactionLimitPaise}`
+    );
+  }
+
+  if (executionMandate.timestamp > intentMandate.validUntilTimestamp) {
+    throw new MandateVerificationError(
+      `Intent mandate expired at ${intentMandate.validUntilTimestamp} (current: ${executionMandate.timestamp})`
+    );
+  }
+}

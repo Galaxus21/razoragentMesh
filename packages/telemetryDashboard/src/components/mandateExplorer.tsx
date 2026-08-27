@@ -25,91 +25,93 @@ export function MandateExplorer({ events }: MandateExplorerProps): React.JSX.Ele
   };
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-950/70 p-4 shadow-xl backdrop-blur-md">
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+    <div className="flex h-full flex-col rounded-lg border border-borderSubtle bg-bgSurface p-4">
+      <div className="flex items-center justify-between border-b border-borderSubtle pb-3">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-cyan-400" />
-          <h2 className="text-sm font-semibold text-white">AP2 Cryptographic Mandate Chain</h2>
-          <span className="rounded bg-cyan-950/70 px-1.5 py-0.5 text-[11px] font-mono text-cyan-300">
+          <ShieldCheck className="h-4 w-4 text-statusInfo" />
+          <h2 className="text-sm font-semibold text-textPrimary">AP2 Cryptographic Mandate Chain</h2>
+          <span className="rounded bg-accentSubtle px-1.5 py-0.5 text-xs font-mono text-accentPrimary">
             Ed25519 + JCS
           </span>
         </div>
       </div>
 
       <div className="mt-3 flex-1 space-y-2.5 overflow-y-auto pr-1 max-h-[380px] custom-scrollbar">
-        {defaultMandateChainNodes.map((node, index) => {
+        {defaultMandateChainNodes.map((node) => {
           const match = signedMandates.find((m) => m.payload.mandateType === node.kind);
-          const sampleHash =
-            match?.payload.mandateHash ??
-            `0x${(index + 1) * 22}ab89cd45ef67890123456789abcdef0123456789abcdef0123456789`;
-          const isValid = match ? match.payload.verificationStatus !== "INVALID" : true;
+          const isSigned = Boolean(match);
+          const isValid = match?.payload.verificationStatus !== "INVALID";
+          const mandateHash = match?.payload.mandateHash ?? null;
+          const signerRole = match?.payload.signerKeyDid ?? node.signerRole;
 
           return (
             <div
               key={node.kind}
-              className="relative rounded-lg border border-slate-800 bg-slate-900/60 p-3 transition hover:border-slate-700"
+              className="relative rounded-md border border-borderSubtle bg-surfaceContainer p-3 transition hover:border-borderSubtle/80 hover:bg-bgSurfaceHover"
             >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-white">{node.title}</span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                        isValid
-                          ? "bg-emerald-950 text-emerald-300 border border-emerald-500/30"
-                          : "bg-rose-950 text-rose-300 border border-rose-500/30"
-                      }`}
-                    >
-                      <CheckCircle2 className="h-3 w-3" />
-                      {isValid ? "VALID" : "INVALID"}
-                    </span>
+                    <span className="font-mono text-xs font-bold text-textPrimary">{node.title}</span>
+                    {isSigned ? (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                          isValid
+                            ? "bg-statusSuccess/10 text-statusSuccess border border-statusSuccess/30"
+                            : "bg-statusError/10 text-statusError border border-statusError/30"
+                        }`}
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        {isValid ? "VALID" : "INVALID"}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded border border-borderSubtle bg-bgBase px-1.5 py-0.5 text-[10px] font-semibold text-textMuted">
+                        PENDING
+                      </span>
+                    )}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">{node.description}</p>
+                  <p className="mt-0.5 text-xs text-textSecondary">{node.description}</p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedJcs({
-                      title: node.title,
-                      jcs:
-                        match?.payload.canonicalJcsPreview ??
-                        JSON.stringify(
-                          {
-                            mandateType: node.kind,
-                            signerRole: node.signerRole,
-                            hash: sampleHash,
-                          },
-                          null,
-                          2
-                        ),
-                    })
-                  }
-                  className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-700"
-                >
-                  <FileCode className="h-3 w-3 text-cyan-400" />
-                  <span>JCS</span>
-                </button>
+                {isSigned && match?.payload.canonicalJcsPreview && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedJcs({
+                        title: node.title,
+                        jcs: match.payload.canonicalJcsPreview ?? "",
+                      })
+                    }
+                    className="flex items-center gap-1 rounded border border-borderSubtle bg-bgSurface px-2 py-1 text-xs text-textSecondary hover:bg-bgSurfaceHover hover:text-textPrimary"
+                  >
+                    <FileCode className="h-3 w-3 text-statusInfo" />
+                    <span>JCS</span>
+                  </button>
+                )}
               </div>
 
-              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-2 text-[11px] font-mono">
-                <div className="flex items-center gap-1 text-slate-400">
-                  <KeyRound className="h-3 w-3 text-slate-500" />
-                  <span className="truncate max-w-[140px] text-slate-300">{node.signerRole}</span>
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-borderSubtle pt-2 text-xs font-mono">
+                <div className="flex items-center gap-1 text-textSecondary">
+                  <KeyRound className="h-3 w-3 text-textMuted" />
+                  <span className="truncate max-w-[160px] text-textSecondary">
+                    {signerRole}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <span className="text-slate-500">SHA-256:</span>
-                  <span className="rounded bg-slate-950 px-1.5 py-0.5 text-cyan-300">
-                    {truncateHash(sampleHash)}
+                  <span className="text-textMuted">SHA-256:</span>
+                  <span className="rounded bg-bgBase border border-borderSubtle px-1.5 py-0.5 text-textPrimary">
+                    {mandateHash ? truncateHash(mandateHash) : "—"}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(sampleHash)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <Copy className="h-3 w-3" />
-                  </button>
+                  {mandateHash && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(mandateHash)}
+                      className="text-textMuted hover:text-textPrimary"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -118,21 +120,21 @@ export function MandateExplorer({ events }: MandateExplorerProps): React.JSX.Ele
       </div>
 
       {selectedJcs && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="text-xs font-semibold text-white font-mono">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-borderSubtle bg-bgSurface p-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-borderSubtle pb-2">
+              <span className="text-xs font-semibold text-textPrimary font-mono">
                 RFC 8785 Canonical JCS — {selectedJcs.title}
               </span>
               <button
                 type="button"
                 onClick={() => setSelectedJcs(null)}
-                className="text-slate-400 hover:text-white"
+                className="text-textSecondary hover:text-textPrimary"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <pre className="mt-3 max-h-64 overflow-y-auto rounded bg-slate-900 p-3 font-mono text-xs text-cyan-300 custom-scrollbar">
+            <pre className="mt-3 max-h-64 overflow-y-auto rounded bg-bgBase border border-borderSubtle p-3 font-mono text-xs text-textPrimary custom-scrollbar">
               {selectedJcs.jcs}
             </pre>
           </div>

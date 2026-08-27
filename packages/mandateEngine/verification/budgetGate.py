@@ -6,11 +6,46 @@ from typing import Optional
 from ..mandates.cartMandateSchema import CartMandate
 from ..mandates.executionMandateSchema import ExecutionMandate
 from ..mandates.intentMandateSchema import IntentMandate
+from ..settlement.settlementExceptions import (
+    ArithmeticEnclaveMismatchException,
+    BudgetExceededViolation,
+    CategoryNotAuthorizedException,
+    MandateExpiredException,
+    SingleTransactionLimitExceededException,
+)
 from .arithmeticEnclave import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,
 )
+
+
+def validateBudgetGate(
+    intentMandate: IntentMandate,
+    cartMandate: CartMandate,
+    executionMandate: ExecutionMandate,
+    currentTimestamp: Optional[int] = None,
+    skuCategories: Optional[list[str]] = None,
+    serverTime: Optional[int] = None,
+) -> bool:
+    """Evaluates budget bounds, enclave math invariants, and delegation constraints."""
+    evalTime = serverTime if serverTime is not None else (currentTimestamp or int(time.time()))
+    if evalTime > intentMandate.validUntilTimestamp:
+        raise MandateExpiredException(
+            f"Intent mandate expired at {intentMandate.validUntilTimestamp} (current: {evalTime})"
+        )
+
+    enclaveTotal = _recomputeEnclaveTotal(cartMandate)
+    settlementAmt = executionMandate.settlementAmountPaise
+    if enclaveTotal != settlementAmt or cartMandate.totalPaise != settlementAmt:
+        raise ArithmeticEnclaveMismatchException(
+            f"Arithmetic enclave mismatch: recomputed={enclaveTotal}, "
+            f"cartTotal={cartMandate.totalPaise}, execution={settlementAmt}"
+        )
+
+    _verifyBudgetCaps(intentMandate, settlementAmt)
+    _verifyCategoryAuthorization(intentMandate, skuCategories)
+    return True
 
 
 def _recomputeEnclaveTotal(cartMandate: CartMandate) -> int:
@@ -36,16 +71,10 @@ def _recomputeEnclaveTotal(cartMandate: CartMandate) -> int:
 def _verifyBudgetCaps(intentMandate: IntentMandate, amountPaise: int) -> None:
     """Checks budget cap and single transaction ceiling."""
     if amountPaise > intentMandate.maxBudgetPaise:
-        from ..settlement.settlementExceptions import BudgetExceededViolation
-
         raise BudgetExceededViolation(
             f"Requested amount {amountPaise} paise exceeds delegated budget {intentMandate.maxBudgetPaise} paise: ₹0 charged"
         )
     if amountPaise > intentMandate.singleTransactionLimitPaise:
-        from ..settlement.settlementExceptions import (
-            SingleTransactionLimitExceededException,
-        )
-
         raise SingleTransactionLimitExceededException(
             f"Transaction amount {amountPaise} paise exceeds single limit {intentMandate.singleTransactionLimitPaise} paise"
         )
@@ -60,43 +89,9 @@ def _verifyCategoryAuthorization(
         return
     unauthorized = set(skuCategories) - set(intentMandate.authorizedCategories)
     if unauthorized:
-        from ..settlement.settlementExceptions import (
-            CategoryNotAuthorizedException,
-        )
-
         raise CategoryNotAuthorizedException(
             f"Unauthorized product categories in cart: {sorted(list(unauthorized))}"
         )
 
 
-def validateBudgetGate(
-    intentMandate: IntentMandate,
-    cartMandate: CartMandate,
-    executionMandate: ExecutionMandate,
-    currentTimestamp: Optional[int] = None,
-    skuCategories: Optional[list[str]] = None,
-) -> bool:
-    """Evaluates budget bounds, enclave math invariants, and delegation constraints."""
-    evalTime = currentTimestamp or int(time.time())
-    if evalTime > intentMandate.validUntilTimestamp:
-        from ..settlement.settlementExceptions import MandateExpiredException
-
-        raise MandateExpiredException(
-            f"Intent mandate expired at {intentMandate.validUntilTimestamp} (current: {evalTime})"
-        )
-
-    enclaveTotal = _recomputeEnclaveTotal(cartMandate)
-    settlementAmt = executionMandate.settlementAmountPaise
-    if enclaveTotal != settlementAmt or cartMandate.totalPaise != settlementAmt:
-        from ..settlement.settlementExceptions import (
-            ArithmeticEnclaveMismatchException,
-        )
-
-        raise ArithmeticEnclaveMismatchException(
-            f"Arithmetic enclave mismatch: recomputed={enclaveTotal}, "
-            f"cartTotal={cartMandate.totalPaise}, execution={settlementAmt}"
-        )
-
-    _verifyBudgetCaps(intentMandate, settlementAmt)
-    _verifyCategoryAuthorization(intentMandate, skuCategories)
-    return True
+__all__ = ["validateBudgetGate"]

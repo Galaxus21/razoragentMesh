@@ -1,9 +1,16 @@
 """Merchant onboarding and DID cryptographic registration route."""
 
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
-from ..constants.merchantConstants import redisMerchantProfileKeyPrefix
+from ..constants.merchantConstants import (
+    merchantKeypairPrefix,
+    redisMerchantProfileKeyPrefix,
+)
+from ..exceptions.merchantExceptions import (
+    InvalidGstinException,
+    InvalidRazorpayAccountException,
+)
 from ..onboarding.merchantRegistrar import (
     buildMerchantProfile,
     generateMerchantKeypair,
@@ -31,22 +38,16 @@ async def registerMerchant(
 ) -> MerchantProfile:
     """Registers a merchant, validates regulatory GSTIN/Razorpay credentials, and mints an AP2 DID."""
     if not validateGstin(request.gstin):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Indian GSTIN format or checksum",
-        )
+        raise InvalidGstinException("Invalid Indian GSTIN format or checksum")
 
     if not validateRazorpayAccountId(request.razorpayAccountId):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Razorpay Route account ID format",
-        )
+        raise InvalidRazorpayAccountException("Invalid Razorpay Route account ID format")
 
     keypairRecord = generateMerchantKeypair(request)
     profile = buildMerchantProfile(request, keypairRecord)
 
     profileKey = f"{redisMerchantProfileKeyPrefix}{profile.merchantDid}"
-    keypairKey = f"mesh:merchant:keypair:{profile.merchantDid}"
+    keypairKey = f"{merchantKeypairPrefix}{profile.merchantDid}"
 
     await redis.set(profileKey, profile.model_dump_json())
     await redis.set(keypairKey, keypairRecord.model_dump_json())

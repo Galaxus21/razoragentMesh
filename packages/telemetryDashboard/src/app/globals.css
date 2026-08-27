@@ -2,17 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #070a12;
-  --foreground: #f1f5f9;
-}
+@layer base {
+  :root {
+    --bg-base: 248 250 252;
+    --bg-surface: 255 255 255;
+    --bg-surface-hover: 241 245 249;
+    --border-subtle: 226 232 240;
+    --text-primary: 15 23 42;
+    --text-secondary: 71 85 105;
+    --text-muted: 148 163 184;
+    --accent-primary: 79 70 229;
+    --accent-subtle: 238 242 255;
+    --status-success: 22 163 74;
+    --status-warning: 217 119 6;
+    --status-error: 220 38 38;
+    --status-info: 2 132 199;
+    --primary: 79 70 229;
+    --surface-container: 241 245 249;
+    --surface-container-high: 226 232 240;
+    --on-surface: 30 41 59;
+    --on-surface-variant: 71 85 105;
+    --outline: 100 116 139;
+    --outline-variant: 203 213 225;
+  }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
+  html.dark,
+  .dark {
+    --bg-base: 9 9 11;
+    --bg-surface: 18 18 21;
+    --bg-surface-hover: 26 26 32;
+    --border-subtle: 39 39 42;
+    --text-primary: 250 250 250;
+    --text-secondary: 161 161 170;
+    --text-muted: 82 82 91;
+    --accent-primary: 99 102 241;
+    --accent-subtle: 30 27 75;
+    --status-success: 34 197 94;
+    --status-warning: 245 158 11;
+    --status-error: 239 68 68;
+    --status-info: 56 189 248;
+    --primary: 192 193 255;
+    --surface-container: 31 31 39;
+    --surface-container-high: 41 41 50;
+    --on-surface: 228 225 237;
+    --on-surface-variant: 199 196 215;
+    --outline: 144 143 160;
+    --outline-variant: 70 69 84;
+  }
+
+  body {
+    background-color: rgb(var(--bg-base));
+    color: rgb(var(--text-primary));
+    font-family: var(--font-body), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
 }
 
 /* Custom sleek scrollbar for dashboard feeds and code inspector */
@@ -22,15 +66,14 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 4px;
+  background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8);
+  background: rgb(var(--border-subtle));
   border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(6, 182, 212, 0.6);
+  background: rgb(var(--text-muted));
 }

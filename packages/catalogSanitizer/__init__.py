@@ -1,23 +1,23 @@
 """Layer 0 Ingress Security Shield module."""
 
-from razoragentMesh.packages.catalogSanitizer.catalogSanitizer import (
+from .catalogSanitizer import (
     cleanAndTruncateText,
     sanitizeMerchantSkuQuote,
     stripAnsiEscapes,
     stripMarkdownAndHtml,
     stripZeroWidthCharacters,
 )
-from razoragentMesh.packages.catalogSanitizer.ingressShieldExceptions import (
+from .ingressShieldExceptions import (
     IngressSecurityException,
     InvalidSkuIdentifierException,
     MaliciousPayloadDetectedException,
     SchemaSanitizationFailureException,
 )
-from razoragentMesh.packages.catalogSanitizer.sanitizedSkuQuoteSchema import (
+from .sanitizedSkuQuoteSchema import (
     SanitizedSkuQuote,
     TaxBreakdownSchema,
 )
-from razoragentMesh.packages.catalogSanitizer.sanitizerConstants import (
+from .sanitizerConstants import (
     ansiEscapeRegexPattern,
     defaultCurrency,
     hsnCodeRegexPattern,

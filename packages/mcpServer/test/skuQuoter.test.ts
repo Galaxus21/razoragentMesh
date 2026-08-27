@@ -16,20 +16,22 @@ describe("SkuQuoter (Tool 1: get_live_sku_quote)", () => {
 
     assert.equal(quote.sku_id, "SKU-CHAIR-001");
     assert.equal(quote.base_unit_price_paise, 420000);
-    assert.equal(quote.offered_unit_price_paise, 420000);
+    assert.equal(quote.offered_unit_price_paise, 417850);
     assert.equal(quote.currency, "INR");
     assert.equal(quote.hsn_code, "94013000");
     assert.equal(quote.gst_rate_percent, 18);
-    assert.equal(quote.tax_breakdown.cgst_paise, 37800);
-    assert.equal(quote.tax_breakdown.sgst_paise, 37800);
+    assert.equal(quote.tax_breakdown.cgst_paise, 37606);
+    assert.equal(quote.tax_breakdown.sgst_paise, 37606);
     assert.equal(quote.tax_breakdown.igst_paise, 0);
-    assert.equal(quote.tax_breakdown.total_tax_paise, 75600);
+    assert.equal(quote.tax_breakdown.total_tax_paise, 75212);
+    assert.equal(quote.total_savings_paise, 2150);
+    assert.ok(quote.applied_discounts && quote.applied_discounts.length === 2);
     assert.ok(quote.quote_expiry_timestamp > Math.floor(Date.now() / 1000));
     assert.ok(quote.quote_hash.length === 64);
 
     const isHashValid = verifyQuoteHash(
       {
-        skuId: quote.sku_id,
+        skuId: quote.skuId ?? quote.sku_id,
         quantity: 1,
         offeredUnitPricePaise: quote.offered_unit_price_paise,
         totalTaxPaise: quote.tax_breakdown.total_tax_paise,
@@ -52,8 +54,37 @@ describe("SkuQuoter (Tool 1: get_live_sku_quote)", () => {
 
     assert.equal(quote.tax_breakdown.cgst_paise, 0);
     assert.equal(quote.tax_breakdown.sgst_paise, 0);
-    assert.equal(quote.tax_breakdown.igst_paise, 75600);
-    assert.equal(quote.tax_breakdown.total_tax_paise, 75600);
+    assert.equal(quote.tax_breakdown.igst_paise, 75213);
+    assert.equal(quote.tax_breakdown.total_tax_paise, 75213);
+  });
+
+  it("should automatically apply festive and payment rail discounts on single-unit (quantity=1) quotes", () => {
+    const quote = executeSkuQuote({
+      sku_id: "SKU-CHAIR-001",
+      quantity: 1,
+      buyer_agent_id: "did:agent:single-unit-buyer",
+      delivery_pincode: "560001"
+    });
+
+    // Base: 420000 paise (₹4200.00)
+    // Festive Campaign: 10% of 420000 = 42000 capped at 2000 paise (₹20.00) -> 418000 paise
+    // UPI Instant Cashback: ₹1.50 = 150 paise -> 417850 paise
+    // Total savings: 2150 paise (₹21.50)
+    assert.equal(quote.sku_id, "SKU-CHAIR-001");
+    assert.equal(quote.base_unit_price_paise, 420000);
+    assert.equal(quote.offered_unit_price_paise, 417850);
+    assert.equal(quote.total_savings_paise, 2150);
+    assert.ok(quote.applied_discounts);
+    assert.equal(quote.applied_discounts.length, 2);
+
+    const festiveDiscount = quote.applied_discounts[0];
+    assert.equal(festiveDiscount.type, "CAMPAIGN");
+    assert.equal(festiveDiscount.discountBps, 1000);
+    assert.equal(festiveDiscount.discountPaise, 2000);
+
+    const upiDiscount = quote.applied_discounts[1];
+    assert.equal(upiDiscount.type, "PAYMENT_RAIL");
+    assert.equal(upiDiscount.discountPaise, 150);
   });
 
   it("should apply auto discount stacking when quantity threshold is exceeded", () => {

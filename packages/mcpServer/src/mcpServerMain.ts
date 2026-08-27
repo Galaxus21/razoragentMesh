@@ -90,76 +90,96 @@ export async function dispatchToolCall(
   throw new Error(`Tool ${toolName} not recognized`);
 }
 
+function buildJsonRpcError(
+  requestId: string | number | null,
+  code: number,
+  message: string,
+  data?: unknown
+): JsonRpcResponse {
+  return {
+    jsonrpc: jsonRpcVersion,
+    id: requestId,
+    error: {
+      code,
+      message,
+      ...(data !== undefined ? { data } : {})
+    }
+  };
+}
+
+function handleInitializeRequest(requestId: string | number | null): JsonRpcResponse {
+  return {
+    jsonrpc: jsonRpcVersion,
+    id: requestId,
+    result: {
+      protocolVersion: "2024-11-05",
+      serverInfo: { name: mcpServerName, version: mcpServerVersion },
+      capabilities: { tools: {} }
+    }
+  };
+}
+
+function handleToolsListRequest(requestId: string | number | null): JsonRpcResponse {
+  return {
+    jsonrpc: jsonRpcVersion,
+    id: requestId,
+    result: { tools: mcpToolsManifest }
+  };
+}
+
+async function handleToolsCallRequest(
+  requestId: string | number | null,
+  params: unknown
+): Promise<JsonRpcResponse> {
+  const toolParams = params as { name?: string; arguments?: unknown } | undefined;
+  const toolName = toolParams?.name;
+  const toolArgs = toolParams?.arguments ?? {};
+
+  if (!toolName) {
+    return buildJsonRpcError(requestId, invalidParamsErrorCode, "Missing tool name in params");
+  }
+
+  try {
+    const output = await dispatchToolCall(toolName, toolArgs);
+    return {
+      jsonrpc: jsonRpcVersion,
+      id: requestId,
+      result: {
+        content: [{ type: "text", text: JSON.stringify(output) }]
+      }
+    };
+  } catch (error: unknown) {
+    const err = error as Error & { code?: string | number };
+    const errorCode = err.code === "INSUFFICIENT_STOCK" ? 409 : internalErrorCode;
+    return buildJsonRpcError(
+      requestId,
+      typeof errorCode === "number" ? errorCode : internalErrorCode,
+      err.message,
+      { exceptionCode: err.code }
+    );
+  }
+}
+
 export async function handleJsonRpcMessage(
   request: JsonRpcRequest
 ): Promise<JsonRpcResponse> {
   const requestId = request.id ?? null;
 
   if (request.method === "initialize") {
-    return {
-      jsonrpc: jsonRpcVersion,
-      id: requestId,
-      result: {
-        protocolVersion: "2024-11-05",
-        serverInfo: { name: mcpServerName, version: mcpServerVersion },
-        capabilities: { tools: {} }
-      }
-    };
+    return handleInitializeRequest(requestId);
   }
-
   if (request.method === "tools/list") {
-    return {
-      jsonrpc: jsonRpcVersion,
-      id: requestId,
-      result: { tools: mcpToolsManifest }
-    };
+    return handleToolsListRequest(requestId);
   }
-
   if (request.method === "tools/call") {
-    const params = request.params as { name?: string; arguments?: unknown } | undefined;
-    const name = params?.name;
-    const args = params?.arguments ?? {};
-
-    if (!name) {
-      return {
-        jsonrpc: jsonRpcVersion,
-        id: requestId,
-        error: { code: invalidParamsErrorCode, message: "Missing tool name in params" }
-      };
-    }
-
-    try {
-      const output = await dispatchToolCall(name, args);
-      return {
-        jsonrpc: jsonRpcVersion,
-        id: requestId,
-        result: {
-          content: [{ type: "text", text: JSON.stringify(output) }]
-        }
-      };
-    } catch (error: unknown) {
-      const err = error as Error & { code?: string | number };
-      const errorCode = err.code === "INSUFFICIENT_STOCK" ? 409 : internalErrorCode;
-      return {
-        jsonrpc: jsonRpcVersion,
-        id: requestId,
-        error: {
-          code: typeof errorCode === "number" ? errorCode : internalErrorCode,
-          message: err.message,
-          data: { exceptionCode: err.code }
-        }
-      };
-    }
+    return handleToolsCallRequest(requestId, request.params);
   }
 
-  return {
-    jsonrpc: jsonRpcVersion,
-    id: requestId,
-    error: {
-      code: methodNotFoundErrorCode,
-      message: `Method ${request.method} not found`
-    }
-  };
+  return buildJsonRpcError(
+    requestId,
+    methodNotFoundErrorCode,
+    `Method ${request.method} not found`
+  );
 }
 
 export function initializeCatalogSubscriber(redisUrl?: string): void {
@@ -171,16 +191,21 @@ export function initializeCatalogSubscriber(redisUrl?: string): void {
     .then((ioredisModule) => {
       const RedisClass = ioredisModule.Redis ?? ioredisModule.default;
       const subscriber = new RedisClass(targetUrl, {
-        retryStrategy: () => null,
-        enableOfflineQueue: false
+        retryStrategy: (times: number) => Math.min(times * 100, 2000),
+        maxRetriesPerRequest: null,
+        enableOfflineQueue: true,
+        lazyConnect: false
       });
-      subscriber.on("error", () => {
-        // Fallback to static fixtures when Redis is offline
+      subscriber.on("error", (error: unknown) => {
+        const msg = String(error);
+        if (!msg.includes("Connection in subscriber mode")) {
+          process.stderr.write("Redis pub/sub subscriber error: " + msg + "\n");
+        }
       });
       defaultCatalogStore.subscribeToCatalogChannel(subscriber);
     })
-    .catch(() => {
-      // Redis offline -> static fixtures fallback
+    .catch((error: unknown) => {
+      process.stderr.write("Redis pub/sub subscriber error: " + String(error) + "\n");
     });
 }
 

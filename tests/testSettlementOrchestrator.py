@@ -27,71 +27,31 @@ from razoragentMesh.packages.mandateEngine.settlement.settlementOrchestrator imp
 
 def _setupSagaMandates(amountPaise: int = 118000) -> tuple:
     """Sets up signed M_I, M_C, and M_E mandates."""
-    uPriv, _ = generateKeyPair()
-    mPriv, _ = generateKeyPair()
-    aPriv, _ = generateKeyPair()
-
-    uSigner = Ed25519Signer(uPriv)
-    mSigner = Ed25519Signer(mPriv)
-    aSigner = Ed25519Signer(aPriv)
+    uSigner = Ed25519Signer(generateKeyPair()[0])
+    mSigner = Ed25519Signer(generateKeyPair()[0])
+    aSigner = Ed25519Signer(generateKeyPair()[0])
 
     intentM = createSignedIntentMandate(
-        mandateId="M-I-SAGA-01",
-        userSigner=uSigner,
-        delegatedAgentDid=aSigner.getAgentDid(),
-        maxBudgetPaise=200000,
-        upiCircleDelegationToken="upi_tok_saga",
-        singleTransactionLimitPaise=200000,
-        validUntilTimestamp=2000000000,
+        mandateId="M-I-SAGA-01", userSigner=uSigner, delegatedAgentDid=aSigner.getAgentDid(),
+        maxBudgetPaise=200000, upiCircleDelegationToken="upi_tok_saga",
+        singleTransactionLimitPaise=200000, validUntilTimestamp=2000000000,
     )
-
-    taxable = 100000
-    tax = 18000
-    cgst = 9000
-    sgst = 9000
-
-    item = CartItemSchema(
-        skuId="SKU-SAGA-01",
-        quantity=1,
-        unitPricePaise=taxable,
-        hsnCode="84713010",
-        gstRatePercent=18,
-        lineTotalPaise=taxable,
-    )
-    taxBreakdown = TaxBreakdownSchema(
-        cgstPaise=cgst,
-        sgstPaise=sgst,
-        igstPaise=0,
-        totalTaxPaise=tax,
-    )
+    item = CartItemSchema(skuId="SKU-SAGA-01", quantity=1, unitPricePaise=100000, hsnCode="84713010", gstRatePercent=18, lineTotalPaise=100000)
+    taxBreakdown = TaxBreakdownSchema(cgstPaise=9000, sgstPaise=9000, igstPaise=0, totalTaxPaise=18000)
     cartM = createSignedCartMandate(
-        cartId="M-C-SAGA-01",
-        merchantSigner=mSigner,
-        merchantGstin="29AAAAA0000A1Z5",
-        merchantStateCode="29",
-        buyerDeliveryPincode="560001",
-        buyerDeliveryStateCode="29",
-        items=[item],
-        taxableSubtotalPaise=taxable,
-        taxBreakdown=taxBreakdown,
-        shippingPaise=0,
-        discountPaise=0,
-        totalPaise=amountPaise,
-        inventoryLockToken="lock_saga",
-        inventoryLockExpiresAt=2000000000,
+        cartId="M-C-SAGA-01", merchantSigner=mSigner, merchantGstin="29AAAAA0000A1ZY",
+        merchantStateCode="29", buyerDeliveryPincode="560001", buyerDeliveryStateCode="29",
+        items=[item], taxableSubtotalPaise=100000, taxBreakdown=taxBreakdown,
+        shippingPaise=0, discountPaise=0, totalPaise=amountPaise,
+        inventoryLockToken="lock_saga", inventoryLockExpiresAt=2000000000,
     )
-
     execM = createSignedExecutionMandate(
-        executionId="M-E-SAGA-01",
-        buyerAgentSigner=aSigner,
-        intentMandate=intentM,
-        cartMandate=cartM,
-        settlementAmountPaise=amountPaise,
-        upiCircleToken="upi_tok_saga",
+        executionId="M-E-SAGA-01", buyerAgentSigner=aSigner, intentMandate=intentM,
+        cartMandate=cartM, settlementAmountPaise=amountPaise, upiCircleToken="upi_tok_saga",
         timestamp=1700000000,
     )
-
     return intentM, cartM, execM
+
 
 
 @pytest.mark.asyncio

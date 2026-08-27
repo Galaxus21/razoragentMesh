@@ -4,12 +4,14 @@ import re
 from typing import Any
 from pydantic import ValidationError
 
-from razoragentMesh.packages.catalogSanitizer.ingressShieldExceptions import (
+from .ingressShieldExceptions import (
+    ArithmeticDriftException,
     InvalidSkuIdentifierException,
     SchemaSanitizationFailureException,
 )
-from razoragentMesh.packages.catalogSanitizer.sanitizerConstants import (
+from .sanitizerConstants import (
     ansiEscapeRegexPattern,
+    defaultCurrency,
     htmlTagRegexPattern,
     markdownEmptyAltImageRegexPattern,
     markdownLinkRegexPattern,
@@ -18,13 +20,60 @@ from razoragentMesh.packages.catalogSanitizer.sanitizerConstants import (
     skuIdRegexPattern,
     zeroWidthCodePoints,
 )
-from razoragentMesh.packages.catalogSanitizer.sanitizedSkuQuoteSchema import (
+from .sanitizedSkuQuoteSchema import (
     SanitizedSkuQuote,
     TaxBreakdownSchema,
 )
-from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
-    ArithmeticDriftException,
-)
+
+
+
+def sanitizeMerchantSkuQuote(rawQuote: dict[str, Any]) -> SanitizedSkuQuote:
+    """Sanitizes raw merchant catalog payload into strict SanitizedSkuQuote."""
+    if not isinstance(rawQuote, dict):
+        raise SchemaSanitizationFailureException("rawQuote must be a dictionary")
+
+    skuId = _extractFieldValue(rawQuote, "skuId", "sku_id")
+    if not isinstance(skuId, str) or not re.match(skuIdRegexPattern, skuId):
+        raise InvalidSkuIdentifierException(f"Invalid SKU ID format: {skuId}")
+
+    rawTitle = _extractFieldValue(rawQuote, "title", "title") or skuId
+    rawDesc = _extractFieldValue(rawQuote, "description", "description") or ""
+    nums = _extractNumericFields(rawQuote)
+
+    hsn = str(_extractFieldValue(rawQuote, "hsnCode", "hsn_code") or "")
+    qHash = str(_extractFieldValue(rawQuote, "quoteHash", "quote_hash") or "")
+    taxBreakdown = _buildTaxBreakdown(_extractFieldValue(rawQuote, "taxBreakdown", "tax_breakdown"))
+
+    try:
+        return SanitizedSkuQuote(
+            skuId=skuId,
+            title=cleanAndTruncateText(str(rawTitle), maxTitleLength),
+            description=cleanAndTruncateText(str(rawDesc), maxDescriptionLength),
+            availableStock=nums["stock"],
+            baseUnitPricePaise=nums["basePrice"],
+            offeredUnitPricePaise=nums["offeredPrice"],
+            currency=defaultCurrency,
+            hsnCode=hsn,
+            gstRatePercent=nums["gstRate"],
+            taxBreakdown=taxBreakdown,
+            quoteExpiryTimestamp=nums["expiry"],
+            quoteHash=qHash,
+        )
+    except ValidationError as err:
+        raise SchemaSanitizationFailureException(f"Validation failed: {str(err)}") from err
+
+
+def cleanAndTruncateText(rawText: str, maxLength: int) -> str:
+    """Applies zero-width, ANSI, and markup stripping, then normalizes whitespace."""
+    if not rawText:
+        return ""
+    cleaned = stripZeroWidthCharacters(rawText)
+    cleaned = stripAnsiEscapes(cleaned)
+    cleaned = stripMarkdownAndHtml(cleaned)
+    normalized = " ".join(cleaned.split())
+    if len(normalized) <= maxLength:
+        return normalized
+    return normalized[:maxLength].rstrip()
 
 
 def stripZeroWidthCharacters(inputString: str) -> str:
@@ -51,19 +100,6 @@ def stripMarkdownAndHtml(inputString: str) -> str:
     textWithoutEmptyImages = re.sub(markdownEmptyAltImageRegexPattern, "", inputString)
     textWithoutLinks = re.sub(markdownLinkRegexPattern, r"\1", textWithoutEmptyImages)
     return re.sub(htmlTagRegexPattern, "", textWithoutLinks)
-
-
-def cleanAndTruncateText(rawText: str, maxLength: int) -> str:
-    """Applies zero-width, ANSI, and markup stripping, then normalizes whitespace."""
-    if not rawText:
-        return ""
-    cleaned = stripZeroWidthCharacters(rawText)
-    cleaned = stripAnsiEscapes(cleaned)
-    cleaned = stripMarkdownAndHtml(cleaned)
-    normalized = " ".join(cleaned.split())
-    if len(normalized) <= maxLength:
-        return normalized
-    return normalized[:maxLength].rstrip()
 
 
 def _extractFieldValue(rawQuote: dict[str, Any], camelKey: str, snakeKey: str) -> Any:
@@ -128,37 +164,10 @@ def _extractNumericFields(rawQuote: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def sanitizeMerchantSkuQuote(rawQuote: dict[str, Any]) -> SanitizedSkuQuote:
-    """Sanitizes raw merchant catalog payload into strict SanitizedSkuQuote."""
-    if not isinstance(rawQuote, dict):
-        raise SchemaSanitizationFailureException("rawQuote must be a dictionary")
-
-    skuId = _extractFieldValue(rawQuote, "skuId", "sku_id")
-    if not isinstance(skuId, str) or not re.match(skuIdRegexPattern, skuId):
-        raise InvalidSkuIdentifierException(f"Invalid SKU ID format: {skuId}")
-
-    rawTitle = _extractFieldValue(rawQuote, "title", "title") or skuId
-    rawDesc = _extractFieldValue(rawQuote, "description", "description") or ""
-    nums = _extractNumericFields(rawQuote)
-
-    hsn = str(_extractFieldValue(rawQuote, "hsnCode", "hsn_code") or "")
-    qHash = str(_extractFieldValue(rawQuote, "quoteHash", "quote_hash") or "")
-    taxBreakdown = _buildTaxBreakdown(_extractFieldValue(rawQuote, "taxBreakdown", "tax_breakdown"))
-
-    try:
-        return SanitizedSkuQuote(
-            skuId=skuId,
-            title=cleanAndTruncateText(str(rawTitle), maxTitleLength),
-            description=cleanAndTruncateText(str(rawDesc), maxDescriptionLength),
-            availableStock=nums["stock"],
-            baseUnitPricePaise=nums["basePrice"],
-            offeredUnitPricePaise=nums["offeredPrice"],
-            currency="INR",
-            hsnCode=hsn,
-            gstRatePercent=nums["gstRate"],
-            taxBreakdown=taxBreakdown,
-            quoteExpiryTimestamp=nums["expiry"],
-            quoteHash=qHash,
-        )
-    except ValidationError as err:
-        raise SchemaSanitizationFailureException(f"Validation failed: {str(err)}") from err
+__all__ = [
+    "cleanAndTruncateText",
+    "sanitizeMerchantSkuQuote",
+    "stripAnsiEscapes",
+    "stripMarkdownAndHtml",
+    "stripZeroWidthCharacters",
+]

@@ -2,12 +2,13 @@
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
 
 from ..constants.merchantConstants import (
     basisPointsDivisor,
     defaultQuoteTtlSeconds,
     percentDivisor,
+    rateLimitBurst1000,
+    rateLimitMax100M,
     zeroPaise,
 )
 from ..schemas.dynamicPricingSchema import DynamicPricingRule
@@ -34,48 +35,6 @@ class StalePriceQuoteException(Exception):
     def __init__(self, deltaMs: int) -> None:
         self.deltaMs = deltaMs
         super().__init__(f"Price quote is stale by {deltaMs}ms")
-
-
-def verifyQuoteNotExpired(expiresAtTimestamp: int, currentTimestamp: int) -> None:
-    """Guards against stale quotations by validating against current timestamp."""
-    if currentTimestamp > expiresAtTimestamp:
-        timeDelta = currentTimestamp - expiresAtTimestamp
-        # Convert seconds timestamp delta to milliseconds for audit trail
-        deltaMs = timeDelta * 1000 if timeDelta < 100000000 else timeDelta
-        raise StalePriceQuoteException(deltaMs=deltaMs)
-
-
-def _computeGoldCostPaise(
-    netWeightGrams: Decimal,
-    spotRatePerGramPaise: int,
-    purityMultiplier: Decimal,
-) -> int:
-    """Calculates pure bullion cost before fabrication and tax."""
-    rawCost = (
-        Decimal(str(netWeightGrams))
-        * Decimal(str(spotRatePerGramPaise))
-        * Decimal(str(purityMultiplier))
-    )
-    return int(rawCost)
-
-
-def _computeMakingChargesPaise(
-    rule: DynamicPricingRule,
-    goldCostPaise: int,
-) -> int:
-    """Determines making charges from basis points or flat paise."""
-    makingChargeBps = getattr(rule, "makingChargeBps", None)
-    if makingChargeBps is not None and makingChargeBps > 0:
-        return (goldCostPaise * makingChargeBps) // basisPointsDivisor
-
-    makingChargesType = getattr(rule, "makingChargesType", None)
-    if makingChargesType == "PERCENTAGE_OF_GOLD":
-        return (goldCostPaise * rule.makingChargesPaise) // basisPointsDivisor
-
-    if getattr(rule, "makingChargesPaise", None) is not None:
-        return rule.makingChargesPaise
-
-    return zeroPaise
 
 
 async def computeSpotLinkedQuote(
@@ -112,6 +71,48 @@ async def computeSpotLinkedQuote(
         oracleFeedSymbol=symbol,
         spotRatePerGramPaise=spotRatePerGramPaise,
     )
+
+
+def verifyQuoteNotExpired(expiresAtTimestamp: int, currentTimestamp: int) -> None:
+    """Guards against stale quotations by validating against current timestamp."""
+    if currentTimestamp > expiresAtTimestamp:
+        timeDelta = currentTimestamp - expiresAtTimestamp
+        # Convert seconds timestamp delta to milliseconds for audit trail
+        deltaMs = timeDelta * rateLimitBurst1000 if timeDelta < rateLimitMax100M else timeDelta
+        raise StalePriceQuoteException(deltaMs=deltaMs)
+
+
+def _computeGoldCostPaise(
+    netWeightGrams: Decimal,
+    spotRatePerGramPaise: int,
+    purityMultiplier: Decimal,
+) -> int:
+    """Calculates pure bullion cost before fabrication and tax."""
+    rawCost = (
+        Decimal(str(netWeightGrams))
+        * Decimal(str(spotRatePerGramPaise))
+        * Decimal(str(purityMultiplier))
+    )
+    return int(rawCost)
+
+
+def _computeMakingChargesPaise(
+    rule: DynamicPricingRule,
+    goldCostPaise: int,
+) -> int:
+    """Determines making charges from basis points or flat paise."""
+    makingChargeBps = getattr(rule, "makingChargeBps", None)
+    if makingChargeBps is not None and makingChargeBps > 0:
+        return (goldCostPaise * makingChargeBps) // basisPointsDivisor
+
+    makingChargesType = getattr(rule, "makingChargesType", None)
+    if makingChargesType == "PERCENTAGE_OF_GOLD":
+        return (goldCostPaise * rule.makingChargesPaise) // basisPointsDivisor
+
+    if getattr(rule, "makingChargesPaise", None) is not None:
+        return rule.makingChargesPaise
+
+    return zeroPaise
 
 
 __all__ = [

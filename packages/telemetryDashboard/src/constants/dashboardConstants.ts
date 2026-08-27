@@ -1,6 +1,5 @@
 import {
   MandateKind,
-  RouteTransferItem,
   SseConnectionState,
   TelemetryEventType,
 } from "@/types/telemetryEventTypes";
@@ -37,10 +36,10 @@ export const connectionStatusLabels: Record<SseConnectionState, string> = {
 };
 
 export const connectionStatusColors: Record<SseConnectionState, string> = {
-  CONNECTED: "bg-emerald-500 text-emerald-300 border-emerald-500/30",
-  CONNECTING: "bg-amber-500 text-amber-300 border-amber-500/30",
-  DISCONNECTED: "bg-slate-600 text-slate-300 border-slate-600/30",
-  ERROR: "bg-rose-500 text-rose-300 border-rose-500/30",
+  CONNECTED: "bg-statusSuccess/10 text-statusSuccess border-statusSuccess/30",
+  CONNECTING: "bg-statusWarning/10 text-statusWarning border-statusWarning/30",
+  DISCONNECTED: "bg-bgSurface text-textMuted border-borderSubtle",
+  ERROR: "bg-statusError/10 text-statusError border-statusError/30",
 };
 
 // Agent Trace Panel Constants
@@ -53,11 +52,7 @@ export const traceEventTypes: ReadonlySet<TelemetryEventType> = new Set<Telemetr
 ]);
 
 // Dynamic B2B Negotiation Constants
-export const defaultTotalMicroFeesPaise = 150;
-export const defaultFallbackBidPaise = 335000;
-export const defaultFallbackAskPaise = 335000;
 export const maxNegotiationTurns = 5;
-export const defaultTurnNumberFallback = 3;
 export const negotiationTurnNumbers: ReadonlyArray<number> = [1, 2, 3, 4, 5];
 
 // AP2 Mandate Chain Constants
@@ -91,38 +86,7 @@ export const copyFeedbackTimeoutMs = 2000;
 
 // Self-Healing Diff Viewer Constants
 export const defaultHealingSlaThresholdMs = 300;
-export const defaultOriginalPricePaise = 420000;
-export const defaultSubstitutePricePaise = 425000;
-export const defaultCosineSimilarity = 0.924;
-export const defaultHealingDurationMs = 214;
-export const defaultOriginalSkuId = "SKU-101";
-export const defaultSubstituteSkuId = "SKU-104";
 export const healingSimilarityThresholdPercentage = 85.0;
-
-// Razorpay Live Webhook Feed Constants
-export const defaultTransfers: ReadonlyArray<RouteTransferItem> = [
-  {
-    transferId: "trf_merchant_001",
-    recipientAccountId: "acc_merchant_nexus_01",
-    amountPaise: 380000,
-    feePaise: 0,
-  },
-  {
-    transferId: "trf_platform_002",
-    recipientAccountId: "acc_razoragent_protocol",
-    amountPaise: 2000,
-    feePaise: 0,
-  },
-  {
-    transferId: "trf_logistics_003",
-    recipientAccountId: "acc_delhivery_direct",
-    amountPaise: 38000,
-    feePaise: 0,
-  },
-];
-export const defaultPaymentId = "pay_A2A_Live_982341";
-export const defaultSettledAmountPaise = 420000;
-export const defaultGstrInvoiceHash = "0xfa9812bc67de45fe9812bc67de45fe9812bc67de45fe";
 
 // Event Formatter and Truncation Constants
 export const hashTruncatePrefixLength = 8;
@@ -131,100 +95,95 @@ export const defaultUnknownLabel = "UNKNOWN";
 
 export const defaultFallbackEventStyle: EventMetaStyle = {
   label: defaultUnknownLabel,
-  badgeBg: "bg-slate-900",
-  badgeText: "text-slate-300",
-  borderColor: "border-slate-700",
-  dotColor: "bg-slate-400",
+  badgeBg: "bg-surfaceContainer",
+  badgeText: "text-textSecondary",
+  borderColor: "border-borderSubtle",
+  dotColor: "bg-textMuted",
 };
 
 export const defaultEventStyleMap: Record<TelemetryEventType, EventMetaStyle> = {
   MCP_TOOL_CALL: {
     label: "MCP CALL",
-    badgeBg: "bg-cyan-950/60",
-    badgeText: "text-cyan-400",
-    borderColor: "border-cyan-500/30",
-    dotColor: "bg-cyan-400",
+    badgeBg: "bg-statusInfo/10",
+    badgeText: "text-statusInfo",
+    borderColor: "border-statusInfo/30",
+    dotColor: "bg-statusInfo",
   },
   MCP_TOOL_RESULT: {
     label: "MCP RESULT",
-    badgeBg: "bg-teal-950/60",
-    badgeText: "text-teal-300",
-    borderColor: "border-teal-500/30",
-    dotColor: "bg-teal-400",
+    badgeBg: "bg-statusInfo/10",
+    badgeText: "text-statusInfo",
+    borderColor: "border-statusInfo/30",
+    dotColor: "bg-statusInfo",
   },
   BID_TURN_COMPLETED: {
     label: "BID TURN",
-    badgeBg: "bg-violet-950/60",
-    badgeText: "text-violet-300",
-    borderColor: "border-violet-500/30",
-    dotColor: "bg-violet-400",
+    badgeBg: "bg-accentSubtle",
+    badgeText: "text-accentPrimary",
+    borderColor: "border-accentPrimary/30",
+    dotColor: "bg-accentPrimary",
   },
   NEGOTIATION_CONVERGED: {
     label: "CONVERGED",
-    badgeBg: "bg-emerald-950/60",
-    badgeText: "text-emerald-300",
-    borderColor: "border-emerald-500/40",
-    dotColor: "bg-emerald-400",
+    badgeBg: "bg-statusSuccess/10",
+    badgeText: "text-statusSuccess",
+    borderColor: "border-statusSuccess/30",
+    dotColor: "bg-statusSuccess",
   },
   MANDATE_SIGNED: {
     label: "AP2 SIGNED",
-    badgeBg: "bg-indigo-950/60",
-    badgeText: "text-indigo-300",
-    borderColor: "border-indigo-500/30",
-    dotColor: "bg-indigo-400",
+    badgeBg: "bg-accentSubtle",
+    badgeText: "text-accentPrimary",
+    borderColor: "border-accentPrimary/30",
+    dotColor: "bg-accentPrimary",
   },
   PAYMENT_CAPTURED: {
     label: "SETTLED",
-    badgeBg: "bg-emerald-950/60",
-    badgeText: "text-emerald-400",
-    borderColor: "border-emerald-500/50",
-    dotColor: "bg-emerald-400",
+    badgeBg: "bg-statusSuccess/10",
+    badgeText: "text-statusSuccess",
+    borderColor: "border-statusSuccess/30",
+    dotColor: "bg-statusSuccess",
   },
   OOS_HEALED: {
     label: "OOS HEALED",
-    badgeBg: "bg-amber-950/60",
-    badgeText: "text-amber-300",
-    borderColor: "border-amber-500/30",
-    dotColor: "bg-amber-400",
+    badgeBg: "bg-statusWarning/10",
+    badgeText: "text-statusWarning",
+    borderColor: "border-statusWarning/30",
+    dotColor: "bg-statusWarning",
   },
   BUDGET_BLOCKED: {
     label: "BUDGET BLOCKED",
-    badgeBg: "bg-rose-950/60",
-    badgeText: "text-rose-400",
-    borderColor: "border-rose-500/40",
-    dotColor: "bg-rose-400",
+    badgeBg: "bg-statusError/10",
+    badgeText: "text-statusError",
+    borderColor: "border-statusError/30",
+    dotColor: "bg-statusError",
   },
   POW_CHALLENGE_SOLVED: {
     label: "POW VERIFIED",
-    badgeBg: "bg-sky-950/60",
-    badgeText: "text-sky-300",
-    borderColor: "border-sky-500/30",
-    dotColor: "bg-sky-400",
+    badgeBg: "bg-statusInfo/10",
+    badgeText: "text-statusInfo",
+    borderColor: "border-statusInfo/30",
+    dotColor: "bg-statusInfo",
   },
   INVENTORY_LOCKED: {
     label: "INV LOCKED",
-    badgeBg: "bg-blue-950/60",
-    badgeText: "text-blue-300",
-    borderColor: "border-blue-500/30",
-    dotColor: "bg-blue-400",
+    badgeBg: "bg-statusInfo/10",
+    badgeText: "text-statusInfo",
+    borderColor: "border-statusInfo/30",
+    dotColor: "bg-statusInfo",
   },
   ROUTE_ROLLBACK_TRIGGERED: {
     label: "2PC ROLLBACK",
-    badgeBg: "bg-red-950/60",
-    badgeText: "text-red-400",
-    borderColor: "border-red-500/50",
-    dotColor: "bg-red-400",
+    badgeBg: "bg-statusError/10",
+    badgeText: "text-statusError",
+    borderColor: "border-statusError/30",
+    dotColor: "bg-statusError",
   },
   HEARTBEAT: {
     label: "HEARTBEAT",
-    badgeBg: "bg-slate-900/60",
-    badgeText: "text-slate-400",
-    borderColor: "border-slate-700/30",
-    dotColor: "bg-slate-500",
+    badgeBg: "bg-surfaceContainer",
+    badgeText: "text-textMuted",
+    borderColor: "border-borderSubtle",
+    dotColor: "bg-textMuted",
   },
 };
-
-// Mock Scenario Agent Identifiers
-export const defaultBuyerAgentDid = "did:agent:procurement-bot-01";
-export const defaultUserCfoDid = "did:agent:user-cfo-01";
-export const defaultMerchantDid = "did:agent:merchant-nexus-01";

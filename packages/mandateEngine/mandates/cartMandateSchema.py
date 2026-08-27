@@ -1,6 +1,8 @@
 """Pydantic v2 schema for CartMandate (M_C) signed by merchant."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from ..tax.gstinValidator import validateGstin
 
 
 class CartItemSchema(BaseModel):
@@ -49,3 +51,11 @@ class CartMandate(BaseModel):
     nonce: str = Field(min_length=1, description="Single-use cryptographic nonce")
     timestamp: int = Field(gt=0, description="Unix creation timestamp")
     merchantSignature: str = Field(min_length=128, max_length=128, description="Ed25519 signature by merchant")
+
+    @field_validator("merchantGstin")
+    @classmethod
+    def validate_merchant_gstin(cls, v: str) -> str:
+        """Validates merchant GSTIN format and Luhn Mod-36 statutory checksum."""
+        if not validateGstin(v):
+            raise ValueError("Invalid Indian GSTIN: failed format or Luhn Mod-36 checksum verification")
+        return v

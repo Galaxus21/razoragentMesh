@@ -13,6 +13,12 @@ import {
   RedisChannelSubscriber
 } from "../types/mcpToolTypes.js";
 
+export interface ParsedCatalogEvent {
+  readonly actionType?: string;
+  readonly itemData?: CatalogSkuItem;
+  readonly skuId?: string;
+}
+
 export class CatalogStore {
   private readonly itemsMap = new Map<string, CatalogSkuItem>();
   private readonly stockMap = new Map<string, number>();
@@ -46,47 +52,7 @@ export class CatalogStore {
   public subscribeToCatalogChannel(redisSubscriber: RedisChannelSubscriber): void {
     redisSubscriber.subscribe(meshCatalogUpdatesChannel);
     redisSubscriber.on("message", (channel: unknown, rawMessage: unknown) => {
-      if (typeof channel !== "string" || channel !== meshCatalogUpdatesChannel) {
-        return;
-      }
-      if (typeof rawMessage !== "string") {
-        return;
-      }
-      try {
-        const parsed = JSON.parse(rawMessage) as {
-          action?: string;
-          event?: string;
-          type?: string;
-          item?: unknown;
-          payload?: unknown;
-          skuId?: string;
-          sku_id?: string;
-        };
-        const actionType = parsed.action ?? parsed.event ?? parsed.type;
-        if (
-          actionType === catalogEventAdded ||
-          actionType === catalogEventUpdated ||
-          actionType === "CATALOG_ITEM_ADDED" ||
-          actionType === "CATALOG_ITEM_UPDATED"
-        ) {
-          const itemData = (parsed.item ?? parsed.payload ?? parsed) as CatalogSkuItem;
-          this.addSku(itemData);
-        } else if (
-          actionType === catalogEventRemoved ||
-          actionType === "CATALOG_ITEM_REMOVED"
-        ) {
-          const skuId =
-            parsed.skuId ??
-            parsed.sku_id ??
-            (parsed.payload as { skuId?: string; sku_id?: string })?.skuId ??
-            (parsed.payload as { skuId?: string; sku_id?: string })?.sku_id;
-          if (skuId) {
-            this.removeSku(skuId);
-          }
-        }
-      } catch {
-        // Ignore malformed message payloads gracefully
-      }
+      _handleCatalogEvent(this, channel, rawMessage);
     });
   }
 
@@ -157,3 +123,54 @@ export class CatalogStore {
 }
 
 export const defaultCatalogStore = new CatalogStore();
+
+function _parseCatalogMessage(rawMessage: unknown): ParsedCatalogEvent | null {
+  if (typeof rawMessage !== "string") {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(rawMessage) as {
+      action?: string; event?: string; type?: string;
+      item?: unknown; payload?: unknown; skuId?: string; sku_id?: string;
+    };
+    const actionType = parsed.action ?? parsed.event ?? parsed.type;
+    const isAddAction =
+      actionType === catalogEventAdded || actionType === catalogEventUpdated ||
+      actionType === "CATALOG_ITEM_ADDED" || actionType === "CATALOG_ITEM_UPDATED";
+    const itemData = isAddAction ? ((parsed.item ?? parsed.payload ?? parsed) as CatalogSkuItem) : undefined;
+    const skuId =
+      parsed.skuId ?? parsed.sku_id ??
+      (parsed.payload as { skuId?: string; sku_id?: string } | undefined)?.skuId ??
+      (parsed.payload as { skuId?: string; sku_id?: string } | undefined)?.sku_id;
+
+    return { actionType, itemData, skuId };
+  } catch (error) {
+    console.warn("Malformed catalog message:", error);
+    return null;
+  }
+}
+
+function _handleCatalogEvent(store: CatalogStore, channel: unknown, rawMessage: unknown): void {
+  if (typeof channel !== "string" || channel !== meshCatalogUpdatesChannel) {
+    return;
+  }
+  const parsedEvent = _parseCatalogMessage(rawMessage);
+  if (!parsedEvent) {
+    return;
+  }
+  const { actionType, itemData, skuId } = parsedEvent;
+  if (
+    itemData &&
+    (actionType === catalogEventAdded ||
+      actionType === catalogEventUpdated ||
+      actionType === "CATALOG_ITEM_ADDED" ||
+      actionType === "CATALOG_ITEM_UPDATED")
+  ) {
+    store.addSku(itemData);
+  } else if (
+    skuId &&
+    (actionType === catalogEventRemoved || actionType === "CATALOG_ITEM_REMOVED")
+  ) {
+    store.removeSku(skuId);
+  }
+}

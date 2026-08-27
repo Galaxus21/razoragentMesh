@@ -5,10 +5,10 @@ import hmac
 import json
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
-from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import validateIntegerPaise
+from ..constants.arithmeticUtils import validateIntegerPaise
 from ..constants.alertConstants import (
     defaultWebhookTimeoutSeconds,
     eventPriceDropTriggered,
@@ -66,7 +66,6 @@ class PriceDropAlertManager:
         validateIntegerPaise(targetPricePaise, "targetPricePaise")
         if targetPricePaise <= 0:
             raise ValueError("Target price must be positive integer paise")
-
         now = int(time.time())
         if expiresAtUnix <= now:
             raise ValueError("Alert expiry timestamp must be in the future")
@@ -82,7 +81,6 @@ class PriceDropAlertManager:
             createdAtUnix=now,
             status=statusAlertActive,
         )
-
         await self._storeAlert(alert, now)
         return alert
 
@@ -181,70 +179,19 @@ class PriceDropAlertManager:
         now: int,
     ) -> PriceDropDispatchResult:
         """Constructs signed webhook payload and sends HTTP POST to callback URL."""
-        savingsPaise = max(0, alert.targetPricePaise - activePricePaise)
-        payload = PriceDropWebhookPayload(
-            event=eventPriceDropTriggered,
-            alertId=alert.alertId,
-            skuId=alert.skuId,
-            buyerAgentId=alert.buyerAgentId,
-            targetPricePaise=alert.targetPricePaise,
-            activePricePaise=activePricePaise,
-            savingsPaise=savingsPaise,
-            triggeredAtUnix=now,
-            callbackUrl=alert.callbackUrl,
+        payload = _buildWebhookPayload(alert, activePricePaise, now)
+        payloadBytes, headers, sig = _signWebhookPayload(payload, self._webhookSecret)
+        isOk, statusCode, errorMsg = await _executeWebhookPost(
+            alert.callbackUrl, payloadBytes, headers, self._httpClient
         )
-        payloadBytes = json.dumps(payload.model_dump(), separators=(",", ":"), sort_keys=True).encode("utf-8")
-        sig = hmac.new(self._webhookSecret.encode("utf-8"), payloadBytes, hashlib.sha256).hexdigest()
-        deliveryId = f"{idPrefixDelivery}{uuid.uuid4().hex[:16]}"
-        headers = {
-            "Content-Type": "application/json",
-            headerMeshSignature: sig,
-            headerRazorpaySignature: sig,
-            headerMeshEvent: eventPriceDropTriggered,
-            headerMeshDeliveryId: deliveryId,
-        }
-
-        try:
-            if self._httpClient is not None:
-                resp = await self._httpClient.post(
-                    alert.callbackUrl,
-                    content=payloadBytes,
-                    headers=headers,
-                    timeout=defaultWebhookTimeoutSeconds,
-                )
-                isOk = httpStatusOkMin <= resp.status_code < httpStatusOkMax
-                return PriceDropDispatchResult(
-                    alertId=alert.alertId,
-                    callbackUrl=alert.callbackUrl,
-                    status=statusDispatchSuccess if isOk else statusDispatchFailed,
-                    statusCode=resp.status_code,
-                    signatureHeader=sig,
-                    error=None if isOk else f"HTTP {resp.status_code}",
-                )
-            async with httpx.AsyncClient(timeout=defaultWebhookTimeoutSeconds) as client:
-                resp = await client.post(
-                    alert.callbackUrl,
-                    content=payloadBytes,
-                    headers=headers,
-                )
-                isOk = httpStatusOkMin <= resp.status_code < httpStatusOkMax
-                return PriceDropDispatchResult(
-                    alertId=alert.alertId,
-                    callbackUrl=alert.callbackUrl,
-                    status=statusDispatchSuccess if isOk else statusDispatchFailed,
-                    statusCode=resp.status_code,
-                    signatureHeader=sig,
-                    error=None if isOk else f"HTTP {resp.status_code}",
-                )
-        except Exception as err:
-            return PriceDropDispatchResult(
-                alertId=alert.alertId,
-                callbackUrl=alert.callbackUrl,
-                status=statusDispatchFailed,
-                statusCode=None,
-                signatureHeader=sig,
-                error=str(err),
-            )
+        return PriceDropDispatchResult(
+            alertId=alert.alertId,
+            callbackUrl=alert.callbackUrl,
+            status=statusDispatchSuccess if isOk else statusDispatchFailed,
+            statusCode=statusCode,
+            signatureHeader=sig,
+            error=errorMsg,
+        )
 
     async def _deleteRedisKey(self, key: str) -> None:
         """Safely removes key across real Redis client or in-memory mock."""
@@ -258,6 +205,73 @@ class PriceDropAlertManager:
                 self._redisClient.expirations.pop(key, None)
         elif hasattr(self._redisClient, "set"):
             await self._redisClient.set(key, "")
+
+
+def _buildWebhookPayload(
+    alert: PriceDropAlert,
+    activePricePaise: int,
+    now: int,
+) -> PriceDropWebhookPayload:
+    """Constructs structured webhook payload for price drop event."""
+    savingsPaise = max(0, alert.targetPricePaise - activePricePaise)
+    return PriceDropWebhookPayload(
+        event=eventPriceDropTriggered,
+        alertId=alert.alertId,
+        skuId=alert.skuId,
+        buyerAgentId=alert.buyerAgentId,
+        targetPricePaise=alert.targetPricePaise,
+        activePricePaise=activePricePaise,
+        savingsPaise=savingsPaise,
+        triggeredAtUnix=now,
+        callbackUrl=alert.callbackUrl,
+    )
+
+
+def _signWebhookPayload(
+    payload: PriceDropWebhookPayload,
+    secret: str,
+) -> Tuple[bytes, Dict[str, str], str]:
+    """Serializes payload to canonical JSON and generates HMAC-SHA256 headers."""
+    payloadBytes = json.dumps(payload.model_dump(), separators=(",", ":"), sort_keys=True).encode("utf-8")
+    sig = hmac.new(secret.encode("utf-8"), payloadBytes, hashlib.sha256).hexdigest()
+    deliveryId = f"{idPrefixDelivery}{uuid.uuid4().hex[:16]}"
+    headers = {
+        "Content-Type": "application/json",
+        headerMeshSignature: sig,
+        headerRazorpaySignature: sig,
+        headerMeshEvent: eventPriceDropTriggered,
+        headerMeshDeliveryId: deliveryId,
+    }
+    return payloadBytes, headers, sig
+
+
+async def _executeWebhookPost(
+    callbackUrl: str,
+    payloadBytes: bytes,
+    headers: Dict[str, str],
+    httpClient: Optional[Any] = None,
+) -> Tuple[bool, Optional[int], Optional[str]]:
+    """Dispatches signed webhook payload via HTTP POST to callback endpoint."""
+    try:
+        if httpClient is not None:
+            resp = await httpClient.post(
+                callbackUrl,
+                content=payloadBytes,
+                headers=headers,
+                timeout=defaultWebhookTimeoutSeconds,
+            )
+            isOk = httpStatusOkMin <= resp.status_code < httpStatusOkMax
+            return isOk, resp.status_code, None if isOk else f"HTTP {resp.status_code}"
+        async with httpx.AsyncClient(timeout=defaultWebhookTimeoutSeconds) as client:
+            resp = await client.post(
+                callbackUrl,
+                content=payloadBytes,
+                headers=headers,
+            )
+            isOk = httpStatusOkMin <= resp.status_code < httpStatusOkMax
+            return isOk, resp.status_code, None if isOk else f"HTTP {resp.status_code}"
+    except Exception as err:
+        return False, None, str(err)
 
 
 __all__ = [

@@ -3,39 +3,88 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
+*.pyd
+.ruff_cache/
 
 # Virtual environments
 .venv/
 venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
-# Pytest
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+
+# Testing & Coverage caches
 .pytest_cache/
+.hypothesis/
 htmlcov/
 .coverage
+.coverage.*
 coverage.xml
+coverage/
+*.lcov
 
-# Environment secrets
-.env
+# TypeScript build caches & configs
+*.tsbuildinfo
+tsconfig.tsbuildinfo
 
-# Distribution / packaging
-*.egg-info/
+# Next.js & Web build artifacts
+.next/
+out/
+.vercel/
+
+# Distribution & Packaging
 dist/
 build/
+*.egg-info/
+*.egg
+.eggs/
 
-# mypy / type checkers
+# Type checkers
 .mypy_cache/
 .pytype/
+.dmypy.json
+dmypy.json
+
+# Environment secrets & local configs
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # Agent scratch & logs
 .agents/
+.gemini/
 
 # OS artifacts
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 Desktop.ini
 
-# IDE
+# IDE & Editor files
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 

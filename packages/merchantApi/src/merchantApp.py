@@ -1,17 +1,27 @@
 """FastAPI Application factory for RazorAgent Mesh Merchant Ingestion API."""
 
 from contextlib import asynccontextmanager
+import logging
 import os
 from typing import AsyncGenerator
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import redis.asyncio as aioredis
 
-from .constants.merchantConstants import merchantApiDefaultPort
+from .config import getMerchantApiSettings
+from .constants.merchantConstants import (
+    defaultApiTitle,
+    defaultApiVersion,
+    merchantApiDefaultPort,
+)
+from .exceptions.merchantExceptions import MerchantApiException
 from .routes.bulkIngestRoute import bulkIngestRouter
 from .routes.catalogRoute import catalogRouter
 from .routes.policyRoute import policyRouter
 from .routes.registrationRoute import registrationRouter
+
+logger = logging.getLogger(__name__)
 
 defaultRedisUrl: str = "redis://localhost:6379/0"
 environmentRedisKey: str = "REDIS_URL"
@@ -21,11 +31,15 @@ environmentRedisKey: str = "REDIS_URL"
 async def merchantApiLifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager initializing and terminating Redis client state."""
     if not getattr(app.state, "redis", None):
-        redisUrl = os.environ.get(environmentRedisKey, defaultRedisUrl)
+        settings = getMerchantApiSettings()
         try:
-            app.state.redis = aioredis.from_url(redisUrl)
-        except Exception:
-            pass
+            app.state.redis = aioredis.from_url(settings.redisUrl)
+        except Exception as err:
+            logger.warning(
+                "Redis connection failed, continuing with in-memory fallback: %s",
+                err,
+                exc_info=True,
+            )
     yield
     if getattr(app.state, "redis", None) is not None:
         client = app.state.redis
@@ -37,13 +51,20 @@ async def merchantApiLifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 await res
 
 
+async def merchantApiExceptionHandler(request: Request, exc: MerchantApiException) -> JSONResponse:
+    """Translates domain exceptions into standard JSON error responses."""
+    return JSONResponse(status_code=exc.statusCode, content={"detail": exc.message})
+
+
 def createMerchantApp() -> FastAPI:
     """Instantiates and configures the FastAPI Merchant API application."""
     app = FastAPI(
-        title="RazorAgent Mesh — Merchant Ingestion API",
-        version="2.0.0",
+        title=defaultApiTitle,
+        version=defaultApiVersion,
         lifespan=merchantApiLifespan,
     )
+
+    app.add_exception_handler(MerchantApiException, merchantApiExceptionHandler)
 
     app.add_middleware(
         CORSMiddleware,
@@ -65,6 +86,7 @@ merchantApp: FastAPI = createMerchantApp()
 
 __all__ = [
     "createMerchantApp",
+    "merchantApiExceptionHandler",
     "merchantApiLifespan",
     "merchantApp",
 ]

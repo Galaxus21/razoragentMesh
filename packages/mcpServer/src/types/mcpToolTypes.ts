@@ -27,7 +27,7 @@ export interface DiscountStackResult {
 
 export interface RedisChannelSubscriber {
   subscribe(...channels: (string | Buffer)[]): unknown;
-  on(event: string, listener: (...args: any[]) => void): unknown;
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
 }
 
 export interface ScheduledPromotion {

@@ -12,10 +12,100 @@ class NegativeConstraintFilter:
 
     def __init__(self, manifest: NegativeConstraintManifest) -> None:
         self.manifest = manifest
-        self._normalizedAllergens = {a.lower().strip() for a in manifest.excludedAllergens}
-        self._normalizedBrands = {b.lower().strip() for b in manifest.excludedBrands}
-        self._normalizedMaterials = {m.lower().strip() for m in manifest.excludedMaterials}
-        self._normalizedSalts = {s.lower().strip() for s in manifest.excludedActiveSalts}
+        self._normalizedAllergens = {allergen.lower().strip() for allergen in manifest.excludedAllergens}
+        self._normalizedBrands = {brand.lower().strip() for brand in manifest.excludedBrands}
+        self._normalizedMaterials = {material.lower().strip() for material in manifest.excludedMaterials}
+        self._normalizedSalts = {salt.lower().strip() for salt in manifest.excludedActiveSalts}
+
+    def evaluateCandidate(self, skuPayload: Dict[str, Any]) -> ConstraintEvaluationResult:
+        """Runs full suite of boolean constraint checks on SKU payload."""
+        skuId = skuPayload["skuId"]
+        attributes = skuPayload.get("attributes", {})
+        apparelFacet = skuPayload.get("apparelFacet", {}) or {}
+        fmcgFacet = skuPayload.get("fmcgFacet", {}) or {}
+        pharmaFacet = skuPayload.get("pharmaFacet", {}) or {}
+
+        rejection = (
+            self._checkAllergenConstraints(skuPayload, attributes, fmcgFacet)
+            or self._checkBrandConstraints(skuPayload)
+            or self._checkMaterialAndPharmaConstraints(skuPayload, attributes, apparelFacet, pharmaFacet)
+            or self._checkPhysicalAndDietaryConstraints(skuPayload, attributes, fmcgFacet)
+            or self._checkSlaConstraints(skuPayload, attributes)
+        )
+        if rejection:
+            return ConstraintEvaluationResult(skuId=skuId, isAllowed=False, rejectionReason=rejection)
+        return ConstraintEvaluationResult(skuId=skuId, isAllowed=True)
+
+    def _checkAllergenConstraints(
+        self,
+        skuPayload: Dict[str, Any],
+        attributes: Dict[str, Any],
+        fmcgFacet: Dict[str, Any],
+    ) -> Optional[str]:
+        """Extracts and evaluates item allergens against manifest exclusion list."""
+        rawAllergens = (
+            attributes.get("allergens", [])
+            or skuPayload.get("allergens", [])
+            or fmcgFacet.get("allergens", [])
+        )
+        itemAllergens = [str(a).lower().strip() for a in rawAllergens]
+        return self._checkAllergens(itemAllergens)
+
+    def _checkBrandConstraints(self, skuPayload: Dict[str, Any]) -> Optional[str]:
+        """Extracts brand and evaluates against manifest exclusion list."""
+        brand = skuPayload.get("brand", "").lower().strip()
+        return self._checkBrand(brand)
+
+    def _checkMaterialAndPharmaConstraints(
+        self,
+        skuPayload: Dict[str, Any],
+        attributes: Dict[str, Any],
+        apparelFacet: Dict[str, Any],
+        pharmaFacet: Dict[str, Any],
+    ) -> Optional[str]:
+        """Evaluates fabric materials, active pharma salts, and OTC prescription requirements."""
+        fabrics = apparelFacet.get("fabric", []) or attributes.get("fabric", []) or skuPayload.get("fabric", [])
+        if isinstance(fabrics, str):
+            fabrics = [fabrics]
+        materialReason = self._checkMaterials(fabrics)
+        if materialReason:
+            return materialReason
+
+        activeSalt = pharmaFacet.get("activeSalt") or attributes.get("activeSalt") or skuPayload.get("activeSalt", "")
+        saltReason = self._checkSalts(str(activeSalt))
+        if saltReason:
+            return saltReason
+
+        if self.manifest.requireOtcOnly:
+            rxReq = pharmaFacet.get("prescriptionRequired") or attributes.get("prescriptionRequired", False)
+            if rxReq:
+                return "PRESCRIPTION_REQUIRED_BREACH"
+        return None
+
+    def _checkPhysicalAndDietaryConstraints(
+        self,
+        skuPayload: Dict[str, Any],
+        attributes: Dict[str, Any],
+        fmcgFacet: Dict[str, Any],
+    ) -> Optional[str]:
+        """Evaluates vegetarian dietary invariant, item weight, and dimension boundaries."""
+        vegReason = self._checkVegInvariant(fmcgFacet, attributes, skuPayload)
+        if vegReason:
+            return vegReason
+        weight = attributes.get("weightGrams") or skuPayload.get("weightGrams")
+        return self._checkPhysicalLimits(weight, attributes)
+
+    def _checkSlaConstraints(
+        self,
+        skuPayload: Dict[str, Any],
+        attributes: Dict[str, Any],
+    ) -> Optional[str]:
+        """Evaluates fulfillment SLA hours against manifest ceiling."""
+        if self.manifest.maxSlaHours is not None:
+            slaHours = skuPayload.get("slaHours") or attributes.get("slaHours")
+            if slaHours is not None and slaHours > self.manifest.maxSlaHours:
+                return f"SLA_EXCEEDED:{slaHours}h"
+        return None
 
     def _checkAllergens(self, itemAllergens: List[str]) -> Optional[str]:
         """Evaluates candidate allergens against blacklisted allergens."""
@@ -33,10 +123,10 @@ class NegativeConstraintFilter:
 
     def _checkMaterials(self, fabrics: List[str]) -> Optional[str]:
         """Evaluates candidate fabrics/materials against excluded material list."""
-        for mat in self._normalizedMaterials:
-            for f in fabrics:
-                if mat in f.lower() or f.lower() in mat:
-                    return f"MATERIAL_EXCLUDED:{mat}"
+        for material in self._normalizedMaterials:
+            for fabricMaterial in fabrics:
+                if material in fabricMaterial.lower() or fabricMaterial.lower() in material:
+                    return f"MATERIAL_EXCLUDED:{material}"
         return None
 
     def _checkSalts(self, activeSalt: str) -> Optional[str]:
@@ -44,9 +134,9 @@ class NegativeConstraintFilter:
         if not activeSalt:
             return None
         saltClean = activeSalt.lower().strip()
-        for s in self._normalizedSalts:
-            if s in saltClean or saltClean in s:
-                return f"ACTIVE_SALT_EXCLUDED:{s}"
+        for excludedSalt in self._normalizedSalts:
+            if excludedSalt in saltClean or saltClean in excludedSalt:
+                return f"ACTIVE_SALT_EXCLUDED:{excludedSalt}"
         return None
 
     def _checkPhysicalLimits(self, weight: Optional[int], attributes: Dict[str, Any]) -> Optional[str]:
@@ -83,75 +173,6 @@ class NegativeConstraintFilter:
         if not isVeg:
             return "NON_VEG_EXCLUDED"
         return None
-
-    def evaluateCandidate(self, skuPayload: Dict[str, Any]) -> ConstraintEvaluationResult:
-        """Runs full suite of boolean constraint checks on SKU payload."""
-        skuId = skuPayload["skuId"]
-        brand = skuPayload.get("brand", "").lower().strip()
-        attributes = skuPayload.get("attributes", {})
-        apparelFacet = skuPayload.get("apparelFacet", {}) or {}
-        fmcgFacet = skuPayload.get("fmcgFacet", {}) or {}
-        pharmaFacet = skuPayload.get("pharmaFacet", {}) or {}
-
-        rawAllergens = (
-            attributes.get("allergens", [])
-            or skuPayload.get("allergens", [])
-            or fmcgFacet.get("allergens", [])
-        )
-        itemAllergens = [str(a).lower().strip() for a in rawAllergens]
-        weight = attributes.get("weightGrams") or skuPayload.get("weightGrams")
-
-        allergenReason = self._checkAllergens(itemAllergens)
-        if allergenReason:
-            return ConstraintEvaluationResult(skuId=skuId, isAllowed=False, rejectionReason=allergenReason)
-
-        brandReason = self._checkBrand(brand)
-        if brandReason:
-            return ConstraintEvaluationResult(skuId=skuId, isAllowed=False, rejectionReason=brandReason)
-
-        fabrics = apparelFacet.get("fabric", []) or attributes.get("fabric", []) or skuPayload.get("fabric", [])
-        if isinstance(fabrics, str):
-            fabrics = [fabrics]
-        materialReason = self._checkMaterials(fabrics)
-        if materialReason:
-            return ConstraintEvaluationResult(skuId=skuId, isAllowed=False, rejectionReason=materialReason)
-
-        activeSalt = pharmaFacet.get("activeSalt") or attributes.get("activeSalt") or skuPayload.get("activeSalt", "")
-        saltReason = self._checkSalts(str(activeSalt))
-        if saltReason:
-            return ConstraintEvaluationResult(skuId=skuId, isAllowed=False, rejectionReason=saltReason)
-
-        if self.manifest.requireOtcOnly:
-            rxReq = pharmaFacet.get("prescriptionRequired") or attributes.get("prescriptionRequired", False)
-            if rxReq:
-                return ConstraintEvaluationResult(
-                    skuId=skuId,
-                    isAllowed=False,
-                    rejectionReason="PRESCRIPTION_REQUIRED_BREACH",
-                )
-
-        vegReason = self._checkVegInvariant(fmcgFacet, attributes, skuPayload)
-        if vegReason:
-            return ConstraintEvaluationResult(
-                skuId=skuId,
-                isAllowed=False,
-                rejectionReason=vegReason,
-            )
-
-        physicalReason = self._checkPhysicalLimits(weight, attributes)
-        if physicalReason:
-            return ConstraintEvaluationResult(skuId=skuId, isAllowed=False, rejectionReason=physicalReason)
-
-        if self.manifest.maxSlaHours is not None:
-            slaHours = skuPayload.get("slaHours") or attributes.get("slaHours")
-            if slaHours is not None and slaHours > self.manifest.maxSlaHours:
-                return ConstraintEvaluationResult(
-                    skuId=skuId,
-                    isAllowed=False,
-                    rejectionReason=f"SLA_EXCEEDED:{slaHours}h",
-                )
-
-        return ConstraintEvaluationResult(skuId=skuId, isAllowed=True)
 
 
 __all__ = [

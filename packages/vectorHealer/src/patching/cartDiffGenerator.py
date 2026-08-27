@@ -1,6 +1,6 @@
 """Cart difference and price delta computation for mandate patching."""
 
-from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import CartMandate
+from razoragentMesh.packages.mandateEngine import CartMandate
 
 
 def generateCartDiff(

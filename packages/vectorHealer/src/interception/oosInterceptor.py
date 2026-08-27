@@ -3,13 +3,19 @@
 import time
 from typing import Any, Dict, List, Optional
 
-from razoragentMesh.packages.mandateEngine.mandates.amendmentMandateSchema import AmendmentMandate
-from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import CartMandate
-from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
-from razoragentMesh.packages.mandateEngine.mandates.intentMandateSchema import IntentMandate
+from razoragentMesh.packages.mandateEngine import (
+    AmendmentMandate,
+    CartMandate,
+    Ed25519Signer,
+    IntentMandate,
+)
+
 
 from ..constants.healerConstants import (
+    defaultFallbackHsnCode,
+    defaultGstRatePercent,
     maxPriceDeltaPercent,
+    millisecondsPerSecond,
     minCosineSimilarity,
 )
 from ..constraints.constraintFilter import (
@@ -94,8 +100,8 @@ class OosInterceptor:
 
         subSkuId = substitutePayload["skuId"]
         subUnitPrice = substitutePayload["baseUnitPricePaise"]
-        subGstRate = substitutePayload.get("gstRatePercent", 18)
-        subHsn = substitutePayload.get("hsnCode", "8471")
+        subGstRate = substitutePayload.get("gstRatePercent", defaultGstRatePercent)
+        subHsn = substitutePayload.get("hsnCode", defaultFallbackHsnCode)
 
         amendment, healedCart = self.patcher.patchCartMandate(
             originalCartMandate=originalCartMandate,
@@ -110,7 +116,7 @@ class OosInterceptor:
             intentMandate=intentMandate,
         )
 
-        durationMs = (time.perf_counter() - startTime) * 1000.0
+        durationMs = (time.perf_counter() - startTime) * millisecondsPerSecond
         return amendment, healedCart, durationMs, cosineScore
 
 

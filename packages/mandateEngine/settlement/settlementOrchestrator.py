@@ -1,8 +1,11 @@
 """Two-Phase Commit (2PC) Settlement Saga Coordinator with Rollback Compensation."""
 
 import time
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from .compensationDlq import CompensationDlq
 
 from ..mandates.cartMandateSchema import CartMandate
 from ..mandates.executionMandateSchema import ExecutionMandate
@@ -16,6 +19,7 @@ from .razorpayRouteClient import (
     RazorpayRouteClient,
     RouteTransferRequest,
     RouteTransferResponse,
+    TransferReversalResponse,
 )
 from .splitManifestBuilder import (
     SplitTransferManifest,
@@ -53,15 +57,18 @@ class SettlementOrchestrator:
         protocolFeeAccount: str = defaultProtocolFeeAccount,
         protocolFeePaise: int = defaultProtocolFeePaise,
         logisticsAccount: str = defaultLogisticsAccount,
+        dlq: Optional["CompensationDlq"] = None,
     ) -> None:
         self._routeClient = routeClient
         self._nonceLedger = nonceLedger
         self.protocolFeeAccount = protocolFeeAccount
         self.protocolFeePaise = protocolFeePaise
         self.logisticsAccount = logisticsAccount
+        self._dlq = dlq
         self._saga = TwoPhaseCommitSaga(
             routeClient=self._routeClient,
             nonceLedger=self._nonceLedger,
+            dlq=self._dlq,
         )
 
     def buildSplitManifest(
@@ -89,9 +96,18 @@ class SettlementOrchestrator:
         """Verifies Ed25519 signatures for all 3 mandates."""
         self._saga.verifyMandateSignatures(intentMandate, cartMandate, executionMandate)
 
-    async def _compensateTransfers(self, completedTransfers: list[RouteTransferResponse]) -> None:
+    async def _compensateTransfers(
+        self,
+        completedTransfers: list[RouteTransferResponse],
+        failureReason: str = "2PC split transfer rollback",
+        paymentId: Optional[str] = None,
+    ) -> list[Optional[TransferReversalResponse]]:
         """Rollback compensation: reverses all successful transfers in LIFO order."""
-        await self._saga.compensateTransfers(completedTransfers)
+        return await self._saga.compensateTransfers(
+            completedTransfers=completedTransfers,
+            failureReason=failureReason,
+            paymentId=paymentId,
+        )
 
     def _buildTransferRequests(
         self,
@@ -104,9 +120,10 @@ class SettlementOrchestrator:
     async def _executeSplitPhase(
         self,
         transferRequests: list[RouteTransferRequest],
+        paymentId: Optional[str] = None,
     ) -> list[RouteTransferResponse]:
         """Executes transfers sequentially with rollback on any failure."""
-        return await self._saga.executeSplitPhase(transferRequests)
+        return await self._saga.executeSplitPhase(transferRequests, paymentId=paymentId)
 
     async def _verifyAndCapturePhase(
         self,
@@ -133,7 +150,7 @@ class SettlementOrchestrator:
 
         manifest = self.buildSplitManifest(cartMandate, merchantAccount)
         requests = self._buildTransferRequests(manifest, paymentId)
-        transfers = await self._executeSplitPhase(requests)
+        transfers = await self._executeSplitPhase(requests, paymentId=paymentId)
 
         invoiceNumber = f"{invoicePrefix}{executionMandate.executionId[:8].upper()}"
         invoice = generateGstrInvoice(

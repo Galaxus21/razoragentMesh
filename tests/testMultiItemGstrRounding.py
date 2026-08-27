@@ -43,8 +43,13 @@ from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import
     computeLineItemTotal,
     computeTcsWithholding,
 )
+from razoragentMesh.tests.fixtures.taxFixtures import (
+    computeExpectedSettlementTotals,
+    generateMultiSlabLineItems,
+    getCanonicalOddPaiseScenarios,
+)
 
-sampleMerchantGstin: str = "29AABCU9603R1ZM"
+sampleMerchantGstin: str = "29AABCU9603R1ZJ"
 karnatakaStateCode: str = "29"
 maharashtraStateCode: str = "27"
 deliveryPincodeMumbai: str = "400001"
@@ -98,70 +103,39 @@ def _createFourSlabLineItems() -> list[CartItemSchema]:
 
 
 def _setupSignedMandatesTc11(
-    items: list[CartItemSchema],
-    taxableSubtotal: int,
-    totalTax: int,
-    grossTotal: int,
+    items: list[CartItemSchema], taxableSubtotal: int, totalTax: int, grossTotal: int,
 ) -> Tuple[IntentMandate, CartMandate, ExecutionMandate]:
     """Generates valid cryptographic mandate triplet for TC-11."""
-    userPriv, _ = generateKeyPair()
-    merchantPriv, _ = generateKeyPair()
-    agentPriv, _ = generateKeyPair()
-
-    userSigner = Ed25519Signer(userPriv)
-    merchantSigner = Ed25519Signer(merchantPriv)
-    agentSigner = Ed25519Signer(agentPriv)
+    userSigner = Ed25519Signer(generateKeyPair()[0])
+    merchantSigner = Ed25519Signer(generateKeyPair()[0])
+    agentSigner = Ed25519Signer(generateKeyPair()[0])
 
     intentMandate = createSignedIntentMandate(
-        mandateId="M-I-TC11-01",
-        userSigner=userSigner,
-        delegatedAgentDid=agentSigner.getAgentDid(),
-        maxBudgetPaise=2000000,
-        upiCircleDelegationToken="upi_tok_tc11",
-        singleTransactionLimitPaise=2000000,
+        mandateId="M-I-TC11-01", userSigner=userSigner,
+        delegatedAgentDid=agentSigner.getAgentDid(), maxBudgetPaise=2000000,
+        upiCircleDelegationToken="upi_tok_tc11", singleTransactionLimitPaise=2000000,
     )
-
-    taxBreakdown = TaxBreakdownSchema(
-        cgstPaise=0,
-        sgstPaise=0,
-        igstPaise=totalTax,
-        totalTaxPaise=totalTax,
-    )
-
+    taxBreakdown = TaxBreakdownSchema(cgstPaise=0, sgstPaise=0, igstPaise=totalTax, totalTaxPaise=totalTax)
     cartMandate = createSignedCartMandate(
-        cartId="M-C-TC11-01",
-        merchantSigner=merchantSigner,
-        merchantGstin=sampleMerchantGstin,
-        merchantStateCode=karnatakaStateCode,
-        buyerDeliveryPincode=deliveryPincodeMumbai,
-        buyerDeliveryStateCode=maharashtraStateCode,
-        items=items,
-        taxableSubtotalPaise=taxableSubtotal,
-        taxBreakdown=taxBreakdown,
-        shippingPaise=defaultShippingPaiseTc11,
-        discountPaise=defaultDiscountPaiseTc11,
-        totalPaise=grossTotal,
-        inventoryLockToken="lock_tok_tc11",
-        inventoryLockExpiresAt=2000000000,
+        cartId="M-C-TC11-01", merchantSigner=merchantSigner,
+        merchantGstin=sampleMerchantGstin, merchantStateCode=karnatakaStateCode,
+        buyerDeliveryPincode=deliveryPincodeMumbai, buyerDeliveryStateCode=maharashtraStateCode,
+        items=items, taxableSubtotalPaise=taxableSubtotal, taxBreakdown=taxBreakdown,
+        shippingPaise=defaultShippingPaiseTc11, discountPaise=defaultDiscountPaiseTc11,
+        totalPaise=grossTotal, inventoryLockToken="lock_tok_tc11", inventoryLockExpiresAt=2000000000,
     )
-
     executionMandate = createSignedExecutionMandate(
-        executionId="M-E-TC11-01",
-        buyerAgentSigner=agentSigner,
-        intentMandate=intentMandate,
-        cartMandate=cartMandate,
-        settlementAmountPaise=grossTotal,
-        upiCircleToken="upi_tok_tc11",
+        executionId="M-E-TC11-01", buyerAgentSigner=agentSigner,
+        intentMandate=intentMandate, cartMandate=cartMandate,
+        settlementAmountPaise=grossTotal, upiCircleToken="upi_tok_tc11",
         timestamp=fixedTimestampTc11,
     )
-
     return intentMandate, cartMandate, executionMandate
 
 
 def testTc11MultiItemInterStateGstr1MixedTaxReconciliation() -> None:
     """TC-11: 4-item inter-state GSTR-1 mixed tax reconciliation and Section 52 TCS."""
     assert not isPlaceOfSupplyIntraState(karnatakaStateCode, maharashtraStateCode)
-
     lineItems = _createFourSlabLineItems()
     taxableSubtotal = sum(computeLineItemTotal(i.unitPricePaise, i.quantity) for i in lineItems)
     assert taxableSubtotal == 1000000
@@ -171,41 +145,26 @@ def testTc11MultiItemInterStateGstr1MixedTaxReconciliation() -> None:
     assert totalIgst == 176000
 
     grossTotal = computeCartSettlementTotal(
-        taxableSubtotalPaise=taxableSubtotal,
-        totalTaxPaise=totalIgst,
-        shippingPaise=defaultShippingPaiseTc11,
-        discountPaise=defaultDiscountPaiseTc11,
+        taxableSubtotalPaise=taxableSubtotal, totalTaxPaise=totalIgst,
+        shippingPaise=defaultShippingPaiseTc11, discountPaise=defaultDiscountPaiseTc11,
     )
     assert grossTotal == 1179000
 
-    _, cartMandate, executionMandate = _setupSignedMandatesTc11(
-        lineItems, taxableSubtotal, totalIgst, grossTotal
-    )
-
+    _, cartMandate, executionMandate = _setupSignedMandatesTc11(lineItems, taxableSubtotal, totalIgst, grossTotal)
     invoice = generateGstrInvoice(
-        cartMandate=cartMandate,
-        executionMandate=executionMandate,
-        invoiceNumber=sampleInvoiceNumberTc11,
-        invoiceTimestamp=fixedTimestampTc11,
+        cartMandate=cartMandate, executionMandate=executionMandate,
+        invoiceNumber=sampleInvoiceNumberTc11, invoiceTimestamp=fixedTimestampTc11,
     )
-
-    assert isinstance(invoice, GstrInvoicePayload)
-    assert invoice.isIntraState is False
-    assert invoice.totalCgstPaise == 0
-    assert invoice.totalSgstPaise == 0
-    assert invoice.totalIgstPaise == 176000
-    assert invoice.totalTaxPaise == 176000
+    assert isinstance(invoice, GstrInvoicePayload) and invoice.isIntraState is False
+    assert invoice.totalCgstPaise == 0 and invoice.totalSgstPaise == 0
+    assert invoice.totalIgstPaise == 176000 and invoice.totalTaxPaise == 176000
 
     tcsResult = computeTcsWithholding(taxableSubtotal, isIntraState=False)
-    assert tcsResult["tcsIgstPaise"] == 10000
-    assert invoice.totalTcsPaise == 10000
-    assert invoice.grandTotalPaise == 1179000
-    assert len(invoice.cryptographicAuditHash) == expectedAuditHashLength
-
+    assert tcsResult["tcsIgstPaise"] == 10000 and invoice.totalTcsPaise == 10000
+    assert invoice.grandTotalPaise == 1179000 and len(invoice.cryptographicAuditHash) == expectedAuditHashLength
     for idx, item in enumerate(invoice.lineItems):
-        assert item.cgstPaise == 0
-        assert item.sgstPaise == 0
-        assert item.igstPaise == expectedPerLineIgst[idx]
+        assert item.cgstPaise == 0 and item.sgstPaise == 0 and item.igstPaise == expectedPerLineIgst[idx]
+
 
 
 def testTc12AsymmetricDiscountAllocationAndPennyConservation() -> None:
@@ -249,21 +208,17 @@ def testTc12AsymmetricDiscountAllocationAndPennyConservation() -> None:
 
 def testTc12OddTaxFloorDivisionConservation() -> None:
     """TC-12: Odd-tax GST floor division conservation without penny loss."""
-    gst101 = computeGstBreakdown(101, 5, isIntraState=True)
-    assert gst101["totalTaxPaise"] == 5
-    assert gst101["cgstPaise"] == 2
-    assert gst101["sgstPaise"] == 3
-    assert gst101["cgstPaise"] + gst101["sgstPaise"] == gst101["totalTaxPaise"]
+    scenarios = getCanonicalOddPaiseScenarios()
+    for scenario in scenarios:
+        gst = computeGstBreakdown(
+            scenario.taxablePaise,
+            scenario.gstRatePercent,
+            isIntraState=scenario.isIntraState,
+        )
+        assert gst["cgstPaise"] == scenario.expectedCgstPaise
+        assert gst["sgstPaise"] == scenario.expectedSgstPaise
+        assert gst["igstPaise"] == scenario.expectedIgstPaise
+        assert gst["totalTaxPaise"] == scenario.expectedTotalTaxPaise
+        assert gst["cgstPaise"] + gst["sgstPaise"] + gst["igstPaise"] == gst["totalTaxPaise"]
 
-    gst33333 = computeGstBreakdown(33333, 5, isIntraState=True)
-    assert gst33333["totalTaxPaise"] == 1666
-    assert gst33333["cgstPaise"] == 666
-    assert gst33333["sgstPaise"] == 1000
-    assert gst33333["cgstPaise"] + gst33333["sgstPaise"] == gst33333["totalTaxPaise"]
-
-    gst77777 = computeGstBreakdown(77777, 18, isIntraState=False)
-    assert gst77777["totalTaxPaise"] == 13999
-    assert gst77777["igstPaise"] == 13999
-    assert gst77777["cgstPaise"] == 0
-    assert gst77777["sgstPaise"] == 0
 

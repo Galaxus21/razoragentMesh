@@ -1,11 +1,22 @@
 """Razorpay Route client supporting both mock ledger and live HTTP transfers."""
 
 import time
+from typing import Any, Optional
 import uuid
-from typing import Optional
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..constants.settlementConstants import transferIdPrefix
 from .settlementExceptions import MandateEngineException
+
+defaultMockApiKey: str = "rzp_test_mock"
+defaultMockApiSecret: str = "mock_secret"
+defaultRazorpayBaseUrl: str = "https://api.razorpay.com/v1"
+defaultRequestTimeoutSeconds: float = 30.0
+httpStatusOkMin: int = 200
+httpStatusOkMax: int = 300
+headerContentTypeJson: str = "application/json"
+headerAcceptJson: str = "application/json"
 
 
 class RouteTransferRequest(BaseModel):
@@ -63,25 +74,104 @@ class TransferReversalResponse(BaseModel):
 
 
 class RazorpayRouteClient:
-    """Razorpay Route API adapter with deterministic in-memory mock ledger."""
+    """Razorpay Route API adapter with deterministic mock ledger and live HTTP transport."""
 
     def __init__(
         self,
-        apiKey: str = "rzp_test_mock",
-        apiSecret: str = "mock_secret",
-        baseUrl: str = "https://api.razorpay.com/v1",
+        apiKey: str = defaultMockApiKey,
+        apiSecret: str = defaultMockApiSecret,
+        baseUrl: str = defaultRazorpayBaseUrl,
         isMockMode: bool = True,
+        httpClient: Optional[httpx.AsyncClient] = None,
+        timeoutSeconds: float = defaultRequestTimeoutSeconds,
     ) -> None:
         self.apiKey = apiKey
         self.apiSecret = apiSecret
-        self.baseUrl = baseUrl
+        self.baseUrl = baseUrl.rstrip("/")
         self.isMockMode = isMockMode
-
-        # In-memory mock ledgers
+        self.timeoutSeconds = timeoutSeconds
+        self._httpClient = httpClient
+        self._ownsHttpClient = httpClient is None
         self._capturedPayments: dict[str, PaymentCaptureResponse] = {}
         self._transfers: dict[str, RouteTransferResponse] = {}
         self._reversals: dict[str, TransferReversalResponse] = {}
         self.simulatedFailureAccount: Optional[str] = None
+        self.simulatedReverseFailure: bool = False
+        self.simulatedReverseFailureTransferId: Optional[str] = None
+        self.simulatedReverseFailureAccount: Optional[str] = None
+        self.simulatedReverseErrorType: str = "500"
+        self.simulatedReverseFailureCount: Optional[int] = None
+
+    def configureSimulatedReverseFailure(
+        self,
+        transferId: Optional[str] = None,
+        account: Optional[str] = None,
+        errorType: str = "500",
+        failureCount: Optional[int] = None,
+    ) -> None:
+        """Configures simulated reversal failure for deterministic testing in mock mode."""
+        self.simulatedReverseFailure = True
+        self.simulatedReverseFailureTransferId = transferId
+        self.simulatedReverseFailureAccount = account
+        self.simulatedReverseErrorType = errorType
+        self.simulatedReverseFailureCount = failureCount
+
+    def resetSimulatedFailures(self) -> None:
+        """Resets all simulated failure configurations to default state."""
+        self.simulatedFailureAccount = None
+        self.simulatedReverseFailure = False
+        self.simulatedReverseFailureTransferId = None
+        self.simulatedReverseFailureAccount = None
+        self.simulatedReverseErrorType = "500"
+        self.simulatedReverseFailureCount = None
+
+    def _parseRazorpayErrorMessage(self, resp: httpx.Response) -> str:
+        """Extracts human-readable error description from Razorpay JSON response."""
+        try:
+            body = resp.json()
+            if isinstance(body, dict) and "error" in body:
+                errorInfo = body["error"]
+                if isinstance(errorInfo, dict):
+                    return str(errorInfo.get("description") or errorInfo.get("code") or resp.text)
+                return str(errorInfo)
+        except Exception:
+            pass
+        return resp.text or f"HTTP {resp.status_code}"
+
+    async def _sendHttpRequest(
+        self,
+        method: str,
+        path: str,
+        jsonPayload: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Executes authenticated HTTP request against Razorpay Route API."""
+        url = f"{self.baseUrl}{path}"
+        auth = (self.apiKey, self.apiSecret)
+        headers = {"Content-Type": headerContentTypeJson, "Accept": headerAcceptJson}
+        try:
+            if self._httpClient is not None:
+                resp = await self._httpClient.request(
+                    method=method, url=url, json=jsonPayload, headers=headers,
+                    auth=auth, timeout=self.timeoutSeconds,
+                )
+            else:
+                async with httpx.AsyncClient(timeout=self.timeoutSeconds) as client:
+                    resp = await client.request(
+                        method=method, url=url, json=jsonPayload, headers=headers, auth=auth,
+                    )
+        except httpx.TimeoutException as err:
+            raise MandateEngineException(f"Razorpay API request timed out: {url}") from err
+        except httpx.RequestError as err:
+            raise MandateEngineException(f"Razorpay API connection error: {str(err)}") from err
+
+        if not (httpStatusOkMin <= resp.status_code < httpStatusOkMax):
+            errorMessage = self._parseRazorpayErrorMessage(resp)
+            raise MandateEngineException(f"Razorpay API error ({resp.status_code}): {errorMessage}")
+
+        try:
+            return resp.json()
+        except Exception as err:
+            raise MandateEngineException(f"Invalid JSON response from Razorpay API: {resp.text}") from err
 
     async def capturePayment(
         self,
@@ -90,20 +180,27 @@ class RazorpayRouteClient:
         currency: str = "INR",
     ) -> PaymentCaptureResponse:
         """Executes or mocks primary payment capture."""
-        if not self.isMockMode:
-            raise NotImplementedError("Live HTTP route integration requires external credentials")
+        if self.isMockMode:
+            captureRes = PaymentCaptureResponse(
+                id=paymentId, entity="payment", amount=amountPaise, currency=currency,
+                status="captured", method="upi", captured=True, createdAt=int(time.time()),
+            )
+            self._capturedPayments[paymentId] = captureRes
+            return captureRes
 
+        payload = {"amount": amountPaise, "currency": currency}
+        data = await self._sendHttpRequest(method="POST", path=f"/payments/{paymentId}/capture", jsonPayload=payload)
         captureRes = PaymentCaptureResponse(
-            id=paymentId,
-            entity="payment",
-            amount=amountPaise,
-            currency=currency,
-            status="captured",
-            method="upi",
-            captured=True,
-            createdAt=int(time.time()),
+            id=str(data.get("id") or paymentId),
+            entity=str(data.get("entity") or "payment"),
+            amount=int(data.get("amount") or amountPaise),
+            currency=str(data.get("currency") or currency),
+            status=str(data.get("status") or "captured"),
+            method=str(data.get("method") or "upi"),
+            captured=bool(data.get("captured", True)),
+            createdAt=int(data.get("created_at") or data.get("createdAt") or time.time()),
         )
-        self._capturedPayments[paymentId] = captureRes
+        self._capturedPayments[captureRes.id] = captureRes
         return captureRes
 
     async def createTransfer(
@@ -111,25 +208,36 @@ class RazorpayRouteClient:
         transferRequest: RouteTransferRequest,
     ) -> RouteTransferResponse:
         """Executes or mocks POST /v1/transfers split transfer."""
-        if not self.isMockMode:
-            raise NotImplementedError("Live HTTP route integration requires external credentials")
+        if self.isMockMode:
+            if self.simulatedFailureAccount and transferRequest.account == self.simulatedFailureAccount:
+                raise MandateEngineException(f"Simulated Route transfer failure for account {transferRequest.account}")
 
-        if self.simulatedFailureAccount and transferRequest.account == self.simulatedFailureAccount:
-            raise MandateEngineException(
-                f"Simulated Route transfer failure for account {transferRequest.account}"
+            transferId = f"{transferIdPrefix}{uuid.uuid4().hex[:14]}"
+            transferRes = RouteTransferResponse(
+                id=transferId, entity="transfer", account=transferRequest.account,
+                amount=transferRequest.amount, currency=transferRequest.currency,
+                status="processed", createdAt=int(time.time()),
             )
+            self._transfers[transferId] = transferRes
+            return transferRes
 
-        transferId = f"trf_{uuid.uuid4().hex[:14]}"
+        payload = {
+            "account": transferRequest.account,
+            "amount": transferRequest.amount,
+            "currency": transferRequest.currency,
+            "notes": transferRequest.notes,
+        }
+        data = await self._sendHttpRequest(method="POST", path="/transfers", jsonPayload=payload)
         transferRes = RouteTransferResponse(
-            id=transferId,
-            entity="transfer",
-            account=transferRequest.account,
-            amount=transferRequest.amount,
-            currency=transferRequest.currency,
-            status="processed",
-            createdAt=int(time.time()),
+            id=str(data["id"]),
+            entity=str(data.get("entity") or "transfer"),
+            account=str(data.get("account") or data.get("recipient") or transferRequest.account),
+            amount=int(data.get("amount") or transferRequest.amount),
+            currency=str(data.get("currency") or transferRequest.currency),
+            status=str(data.get("status") or "processed"),
+            createdAt=int(data.get("created_at") or data.get("createdAt") or time.time()),
         )
-        self._transfers[transferId] = transferRes
+        self._transfers[transferRes.id] = transferRes
         return transferRes
 
     async def reverseTransfer(
@@ -138,24 +246,68 @@ class RazorpayRouteClient:
         amountPaise: Optional[int] = None,
     ) -> TransferReversalResponse:
         """Executes or mocks POST /v1/transfers/{id}/reversals compensation."""
-        if not self.isMockMode:
-            raise NotImplementedError("Live HTTP route integration requires external credentials")
+        if self.isMockMode:
+            if transferId not in self._transfers:
+                raise MandateEngineException(f"Transfer {transferId} not found in ledger")
 
-        if transferId not in self._transfers:
-            raise MandateEngineException(f"Transfer {transferId} not found in ledger")
+            originalTransfer = self._transfers[transferId]
 
-        originalTransfer = self._transfers[transferId]
-        revAmount = amountPaise or originalTransfer.amount
-        reversalId = f"rev_{uuid.uuid4().hex[:14]}"
+            # Check simulated reversal failure conditions
+            shouldFail = False
+            if self.simulatedReverseFailure:
+                if self.simulatedReverseFailureTransferId is None or self.simulatedReverseFailureTransferId == transferId:
+                    if self.simulatedReverseFailureAccount is None or self.simulatedReverseFailureAccount == originalTransfer.account:
+                        if self.simulatedReverseFailureCount is None:
+                            shouldFail = True
+                        elif self.simulatedReverseFailureCount > 0:
+                            shouldFail = True
+                            self.simulatedReverseFailureCount -= 1
+                        else:
+                            shouldFail = False
 
+            if shouldFail:
+                errType = self.simulatedReverseErrorType.lower()
+                if errType == "timeout":
+                    raise MandateEngineException(f"Razorpay API request timed out: /v1/transfers/{transferId}/reversals")
+                elif errType in ("500", "502", "503", "504"):
+                    raise MandateEngineException(f"Razorpay API error ({self.simulatedReverseErrorType}): Internal Server Error during transfer reversal")
+                elif errType == "network":
+                    raise MandateEngineException(f"Razorpay API connection error: Connection reset by peer for transfer {transferId}")
+                else:
+                    raise MandateEngineException(f"Simulated reversal failure for transfer {transferId}")
+
+            reversalId = f"rev_{uuid.uuid4().hex[:14]}"
+            reversalRes = TransferReversalResponse(
+                id=reversalId, entity="reversal", transferId=transferId,
+                amount=amountPaise or originalTransfer.amount,
+                currency=originalTransfer.currency, status="processed",
+                createdAt=int(time.time()),
+            )
+            self._reversals[reversalId] = reversalRes
+            return reversalRes
+
+        payload = {"amount": amountPaise, "currency": "INR"} if amountPaise is not None else None
+        data = await self._sendHttpRequest(method="POST", path=f"/transfers/{transferId}/reversals", jsonPayload=payload)
         reversalRes = TransferReversalResponse(
-            id=reversalId,
-            entity="reversal",
-            transferId=transferId,
-            amount=revAmount,
-            currency=originalTransfer.currency,
-            status="processed",
-            createdAt=int(time.time()),
+            id=str(data["id"]),
+            entity=str(data.get("entity") or "reversal"),
+            transferId=str(data.get("transfer_id") or data.get("transferId") or transferId),
+            amount=int(data.get("amount") or amountPaise or 0),
+            currency=str(data.get("currency") or "INR"),
+            status=str(data.get("status") or "processed"),
+            createdAt=int(data.get("created_at") or data.get("createdAt") or time.time()),
         )
-        self._reversals[reversalId] = reversalRes
+        self._reversals[reversalRes.id] = reversalRes
         return reversalRes
+
+    async def close(self) -> None:
+        """Closes the underlying HTTP client if initialized."""
+        if self._httpClient is not None:
+            await self._httpClient.aclose()
+
+    async def __aenter__(self) -> "RazorpayRouteClient":
+        return self
+
+    async def __aexit__(self, excType: Any, excVal: Any, excTb: Any) -> None:
+        await self.close()
+

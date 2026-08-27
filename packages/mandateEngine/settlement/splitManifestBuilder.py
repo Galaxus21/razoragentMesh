@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..mandates.cartMandateSchema import CartMandate
+from .settlementExceptions import ArithmeticDriftException
 
 defaultProtocolFeeAccount: str = "acc_protocol_fee"
 defaultProtocolFeePaise: int = 50
@@ -37,9 +38,14 @@ def buildSplitManifest(
     shipping = cartMandate.shippingPaise
     grossTotal = cartMandate.totalPaise
 
-    merchantNet = grossTotal - protoFee - shipping
-    if merchantNet <= 0:
-        merchantNet = grossTotal
+    totalDeductions = protoFee + shipping
+    if totalDeductions >= grossTotal:
+        raise ArithmeticDriftException(
+            f"Settlement overdraft: total deductions ({totalDeductions} paise) "
+            f"exceed or equal gross settlement ({grossTotal} paise)"
+        )
+
+    merchantNet = grossTotal - totalDeductions
 
     return SplitTransferManifest(
         merchantAccount=merchantAccount,
@@ -50,3 +56,4 @@ def buildSplitManifest(
         logisticsAmountPaise=shipping,
         totalPaise=grossTotal,
     )
+

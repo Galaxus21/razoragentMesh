@@ -19,7 +19,6 @@ export interface UseSseStreamOptions {
   readonly endpointUrl?: string;
   readonly filterType?: TelemetryEventType;
   readonly autoConnect?: boolean;
-  readonly enableMockFallback?: boolean;
 }
 
 export interface UseSseStreamResult {
@@ -28,10 +27,7 @@ export interface UseSseStreamResult {
   readonly connectionState: SseConnectionState;
   readonly reconnectCount: number;
   readonly isConnected: boolean;
-  readonly isMockActive: boolean;
   readonly clearEvents: () => void;
-  readonly toggleMockMode: () => void;
-  readonly injectMockEvent: (event: TelemetryEvent) => void;
 }
 
 export function useSseStream(options: UseSseStreamOptions = {}): UseSseStreamResult {
@@ -39,14 +35,12 @@ export function useSseStream(options: UseSseStreamOptions = {}): UseSseStreamRes
     endpointUrl = defaultSseUrl,
     filterType,
     autoConnect = true,
-    enableMockFallback = true,
   } = options;
 
   const [events, setEvents] = useState<ReadonlyArray<TelemetryEvent>>([]);
   const [latestEvent, setLatestEvent] = useState<TelemetryEvent | null>(null);
   const [connectionState, setConnectionState] = useState<SseConnectionState>("DISCONNECTED");
   const [reconnectCount, setReconnectCount] = useState<number>(0);
-  const [isMockActive, setIsMockActive] = useState<boolean>(false);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -74,19 +68,8 @@ export function useSseStream(options: UseSseStreamOptions = {}): UseSseStreamRes
     setLatestEvent(null);
   }, []);
 
-  const injectMockEvent = useCallback(
-    (event: TelemetryEvent) => {
-      handleIncomingEvent(event);
-    },
-    [handleIncomingEvent]
-  );
-
-  const toggleMockMode = useCallback(() => {
-    setIsMockActive((prev) => !prev);
-  }, []);
-
   const connectToStream = useCallback(() => {
-    if (typeof window === "undefined" || isMockActive) {
+    if (typeof window === "undefined") {
       return;
     }
 
@@ -109,8 +92,8 @@ export function useSseStream(options: UseSseStreamOptions = {}): UseSseStreamRes
         try {
           const parsed = JSON.parse(messageEvent.data) as TelemetryEvent;
           handleIncomingEvent(parsed);
-        } catch {
-          // Ignore parse errors on keepalive comments or non-JSON frames
+        } catch (error) {
+          console.warn("Malformed catalog message:", error);
         }
       };
 
@@ -134,18 +117,15 @@ export function useSseStream(options: UseSseStreamOptions = {}): UseSseStreamRes
           }, delay);
         } else {
           setConnectionState("DISCONNECTED");
-          if (enableMockFallback) {
-            setIsMockActive(true);
-          }
         }
       };
     } catch {
       setConnectionState("ERROR");
     }
-  }, [endpointUrl, isMockActive, handleIncomingEvent, enableMockFallback]);
+  }, [endpointUrl, handleIncomingEvent]);
 
   useEffect(() => {
-    if (autoConnect && !isMockActive) {
+    if (autoConnect) {
       connectToStream();
     }
 
@@ -157,17 +137,14 @@ export function useSseStream(options: UseSseStreamOptions = {}): UseSseStreamRes
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [autoConnect, isMockActive, connectToStream]);
+  }, [autoConnect, connectToStream]);
 
   return {
     events,
     latestEvent,
-    connectionState: isMockActive ? "CONNECTED" : connectionState,
+    connectionState,
     reconnectCount,
-    isConnected: isMockActive || connectionState === "CONNECTED",
-    isMockActive,
+    isConnected: connectionState === "CONNECTED",
     clearEvents,
-    toggleMockMode,
-    injectMockEvent,
   };
 }

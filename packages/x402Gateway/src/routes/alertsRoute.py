@@ -1,7 +1,7 @@
 """Price-drop alert webhook subscription API routes for Layer 2 x402Gateway."""
 
 import time
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..alerts.priceDropAlertManager import (
     PriceDropAlertCancelResponse,
@@ -9,9 +9,12 @@ from ..alerts.priceDropAlertManager import (
     PriceDropAlertRegisterRequest,
     PriceDropAlertResponse,
 )
+from ..dependencies import (
+    defaultAlertManager,
+    getAlertManager,
+)
 
 alertsRouter = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
-defaultAlertManager = PriceDropAlertManager()
 
 
 @alertsRouter.post(
@@ -21,6 +24,7 @@ defaultAlertManager = PriceDropAlertManager()
 )
 async def registerPriceDropAlert(
     payload: PriceDropAlertRegisterRequest,
+    alertManager: PriceDropAlertManager = Depends(getAlertManager),
 ) -> PriceDropAlertResponse:
     """Registers an autonomous price-drop alert subscription with temporal TTL."""
     now = int(time.time())
@@ -35,7 +39,7 @@ async def registerPriceDropAlert(
             detail="Target price must be positive integer paise",
         )
 
-    alert = await defaultAlertManager.registerPriceDropAlert(
+    alert = await alertManager.registerPriceDropAlert(
         skuId=payload.skuId,
         targetPricePaise=payload.targetPricePaise,
         callbackUrl=payload.callbackUrl,
@@ -60,9 +64,12 @@ async def registerPriceDropAlert(
     response_model=PriceDropAlertCancelResponse,
     status_code=status.HTTP_200_OK,
 )
-async def cancelPriceDropAlert(alertId: str) -> PriceDropAlertCancelResponse:
+async def cancelPriceDropAlert(
+    alertId: str,
+    alertManager: PriceDropAlertManager = Depends(getAlertManager),
+) -> PriceDropAlertCancelResponse:
     """Cancels an active price-drop alert subscription."""
-    isCancelled = await defaultAlertManager.cancelPriceDropAlert(alertId)
+    isCancelled = await alertManager.cancelPriceDropAlert(alertId)
     if not isCancelled:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

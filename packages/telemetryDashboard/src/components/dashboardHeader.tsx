@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Activity, Play, RefreshCw, Trash2, Wifi, Zap } from "lucide-react";
+import { Activity, Moon, Play, Sun, Trash2 } from "lucide-react";
 import {
   connectionStatusColors,
   connectionStatusLabels,
@@ -11,78 +11,83 @@ import { SseConnectionState } from "@/types/telemetryEventTypes";
 export interface DashboardHeaderProps {
   readonly connectionState: SseConnectionState;
   readonly isConnected: boolean;
-  readonly isMockActive: boolean;
   readonly totalEventsCount: number;
   readonly onClearEvents: () => void;
-  readonly onSimulateFlow: () => void;
+  readonly theme?: "light" | "dark";
+  readonly onToggleTheme?: () => void;
 }
+
+const headerTitle = "Autonomous Settlement Enclave";
+const headerBadge = "Razorpay Route Rails";
+const eventsSuffix = "events";
+const clearLabel = "Clear";
+const clearTitle = "Clear Event Stream";
+const lightModeTitle = "Switch to dark mode";
+const darkModeTitle = "Switch to light mode";
 
 export function DashboardHeader({
   connectionState,
   isConnected,
-  isMockActive,
   totalEventsCount,
   onClearEvents,
-  onSimulateFlow,
+  theme = "dark",
+  onToggleTheme,
 }: DashboardHeaderProps): React.JSX.Element {
   return (
-    <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 bg-slate-950/80 px-6 py-4 backdrop-blur-md">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-borderSubtle bg-bgSurface px-6">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-violet-600 shadow-lg shadow-cyan-500/20">
-          <Zap className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-white">RazorAgent Mesh</h1>
-            <span className="rounded border border-cyan-500/40 bg-cyan-950/60 px-2 py-0.5 text-xs font-semibold text-cyan-300">
-              v2.0 AP2
-            </span>
-          </div>
-          <p className="text-xs text-slate-400">
-            Autonomous M2M Settlement & Cryptographic Telemetry Enclave
-          </p>
-        </div>
+        <h1 className="text-sm font-semibold text-textPrimary">
+          {headerTitle}
+        </h1>
+        <span className="rounded-md border border-accentPrimary/20 bg-accentSubtle px-2 py-0.5 text-[11px] font-mono font-medium text-accentPrimary">
+          {headerBadge}
+        </span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <div
-          className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${
             connectionStatusColors[connectionState]
           }`}
         >
           <span
-            className={`h-2 w-2 rounded-full ${
-              isConnected ? "bg-emerald-400 animate-pulseFast" : "bg-rose-400"
+            className={`h-1.5 w-1.5 rounded-full ${
+              isConnected ? "bg-statusSuccess animate-pulseFast" : "bg-statusError"
             }`}
           />
           <span>{connectionStatusLabels[connectionState]}</span>
-          {isMockActive && <span className="text-[10px] opacity-75">(SIM)</span>}
         </div>
 
-        <div className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-slate-300">
-          <Activity className="h-3.5 w-3.5 text-cyan-400" />
-          <span className="font-mono text-cyan-300 font-semibold">{totalEventsCount}</span>
-          <span className="text-slate-500">events</span>
+        <div className="flex items-center gap-1 rounded-md border border-borderSubtle bg-bgBase px-2.5 py-1 text-xs text-textSecondary font-mono">
+          <Activity className="h-3.5 w-3.5 text-accentPrimary" />
+          <span className="font-semibold text-textPrimary">{totalEventsCount}</span>
+          <span className="text-textMuted">{eventsSuffix}</span>
         </div>
-
-        <button
-          type="button"
-          onClick={onSimulateFlow}
-          className="flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-950/60 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:bg-violet-900/60 hover:border-violet-400"
-        >
-          <Play className="h-3.5 w-3.5 text-violet-400" />
-          <span>Simulate Flow</span>
-        </button>
 
         <button
           type="button"
           onClick={onClearEvents}
-          title="Clear Event Stream"
-          className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+          title={clearTitle}
+          className="flex items-center gap-1 rounded-md border border-borderSubtle bg-bgSurface px-2 py-1 text-xs text-textSecondary transition hover:bg-bgSurfaceHover hover:text-textPrimary"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          <span>Clear</span>
+          <span className="sr-only sm:not-sr-only">{clearLabel}</span>
         </button>
+
+        {onToggleTheme && (
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            title={theme === "dark" ? darkModeTitle : lightModeTitle}
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-borderSubtle bg-bgSurface text-textSecondary transition hover:bg-bgSurfaceHover hover:text-textPrimary"
+          >
+            {theme === "dark" ? (
+              <Sun className="h-3.5 w-3.5 text-statusWarning" />
+            ) : (
+              <Moon className="h-3.5 w-3.5 text-accentPrimary" />
+            )}
+          </button>
+        )}
       </div>
     </header>
   );

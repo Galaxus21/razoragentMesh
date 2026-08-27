@@ -1,16 +1,20 @@
 """GSTR-1 compliant tax invoice generation engine."""
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 import time
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from ..mandates.cartMandateSchema import CartMandate
+    from ..mandates.executionMandateSchema import ExecutionMandate
 
 from ..crypto.jcsCanonicalizer import (
     canonicalizeJson,
     computeSha256Digest,
 )
-from ..mandates.cartMandateSchema import CartMandate
-from ..mandates.executionMandateSchema import ExecutionMandate
 from ..verification.arithmeticEnclave import (
     computeGstBreakdown,
     computeLineItemTotal,
@@ -36,12 +40,12 @@ class GstrLineItem(BaseModel):
 
 
 class GstrInvoicePayload(BaseModel):
-    """Immutable GSTR-1 tax invoice with cryptographic audit hash."""
+    """GSTR-1 compliant invoice payload with cryptographic audit hash."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     invoiceNumber: str = Field(min_length=1)
-    invoiceDate: str = Field(min_length=1)
+    invoiceDate: str = Field(min_length=10)
     sellerGstin: str = Field(min_length=15, max_length=15)
     merchantStateCode: str = Field(min_length=2, max_length=2)
     placeOfSupplyStateCode: str = Field(min_length=2, max_length=2)
@@ -60,8 +64,43 @@ class GstrInvoicePayload(BaseModel):
 
 
 def isPlaceOfSupplyIntraState(merchantStateCode: str, buyerDeliveryStateCode: str) -> bool:
-    """Checks whether transaction is intra-state (same state code) or inter-state."""
+    """Determines whether transaction is intra-state (CGST+SGST) or inter-state (IGST)."""
     return merchantStateCode.strip() == buyerDeliveryStateCode.strip()
+
+
+def generateGstrInvoice(
+    cartMandate: CartMandate,
+    executionMandate: Optional[ExecutionMandate] = None,
+    invoiceNumberPrefix: str = "INV",
+    timestamp: Optional[int] = None,
+    *,
+    invoiceTimestamp: Optional[int] = None,
+    invoiceNumber: Optional[str] = None,
+) -> GstrInvoicePayload:
+    """Constructs GSTR-1 compliant invoice and calculates cryptographically canonical SHA-256."""
+    ts = invoiceTimestamp if invoiceTimestamp is not None else (timestamp or int(time.time()))
+    isoDate = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+    invNum = invoiceNumber if invoiceNumber is not None else f"{invoiceNumberPrefix}-{ts}"
+    intraState = isPlaceOfSupplyIntraState(cartMandate.merchantStateCode, cartMandate.buyerDeliveryStateCode)
+
+    items, taxable, cgst, sgst, igst = _buildLineItemsAndTaxTotals(cartMandate, intraState)
+    totalTax = cgst + sgst + igst
+    grandTotal = taxable + totalTax + cartMandate.shippingPaise - cartMandate.discountPaise
+    totals = (taxable, cgst, sgst, igst, totalTax, grandTotal)
+
+    invoiceDict = _buildInvoiceDict(cartMandate, items, totals, invNum, isoDate, intraState)
+    tcs = computeTcsWithholding(taxable, intraState)
+    auditHash = computeSha256Digest(canonicalizeJson(invoiceDict))
+
+    return GstrInvoicePayload(
+        invoiceNumber=invNum, invoiceDate=isoDate, sellerGstin=cartMandate.merchantGstin,
+        merchantStateCode=cartMandate.merchantStateCode, placeOfSupplyStateCode=cartMandate.buyerDeliveryStateCode,
+        isIntraState=intraState, lineItems=items, taxableAmountPaise=taxable,
+        totalCgstPaise=cgst, totalSgstPaise=sgst, totalIgstPaise=igst, totalTaxPaise=totalTax,
+        totalTcsPaise=tcs["totalTcsPaise"], shippingPaise=cartMandate.shippingPaise,
+        discountPaise=cartMandate.discountPaise, grandTotalPaise=grandTotal,
+        cryptographicAuditHash=auditHash,
+    )
 
 
 def _buildLineItemsAndTaxTotals(
@@ -75,17 +114,17 @@ def _buildLineItemsAndTaxTotals(
     accumSgst = 0
     accumIgst = 0
 
-    for itm in cartMandate.items:
-        lineTaxable = computeLineItemTotal(itm.unitPricePaise, itm.quantity)
-        gst = computeGstBreakdown(lineTaxable, itm.gstRatePercent, intraState)
+    for invoiceItem in cartMandate.items:
+        lineTaxable = computeLineItemTotal(invoiceItem.unitPricePaise, invoiceItem.quantity)
+        gst = computeGstBreakdown(lineTaxable, invoiceItem.gstRatePercent, intraState)
         items.append(
             GstrLineItem(
-                skuId=itm.skuId,
-                hsnCode=itm.hsnCode,
-                quantity=itm.quantity,
-                unitPricePaise=itm.unitPricePaise,
+                skuId=invoiceItem.skuId,
+                hsnCode=invoiceItem.hsnCode,
+                quantity=invoiceItem.quantity,
+                unitPricePaise=invoiceItem.unitPricePaise,
                 taxableAmountPaise=lineTaxable,
-                gstRatePercent=itm.gstRatePercent,
+                gstRatePercent=invoiceItem.gstRatePercent,
                 cgstPaise=gst["cgstPaise"],
                 sgstPaise=gst["sgstPaise"],
                 igstPaise=gst["igstPaise"],
@@ -101,72 +140,50 @@ def _buildLineItemsAndTaxTotals(
 
 
 def _buildInvoiceDict(
-    cart: CartMandate,
-    items: list[GstrLineItem],
-    totals: tuple[int, int, int, int, int, int],
-    num: str,
-    dt: str,
-    intra: bool,
+    cartMandate: Optional[CartMandate] = None,
+    items: Optional[list[GstrLineItem]] = None,
+    totals: Optional[tuple[int, int, int, int, int, int]] = None,
+    invoiceNumber: Optional[str] = None,
+    invoiceDate: Optional[str] = None,
+    isIntraState: Optional[bool] = None,
+    *,
+    cart: Optional[CartMandate] = None,
+    num: Optional[str] = None,
+    dt: Optional[str] = None,
+    intra: Optional[bool] = None,
 ) -> dict[str, Any]:
-    """Builds raw dictionary for JCS canonical hashing."""
-    taxable, cgst, sgst, igst, totalTax, grandTotal = totals
-    tcs = computeTcsWithholding(taxable, intra)
+    targetCart = cartMandate or cart
+    targetItems = items if items is not None else []
+    targetTotals = totals or (0, 0, 0, 0, 0, 0)
+    targetNum = invoiceNumber or (num or "")
+    targetDate = invoiceDate or (dt or "")
+    targetIntra = isIntraState if isIntraState is not None else (intra if intra is not None else True)
+
+    taxable, cgst, sgst, igst, totalTax, grandTotal = targetTotals
+    tcsWithholding = computeTcsWithholding(taxable, targetIntra)
     return {
-        "discountPaise": cart.discountPaise,
+        "discountPaise": targetCart.discountPaise if targetCart else 0,
         "grandTotalPaise": grandTotal,
-        "invoiceDate": dt,
-        "invoiceNumber": num,
-        "isIntraState": intra,
-        "lineItems": [item.model_dump() for item in items],
-        "merchantStateCode": cart.merchantStateCode,
-        "placeOfSupplyStateCode": cart.buyerDeliveryStateCode,
-        "sellerGstin": cart.merchantGstin,
-        "shippingPaise": cart.shippingPaise,
+        "invoiceDate": targetDate,
+        "invoiceNumber": targetNum,
+        "isIntraState": targetIntra,
+        "lineItems": [item.model_dump() for item in targetItems],
+        "merchantStateCode": targetCart.merchantStateCode if targetCart else "29",
+        "placeOfSupplyStateCode": targetCart.buyerDeliveryStateCode if targetCart else "29",
+        "sellerGstin": targetCart.merchantGstin if targetCart else "",
+        "shippingPaise": targetCart.shippingPaise if targetCart else 0,
         "taxableAmountPaise": taxable,
         "totalCgstPaise": cgst,
         "totalIgstPaise": igst,
         "totalSgstPaise": sgst,
         "totalTaxPaise": totalTax,
-        "totalTcsPaise": tcs["totalTcsPaise"],
+        "totalTcsPaise": tcsWithholding["totalTcsPaise"],
     }
 
 
-def generateGstrInvoice(
-    cartMandate: CartMandate,
-    executionMandate: ExecutionMandate,
-    invoiceNumber: str,
-    invoiceTimestamp: Optional[int] = None,
-) -> GstrInvoicePayload:
-    """Constructs GSTR-1 invoice payload with cryptographic JCS SHA-256 audit digest."""
-    ts = invoiceTimestamp or int(time.time())
-    isoDate = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
-    intra = isPlaceOfSupplyIntraState(cartMandate.merchantStateCode, cartMandate.buyerDeliveryStateCode)
-
-    items, taxable, cgst, sgst, igst = _buildLineItemsAndTaxTotals(cartMandate, intra)
-    totTax = cgst + sgst + igst
-    grandTot = taxable + totTax + cartMandate.shippingPaise - cartMandate.discountPaise
-    totals = (taxable, cgst, sgst, igst, totTax, grandTot)
-
-    invDict = _buildInvoiceDict(cartMandate, items, totals, invoiceNumber, isoDate, intra)
-    tcs = computeTcsWithholding(taxable, intra)
-    auditHash = computeSha256Digest(canonicalizeJson(invDict))
-
-    return GstrInvoicePayload(
-        invoiceNumber=invoiceNumber,
-        invoiceDate=isoDate,
-        sellerGstin=cartMandate.merchantGstin,
-        merchantStateCode=cartMandate.merchantStateCode,
-        placeOfSupplyStateCode=cartMandate.buyerDeliveryStateCode,
-        isIntraState=intra,
-        lineItems=items,
-        taxableAmountPaise=taxable,
-        totalCgstPaise=cgst,
-        totalSgstPaise=sgst,
-        totalIgstPaise=igst,
-        totalTaxPaise=totTax,
-        totalTcsPaise=tcs["totalTcsPaise"],
-        shippingPaise=cartMandate.shippingPaise,
-        discountPaise=cartMandate.discountPaise,
-        grandTotalPaise=grandTot,
-        cryptographicAuditHash=auditHash,
-    )
+__all__ = [
+    "GstrInvoicePayload",
+    "GstrLineItem",
+    "generateGstrInvoice",
+    "isPlaceOfSupplyIntraState",
+]

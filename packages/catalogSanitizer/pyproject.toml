@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "razoragent-catalog-sanitizer"
+version = "2.0.0"
+description = "Layer 0 Ingress Security Shield & Catalog Sanitizer for RazorAgent Mesh v2.0"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.0.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

@@ -19,3 +19,19 @@ class InvalidSkuIdentifierException(IngressSecurityException):
 
 class SchemaSanitizationFailureException(IngressSecurityException):
     """Raised when raw catalog data cannot be coerced into a valid schema."""
+
+
+try:
+    from razoragentMesh.packages.mandateEngine import ArithmeticDriftException
+except Exception:
+    class ArithmeticDriftException(IngressSecurityException):
+        """Raised when monetary or tax arithmetic drift is detected in catalog quote."""
+
+
+__all__ = [
+    "ArithmeticDriftException",
+    "IngressSecurityException",
+    "InvalidSkuIdentifierException",
+    "MaliciousPayloadDetectedException",
+    "SchemaSanitizationFailureException",
+]

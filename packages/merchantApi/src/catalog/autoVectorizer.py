@@ -1,86 +1,88 @@
 """Facet-aware text synthesizer and 384-dimensional vector catalog indexer."""
 
 import inspect
+import logging
 import math
 from typing import Any, Dict, List, Optional
 
 from ..constants.merchantConstants import (
-    defaultCollectionName,
-    defaultVectorDimension,
-    modelNameMiniLm,
+    defaultCollectionName, defaultVectorDimension, modelNameMiniLm,
 )
 from ..schemas.universalProductSchema import UniversalProductListing
 
-
-def _formatFacetEntry(key: str, value: Any) -> Optional[str]:
-    """Formats an individual facet or attribute key-value pair into a normalized text fragment."""
-    if isinstance(value, bool):
-        return key if value else None
-
-    if isinstance(value, (list, set, tuple)):
-        joinedItems = ", ".join(str(item) for item in value)
-        return f"{key}: {joinedItems}"
-
-    strValue = str(value).strip()
-    if not strValue:
-        return None
-
-    normalizedKey = key.lower()
-    if normalizedKey in ("gross", "grossweight", "grossweightgrams"):
-        return strValue if "gross" in strValue.lower() else f"Gross {strValue}"
-    if normalizedKey == "size":
-        return strValue if "size" in strValue.lower() else f"Size {strValue}"
-    if normalizedKey == "color":
-        return strValue
-    if normalizedKey in strValue.lower():
-        return strValue
-
-    return f"{key}: {strValue}"
+logger = logging.getLogger(__name__)
 
 
-def _extractFacetedSegments(listing: UniversalProductListing) -> List[str]:
-    """Extracts domain-specific facet fragments for jewelry, apparel, pharma, and FMCG."""
-    segments: List[str] = []
+def _getQdrantModels() -> Any:
+    try:
+        from qdrant_client import models
+        return models
+    except ImportError:
+        class _PointStruct:
+            def __init__(self, id: Any, vector: List[float], payload: Optional[dict] = None) -> None:
+                self.id = id
+                self.vector = vector
+                self.payload = payload or {}
 
-    if getattr(listing, "jewelryFacet", None) is not None:
-        jf = listing.jewelryFacet
-        segments.append(f"Gross {jf.grossWeightGrams}g")
-        if jf.hallmarkNumber:
-            hNum = str(jf.hallmarkNumber).strip()
-            segments.append(hNum if hNum.startswith("BIS") else f"BIS Hallmark {hNum}")
+        class _PointIdsList:
+            def __init__(self, points: List[Any]) -> None:
+                self.points = points
 
-    if getattr(listing, "apparelFacet", None) is not None:
-        af = listing.apparelFacet
-        if af.size:
-            segments.append(f"Size {af.size}")
-        if af.color:
-            segments.append(af.color)
-        if af.fabric:
-            fab = ", ".join(af.fabric) if isinstance(af.fabric, list) else str(af.fabric)
-            segments.append(f"Fabric: {fab}")
-        if af.fitType:
-            segments.append(f"{af.fitType} Fit")
-        if af.gender:
-            segments.append(f"{af.gender}")
+        class _Models:
+            PointStruct = _PointStruct
+            PointIdsList = _PointIdsList
 
-    if getattr(listing, "pharmaFacet", None) is not None:
-        pf = listing.pharmaFacet
-        segments.append(f"Active: {pf.activeSalt}")
-        if pf.schedule:
-            sched = pf.schedule.strip()
-            segments.append(sched if sched.lower().startswith("schedule") else f"Schedule {sched}")
+        return _Models
 
-    if getattr(listing, "fmcgFacet", None) is not None:
-        ff = listing.fmcgFacet
-        if ff.allergens:
-            allg = ", ".join(ff.allergens) if isinstance(ff.allergens, list) else str(ff.allergens)
-            segments.append(f"Allergens: {allg}")
-        if ff.isVeg:
-            segments.append("Veg")
-        if ff.shelfLifeDays:
-            segments.append(f"Shelf Life: {ff.shelfLifeDays} days")
 
-    return segments
+class AutoVectorizer:
+    """Extracts facet-rich embeddings and maintains the Qdrant product vector index."""
+
+    def __init__(self, qdrantClient: Any, collectionName: str = defaultCollectionName) -> None:
+        self.qdrantClient = qdrantClient
+        self.collectionName = collectionName
+        self._engine = _EmbeddingEngine(modelName=modelNameMiniLm)
+
+    async def upsertListing(self, listing: UniversalProductListing) -> None:
+        """Embeds synthesized facet text and upserts vector and metadata into Qdrant."""
+        if self.qdrantClient is None:
+            return
+
+        richText = synthesizeFacetDescription(listing)
+        vector = self._engine.embed(richText)
+        payload = _buildQdrantPayload(listing)
+
+        dispatched = await _dispatchQdrantClientUpsert(
+            self.qdrantClient, self.collectionName, listing.skuId, vector, payload
+        )
+        if not dispatched:
+            pointEntry = {"id": listing.skuId, "vector": vector, "payload": payload}
+            _upsertToMemoryCollection(self.qdrantClient, self.collectionName, pointEntry, listing.skuId)
+
+    async def removeListing(self, skuId: str) -> None:
+        """Deletes vector and metadata point from Qdrant by SKU identifier."""
+        if self.qdrantClient is None:
+            return
+
+        if hasattr(self.qdrantClient, "delete"):
+            try:
+                models = _getQdrantModels()
+
+                res = self.qdrantClient.delete(
+                    collection_name=self.collectionName,
+                    points_selector=models.PointIdsList(points=[skuId]),
+                )
+                if inspect.iscoroutine(res):
+                    await res
+                return
+            except Exception as err:
+                logger.info("Qdrant unavailable, activating memory vector index fallback: %s", err)
+
+        if hasattr(self.qdrantClient, "collections") and self.collectionName in self.qdrantClient.collections:
+            self.qdrantClient.collections[self.collectionName] = [
+                p for p in self.qdrantClient.collections[self.collectionName]
+                if (p.get("id") if isinstance(p, dict) else getattr(p, "id", None)) != skuId
+            ]
 
 
 def synthesizeFacetDescription(listing: UniversalProductListing) -> str:
@@ -112,6 +114,154 @@ def synthesizeFacetDescription(listing: UniversalProductListing) -> str:
     return " | ".join(segments)
 
 
+def _buildQdrantPayload(listing: UniversalProductListing) -> dict[str, Any]:
+    """Constructs dictionary payload for Qdrant point from UniversalProductListing."""
+    return {
+        "skuId": listing.skuId,
+        "merchantDid": listing.merchantDid,
+        "title": listing.title,
+        "category": listing.category,
+        "brand": getattr(listing, "brand", None),
+        "hsnCode": listing.hsnCode,
+        "gstRatePercent": listing.gstRatePercent,
+        "baseUnitPricePaise": listing.baseUnitPricePaise,
+        "availableStock": listing.availableStock,
+        "currency": listing.currency,
+        "description": listing.description,
+        "apparelFacet": listing.apparelFacet.model_dump() if listing.apparelFacet else None,
+        "fmcgFacet": listing.fmcgFacet.model_dump() if listing.fmcgFacet else None,
+        "jewelryFacet": listing.jewelryFacet.model_dump(mode="json") if listing.jewelryFacet else None,
+        "pharmaFacet": listing.pharmaFacet.model_dump() if listing.pharmaFacet else None,
+    }
+
+
+async def _dispatchQdrantClientUpsert(
+    qdrantClient: Any,
+    collectionName: str,
+    pointId: str,
+    vector: List[float],
+    payload: dict[str, Any],
+) -> bool:
+    """Attempts native upsert on qdrantClient using PointStruct, returning True if dispatched."""
+    if not hasattr(qdrantClient, "upsert"):
+        return False
+    try:
+        models = _getQdrantModels()
+
+        points = [models.PointStruct(id=pointId, vector=vector, payload=payload)]
+        res = qdrantClient.upsert(collection_name=collectionName, points=points)
+        if inspect.iscoroutine(res):
+            await res
+        return True
+    except Exception as err:
+        logger.info("Qdrant unavailable, activating memory vector index fallback: %s", err)
+        return False
+
+
+def _upsertToMemoryCollection(
+    qdrantClient: Any,
+    collectionName: str,
+    pointEntry: dict[str, Any],
+    skuId: str,
+) -> None:
+    """Fallback in-memory collection upsert replacing duplicate SKU entries."""
+    if not hasattr(qdrantClient, "collections"):
+        return
+    if collectionName not in qdrantClient.collections:
+        qdrantClient.collections[collectionName] = []
+    existing = [
+        p for p in qdrantClient.collections[collectionName]
+        if (p.get("id") if isinstance(p, dict) else getattr(p, "id", None)) != skuId
+    ]
+    existing.append(pointEntry)
+    qdrantClient.collections[collectionName] = existing
+
+
+def _extractFacetedSegments(listing: UniversalProductListing) -> List[str]:
+    """Extracts domain-specific facet fragments for jewelry, apparel, pharma, and FMCG."""
+    return (
+        _extractJewelrySegments(listing)
+        + _extractApparelSegments(listing)
+        + _extractPharmaSegments(listing)
+        + _extractFmcgSegments(listing)
+    )
+
+
+def _extractJewelrySegments(listing: UniversalProductListing) -> List[str]:
+    """Extracts gross weight and BIS hallmark description segments."""
+    jf = getattr(listing, "jewelryFacet", None)
+    if jf is None:
+        return []
+    hNum = str(jf.hallmarkNumber).strip() if jf.hallmarkNumber else ""
+    hallmarkText = (hNum if hNum.startswith("BIS") else f"BIS Hallmark {hNum}") if hNum else None
+    return [f"Gross {jf.grossWeightGrams}g"] + ([hallmarkText] if hallmarkText else [])
+
+
+def _extractApparelSegments(listing: UniversalProductListing) -> List[str]:
+    """Extracts size, color, fabric, fit, and gender apparel segments."""
+    af = getattr(listing, "apparelFacet", None)
+    if af is None:
+        return []
+    segments: List[str] = []
+    if af.size:
+        segments.append(f"Size {af.size}")
+    if af.color:
+        segments.append(af.color)
+    if af.fabric:
+        fab = ", ".join(af.fabric) if isinstance(af.fabric, list) else str(af.fabric)
+        segments.append(f"Fabric: {fab}")
+    if af.fitType:
+        segments.append(f"{af.fitType} Fit")
+    if af.gender:
+        segments.append(f"{af.gender}")
+    return segments
+
+
+def _extractPharmaSegments(listing: UniversalProductListing) -> List[str]:
+    """Extracts active salt and schedule pharma segments."""
+    pf = getattr(listing, "pharmaFacet", None)
+    if pf is None:
+        return []
+    segments = [f"Active: {pf.activeSalt}"]
+    if pf.schedule:
+        sched = pf.schedule.strip()
+        segments.append(sched if sched.lower().startswith("schedule") else f"Schedule {sched}")
+    return segments
+
+
+def _extractFmcgSegments(listing: UniversalProductListing) -> List[str]:
+    """Extracts allergens, veg indicator, and shelf life FMCG segments."""
+    ff = getattr(listing, "fmcgFacet", None)
+    if ff is None:
+        return []
+    segments: List[str] = []
+    if ff.allergens:
+        allg = ", ".join(ff.allergens) if isinstance(ff.allergens, list) else str(ff.allergens)
+        segments.append(f"Allergens: {allg}")
+    if ff.isVeg:
+        segments.append("Veg")
+    if ff.shelfLifeDays:
+        segments.append(f"Shelf Life: {ff.shelfLifeDays} days")
+    return segments
+
+
+def _formatFacetEntry(key: str, value: Any) -> Optional[str]:
+    """Formats an individual facet or attribute key-value pair into a normalized text fragment."""
+    if isinstance(value, bool):
+        return key if value else None
+    if isinstance(value, (list, set, tuple)):
+        return f"{key}: {', '.join(str(item) for item in value)}"
+    strValue = str(value).strip()
+    if not strValue:
+        return None
+    normalizedKey = key.lower()
+    if normalizedKey in ("gross", "grossweight", "grossweightgrams"):
+        return strValue if "gross" in strValue.lower() else f"Gross {strValue}"
+    if normalizedKey == "size":
+        return strValue if "size" in strValue.lower() else f"Size {strValue}"
+    return strValue if (normalizedKey == "color" or normalizedKey in strValue.lower()) else f"{key}: {strValue}"
+
+
 class _EmbeddingEngine:
     """Provides 384-dimensional dense vector embeddings with fallback."""
 
@@ -123,21 +273,18 @@ class _EmbeddingEngine:
 
     def _normalize(self, vector: List[float]) -> List[float]:
         normSq = sum(v * v for v in vector)
-        if normSq == 0.0:
-            return vector
-        mag = math.sqrt(normSq)
-        return [v / mag for v in vector]
+        return vector if normSq == 0.0 else [v / math.sqrt(normSq) for v in vector]
 
     def _initModel(self) -> None:
-        if self._isInitialized:
-            return
-        self._isInitialized = True
-        try:
-            from fastembed import TextEmbedding  # type: ignore
+        if not self._isInitialized:
+            self._isInitialized = True
+            try:
+                from fastembed import TextEmbedding  # type: ignore
 
-            self._fastembedModel = TextEmbedding(model_name=self.modelName)
-        except Exception:
-            self._fastembedModel = None
+                self._fastembedModel = TextEmbedding(model_name=self.modelName)
+            except Exception as err:
+                logger.info("Qdrant unavailable, activating memory vector index fallback: %s", err)
+                self._fastembedModel = None
 
     def embed(self, text: str) -> List[float]:
         cleaned = text.strip().lower()
@@ -152,8 +299,8 @@ class _EmbeddingEngine:
                 normalized = self._normalize(vec)
                 self._cache[cleaned] = normalized
                 return normalized
-            except Exception:
-                pass
+            except Exception as err:
+                logger.info("Qdrant unavailable, activating memory vector index fallback: %s", err)
 
         # Deterministic 384-dim pseudo-vector fallback for offline environments
         pseudo = [0.0] * defaultVectorDimension
@@ -163,106 +310,6 @@ class _EmbeddingEngine:
         normalizedFallback = self._normalize(pseudo)
         self._cache[cleaned] = normalizedFallback
         return normalizedFallback
-
-
-class AutoVectorizer:
-    """Extracts facet-rich embeddings and maintains the Qdrant product vector index."""
-
-    def __init__(
-        self,
-        qdrantClient: Any,
-        collectionName: str = defaultCollectionName,
-    ) -> None:
-        self.qdrantClient = qdrantClient
-        self.collectionName = collectionName
-        self._engine = _EmbeddingEngine(modelName=modelNameMiniLm)
-
-    async def upsertListing(self, listing: UniversalProductListing) -> None:
-        """Embeds synthesized facet text and upserts vector and metadata into Qdrant."""
-        if self.qdrantClient is None:
-            return
-
-        richText = synthesizeFacetDescription(listing)
-        vector = self._engine.embed(richText)
-        isAvailableFlag = getattr(listing, "isAvailable", True)
-        isAvailable = isAvailableFlag and (listing.availableStock > 0)
-
-        payload = {
-            "skuId": listing.skuId,
-            "merchantDid": listing.merchantDid,
-            "title": listing.title,
-            "category": listing.category,
-            "brand": getattr(listing, "brand", None),
-            "hsnCode": listing.hsnCode,
-            "gstRatePercent": listing.gstRatePercent,
-            "baseUnitPricePaise": listing.baseUnitPricePaise,
-            "availableStock": listing.availableStock,
-            "isAvailable": isAvailable,
-            "currency": listing.currency,
-            "description": listing.description,
-            "apparelFacet": listing.apparelFacet.model_dump() if listing.apparelFacet else None,
-            "fmcgFacet": listing.fmcgFacet.model_dump() if listing.fmcgFacet else None,
-            "jewelryFacet": listing.jewelryFacet.model_dump(mode="json") if listing.jewelryFacet else None,
-            "pharmaFacet": listing.pharmaFacet.model_dump() if listing.pharmaFacet else None,
-        }
-
-        if hasattr(self.qdrantClient, "upsert"):
-            try:
-                from qdrant_client import models
-
-                points = [
-                    models.PointStruct(
-                        id=listing.skuId,
-                        vector=vector,
-                        payload=payload,
-                    )
-                ]
-                res = self.qdrantClient.upsert(
-                    collection_name=self.collectionName,
-                    points=points,
-                )
-                if inspect.iscoroutine(res):
-                    await res
-                return
-            except Exception:
-                pass
-
-        if hasattr(self.qdrantClient, "collections"):
-            if self.collectionName not in self.qdrantClient.collections:
-                self.qdrantClient.collections[self.collectionName] = []
-            pointEntry = {"id": listing.skuId, "vector": vector, "payload": payload}
-            existing = [
-                p for p in self.qdrantClient.collections[self.collectionName]
-                if (p.get("id") if isinstance(p, dict) else getattr(p, "id", None)) != listing.skuId
-            ]
-            existing.append(pointEntry)
-            self.qdrantClient.collections[self.collectionName] = existing
-
-    async def removeListing(self, skuId: str) -> None:
-        """Deletes vector and metadata point from Qdrant by SKU identifier."""
-        if self.qdrantClient is None:
-            return
-
-        if hasattr(self.qdrantClient, "delete"):
-            try:
-                from qdrant_client import models
-
-                res = self.qdrantClient.delete(
-                    collection_name=self.collectionName,
-                    points_selector=models.PointIdsList(points=[skuId]),
-                )
-                if inspect.iscoroutine(res):
-                    await res
-                return
-            except Exception:
-                pass
-
-        if hasattr(self.qdrantClient, "collections"):
-            if self.collectionName in self.qdrantClient.collections:
-                self.qdrantClient.collections[self.collectionName] = [
-                    p for p in self.qdrantClient.collections[self.collectionName]
-                    if (p.get("id") if isinstance(p, dict) else getattr(p, "id", None)) != skuId
-                ]
 
 
 __all__ = [

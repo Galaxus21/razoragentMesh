@@ -1,6 +1,6 @@
 """AST Contract Compiler for compiling negotiated commercial terms into frozen schemas."""
 
-from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import (
+from ..constants.arithmeticUtils import (
     computeCartSettlementTotal,
     computeGstBreakdown,
     computeLineItemTotal,

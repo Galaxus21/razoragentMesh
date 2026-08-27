@@ -6,7 +6,7 @@ import {
   formatLatency,
   formatPaiseToCompactInr,
   formatPaiseToInr,
-} from "../src/lib/currencyUtils.js";
+} from "../src/lib/currencyFormatter.js";
 import {
   formatPrettyJson,
   formatTimestampToTime,

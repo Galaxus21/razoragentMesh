@@ -25,7 +25,7 @@ nominalSkuId = "SKU-001"
 nominalQuantity = 1
 nominalUnitPricePaise = 420000
 nominalGstRate = 18
-nominalGstin = "29AABCU9603R1ZM"
+nominalGstin = "29AABCU9603R1ZJ"
 nominalStateCode = "29"
 nominalPincode = "560001"
 nominalMaxBudgetPaise = 5000000
@@ -34,124 +34,78 @@ nominalUpiToken = "upi_circle_token_tc01"
 nominalMerchantAccount = "acc_merchant_nexus_01"
 
 
-@pytest.mark.asyncio
-async def testNominalA2aSettlementHandshake(
-    agentKeyFixtures: Dict[str, Any],
-    catalogFixtures: List[Dict[str, Any]],
-    mockRedisClient: Any,
-) -> None:
-    """TC-01: Nominal A2A Settlement Handshake — Discovery to 60s lock to AP2 signing to ₹4,200 settlement."""
-    userKey = agentKeyFixtures["userCfo"]
-    buyerKey = agentKeyFixtures["buyerAgent"]
-    merchantKey = agentKeyFixtures["merchantNode"]
-
-    userSigner = Ed25519Signer(userKey["privateKeyHex"])
-    buyerSigner = Ed25519Signer(buyerKey["privateKeyHex"])
-    merchantSigner = Ed25519Signer(merchantKey["privateKeyHex"])
-
-    # Step 1: Query catalog & verify SKU-001
+async def _performTc01InventoryLock(mockRedisClient: Any, catalogFixtures: List[Dict[str, Any]], lockToken: str) -> None:
     skuRecord = next(s for s in catalogFixtures if s["skuId"] == nominalSkuId)
     initialStock = skuRecord["availableStock"]
     assert initialStock > 0
-
-    # Step 2: Atomic 60s inventory lock in Redis Lua
     stockKey = f"sku:{nominalSkuId}:stock"
     fencingKey = f"sku:{nominalSkuId}:fence"
-    lockToken = "lock_token_uuid_tc01"
-    evalResult = await mockRedisClient.eval(
-        "", 2, stockKey, fencingKey, nominalQuantity, lockToken, 60
-    )
-    assert evalResult[0] == 1
-    assert evalResult[1] >= 1
-
+    evalResult = await mockRedisClient.eval("", 2, stockKey, fencingKey, nominalQuantity, lockToken, 60)
+    assert evalResult[0] == 1 and evalResult[1] >= 1
     remainingStock = int(await mockRedisClient.get(stockKey) or 0)
     assert remainingStock == initialStock - nominalQuantity
 
-    # Step 3: AP2 Cryptographic Mandate Signing Chain
-    currentTime = int(time.time())
-    intentMandate = createSignedIntentMandate(
-        mandateId="intent_mandate_tc01",
-        userSigner=userSigner,
-        delegatedAgentDid=buyerSigner.getAgentDid(),
-        maxBudgetPaise=nominalMaxBudgetPaise,
-        upiCircleDelegationToken=nominalUpiToken,
-        singleTransactionLimitPaise=nominalSingleTxLimitPaise,
-        authorizedCategories=["industrial_electronics"],
-        timestamp=currentTime,
-    )
 
-    # Taxable subtotal and 18% intra-state GST calculation in integer paise
+def _buildTc01Mandates(
+    userSigner: Ed25519Signer, buyerSigner: Ed25519Signer, merchantSigner: Ed25519Signer,
+    lockToken: str, currentTime: int,
+) -> Tuple[IntentMandate, CartMandate, ExecutionMandate, int]:
+    intentMandate = createSignedIntentMandate(
+        mandateId="intent_mandate_tc01", userSigner=userSigner,
+        delegatedAgentDid=buyerSigner.getAgentDid(), maxBudgetPaise=nominalMaxBudgetPaise,
+        upiCircleDelegationToken=nominalUpiToken, singleTransactionLimitPaise=nominalSingleTxLimitPaise,
+        authorizedCategories=["industrial_electronics"], timestamp=currentTime,
+    )
     taxableSubtotal = nominalUnitPricePaise * nominalQuantity
     halfRate = nominalGstRate // 2
     cgstPaise = (taxableSubtotal * halfRate) // 100
-    sgstPaise = cgstPaise
-    totalTaxPaise = cgstPaise + sgstPaise
+    totalTaxPaise = cgstPaise * 2
     totalPaise = taxableSubtotal + totalTaxPaise
 
     cartItem = CartItemSchema(
-        skuId=nominalSkuId,
-        quantity=nominalQuantity,
-        unitPricePaise=nominalUnitPricePaise,
-        hsnCode="8504",
-        gstRatePercent=nominalGstRate,
-        lineTotalPaise=taxableSubtotal,
+        skuId=nominalSkuId, quantity=nominalQuantity, unitPricePaise=nominalUnitPricePaise,
+        hsnCode="8504", gstRatePercent=nominalGstRate, lineTotalPaise=taxableSubtotal,
     )
-    taxBreakdown = TaxBreakdownSchema(
-        cgstPaise=cgstPaise,
-        sgstPaise=sgstPaise,
-        igstPaise=0,
-        totalTaxPaise=totalTaxPaise,
-    )
-
+    taxBreakdown = TaxBreakdownSchema(cgstPaise=cgstPaise, sgstPaise=cgstPaise, igstPaise=0, totalTaxPaise=totalTaxPaise)
     cartMandate = createSignedCartMandate(
-        cartId="cart_mandate_tc01",
-        merchantSigner=merchantSigner,
-        merchantGstin=nominalGstin,
-        merchantStateCode=nominalStateCode,
-        buyerDeliveryPincode=nominalPincode,
-        buyerDeliveryStateCode=nominalStateCode,
-        items=[cartItem],
-        taxableSubtotalPaise=taxableSubtotal,
-        taxBreakdown=taxBreakdown,
-        shippingPaise=0,
-        discountPaise=0,
-        totalPaise=totalPaise,
-        inventoryLockToken=lockToken,
-        inventoryLockExpiresAt=currentTime + 60,
-        timestamp=currentTime,
+        cartId="cart_mandate_tc01", merchantSigner=merchantSigner, merchantGstin=nominalGstin,
+        merchantStateCode=nominalStateCode, buyerDeliveryPincode=nominalPincode,
+        buyerDeliveryStateCode=nominalStateCode, items=[cartItem], taxableSubtotalPaise=taxableSubtotal,
+        taxBreakdown=taxBreakdown, shippingPaise=0, discountPaise=0, totalPaise=totalPaise,
+        inventoryLockToken=lockToken, inventoryLockExpiresAt=currentTime + 60, timestamp=currentTime,
     )
-
     executionMandate = createSignedExecutionMandate(
-        executionId="exec_mandate_tc01",
-        buyerAgentSigner=buyerSigner,
-        intentMandate=intentMandate,
-        cartMandate=cartMandate,
-        settlementAmountPaise=totalPaise,
-        upiCircleToken=nominalUpiToken,
+        executionId="exec_mandate_tc01", buyerAgentSigner=buyerSigner, intentMandate=intentMandate,
+        cartMandate=cartMandate, settlementAmountPaise=totalPaise, upiCircleToken=nominalUpiToken,
         timestamp=currentTime,
     )
+    return intentMandate, cartMandate, executionMandate, totalPaise
 
-    # Step 4: 2PC Settlement Saga Orchestration
-    routeClient = RazorpayRouteClient(apiKey="rzp_test_123", apiSecret="rzp_secret_456")
-    nonceLedger = NonceLedger(mockRedisClient)
+
+@pytest.mark.asyncio
+async def testNominalA2aSettlementHandshake(
+    agentKeyFixtures: Dict[str, Any], catalogFixtures: List[Dict[str, Any]], mockRedisClient: Any,
+) -> None:
+    """TC-01: Nominal A2A Settlement Handshake — Discovery to 60s lock to AP2 signing to ₹4,200 settlement."""
+    userSigner = Ed25519Signer(agentKeyFixtures["userCfo"]["privateKeyHex"])
+    buyerSigner = Ed25519Signer(agentKeyFixtures["buyerAgent"]["privateKeyHex"])
+    merchantSigner = Ed25519Signer(agentKeyFixtures["merchantNode"]["privateKeyHex"])
+
+    lockToken = "lock_token_uuid_tc01"
+    await _performTc01InventoryLock(mockRedisClient, catalogFixtures, lockToken)
+
+    currentTime = int(time.time())
+    intentM, cartM, execM, totalPaise = _buildTc01Mandates(userSigner, buyerSigner, merchantSigner, lockToken, currentTime)
+
     orchestrator = SettlementOrchestrator(
-        routeClient=routeClient,
-        nonceLedger=nonceLedger,
+        routeClient=RazorpayRouteClient(apiKey="rzp_test_123", apiSecret="rzp_secret_456"),
+        nonceLedger=NonceLedger(mockRedisClient),
     )
-
     settlementResult = await orchestrator.executeSettlementSaga(
-        intentMandate=intentMandate,
-        cartMandate=cartMandate,
-        executionMandate=executionMandate,
-        merchantAccount=nominalMerchantAccount,
-        paymentId="pay_tc01_capture_success",
-        serverTime=currentTime,
+        intentMandate=intentM, cartMandate=cartM, executionMandate=execM,
+        merchantAccount=nominalMerchantAccount, paymentId="pay_tc01_capture_success", serverTime=currentTime,
     )
-
-    # Step 5: Verify all TC-01 Invariants
-    assert settlementResult.status == "captured"
-    assert settlementResult.amountPaise == totalPaise
-    assert len(settlementResult.transfers) >= 1
-    assert settlementResult.invoice.cryptographicAuditHash is not None
-    assert len(settlementResult.invoice.cryptographicAuditHash) == 64
+    assert settlementResult.status == "captured" and settlementResult.amountPaise == totalPaise
+    assert len(settlementResult.transfers) >= 1 and len(settlementResult.invoice.cryptographicAuditHash) == 64
     assert settlementResult.invoice.grandTotalPaise == totalPaise
+

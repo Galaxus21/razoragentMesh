@@ -1,6 +1,5 @@
 """Qdrant filtered vector similarity search client for substitute retrieval."""
 
-import math
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 
@@ -23,6 +22,45 @@ class ScoredPointCandidate(BaseModel):
     payload: Dict[str, Any]
 
 
+def _getQdrantModels() -> Any:
+    try:
+        from qdrant_client import models
+        return models
+    except ImportError:
+        class _MatchValue:
+            def __init__(self, value: Any) -> None:
+                self.value = value
+
+        class _MatchAny:
+            def __init__(self, any: List[Any]) -> None:
+                self.any = any
+
+        class _Range:
+            def __init__(self, gte: Optional[float] = None, lte: Optional[float] = None) -> None:
+                self.gte = gte
+                self.lte = lte
+
+        class _FieldCondition:
+            def __init__(self, key: str, match: Optional[Any] = None, range: Optional[Any] = None) -> None:
+                self.key = key
+                self.match = match
+                self.range = range
+
+        class _Filter:
+            def __init__(self, must: Optional[List[Any]] = None, must_not: Optional[List[Any]] = None) -> None:
+                self.must = must or []
+                self.must_not = must_not or []
+
+        class _Models:
+            MatchValue = _MatchValue
+            MatchAny = _MatchAny
+            Range = _Range
+            FieldCondition = _FieldCondition
+            Filter = _Filter
+
+        return _Models
+
+
 class VectorSearcher:
     """Performs filtered approximate nearest neighbor (ANN) search on product embeddings."""
 
@@ -34,6 +72,132 @@ class VectorSearcher:
         self._qdrant = qdrantClient
         self._catalog = {s["skuId"]: s for s in (catalogStore or [])}
         self._embeddingProvider = EmbeddingProvider()
+
+    def searchCandidates(
+        self,
+        queryVector: List[float],
+        hsnCode: str,
+        originalPricePaise: int,
+        requestedQuantity: int,
+        excludeSkuId: Optional[str] = None,
+        limit: int = defaultMaxSearchCandidates,
+        scoreThreshold: float = minCosineSimilarity,
+        maxPriceDeltaPct: float = maxPriceDeltaPercent,
+    ) -> List[ScoredPointCandidate]:
+        """Queries vector index with HSN, stock, and price-delta filters."""
+        rawPoints = self._executeRawVectorSearch(
+            queryVector=queryVector,
+            hsnCode=hsnCode,
+            excludeSkuId=excludeSkuId,
+            limit=limit,
+            scoreThreshold=scoreThreshold,
+        )
+        qualified: List[ScoredPointCandidate] = []
+        for pt in rawPoints:
+            candidate = self._qualifyCandidate(
+                pt=pt,
+                originalPricePaise=originalPricePaise,
+                requestedQuantity=requestedQuantity,
+                maxPriceDeltaPct=maxPriceDeltaPct,
+            )
+            if candidate is not None:
+                qualified.append(candidate)
+        return qualified
+
+    def _executeRawVectorSearch(
+        self,
+        queryVector: List[float],
+        hsnCode: str,
+        excludeSkuId: Optional[str],
+        limit: int,
+        scoreThreshold: float,
+    ) -> List[Any]:
+        """Executes search against Qdrant client if available, falling back to in-memory search."""
+        if self._qdrant is not None and hasattr(self._qdrant, "search"):
+            try:
+                return self._qdrant.search(
+                    collectionName=qdrantCollectionName,
+                    queryVector=queryVector,
+                    limit=limit,
+                    scoreThreshold=scoreThreshold,
+                    filterHsnCode=hsnCode,
+                    excludeSkuId=excludeSkuId,
+                )
+            except TypeError:
+                try:
+                    models = _getQdrantModels()
+
+                    mustConditions: List[Any] = [
+                        models.FieldCondition(
+                            key="availableStock",
+                            range=models.Range(gte=1),
+                        ),
+                    ]
+                    if hsnCode:
+                        mustConditions.append(
+                            models.FieldCondition(
+                                key="hsnCode",
+                                match=models.MatchValue(value=hsnCode),
+                            )
+                        )
+                    mustNotConditions: List[Any] = []
+                    if excludeSkuId:
+                        mustNotConditions.append(
+                            models.FieldCondition(
+                                key="skuId",
+                                match=models.MatchValue(value=excludeSkuId),
+                            )
+                        )
+                    queryFilter = models.Filter(
+                        must=mustConditions,
+                        must_not=mustNotConditions if mustNotConditions else None,
+                    )
+                    return self._qdrant.search(
+                        collection_name=qdrantCollectionName,
+                        query_vector=queryVector,
+                        query_filter=queryFilter,
+                        limit=limit,
+                        score_threshold=scoreThreshold,
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        return self._inMemorySearch(queryVector, hsnCode, excludeSkuId, scoreThreshold, limit)
+
+    def _qualifyCandidate(
+        self,
+        pt: Any,
+        originalPricePaise: int,
+        requestedQuantity: int,
+        maxPriceDeltaPct: float,
+    ) -> Optional[ScoredPointCandidate]:
+        """Validates inventory sufficiency and price delta threshold for candidate."""
+        payload = (pt.payload if hasattr(pt, "payload") else pt.get("payload", {})) or {}
+        rawScore = pt.score if hasattr(pt, "score") else pt.get("score", 0.0)
+        score = float(rawScore) if rawScore is not None else 0.0
+        candPrice = int(payload.get("baseUnitPricePaise", 0))
+        candStock = int(payload.get("availableStock", 0))
+
+        if candStock < requestedQuantity:
+            return None
+
+        if originalPricePaise <= 0:
+            priceDeltaPct = 0.0 if candPrice == 0 else 100.0
+        else:
+            priceDeltaPct = abs(candPrice - originalPricePaise) / originalPricePaise * 100.0
+
+        if priceDeltaPct > maxPriceDeltaPct:
+            return None
+
+        candidateSkuId = str(
+            payload.get("skuId")
+            or getattr(pt, "id", None)
+            or getattr(pt, "skuId", None)
+            or (pt.get("id") if isinstance(pt, dict) else "")
+            or ""
+        )
+        return ScoredPointCandidate(skuId=candidateSkuId, score=score, payload=payload)
 
     def _inMemorySearch(
         self,
@@ -58,50 +222,6 @@ class VectorSearcher:
                 candidates.append(ScoredPointCandidate(skuId=skuId, score=sim, payload=item))
         candidates.sort(key=lambda c: c.score, reverse=True)
         return candidates[:limit]
-
-    def searchCandidates(
-        self,
-        queryVector: List[float],
-        hsnCode: str,
-        originalPricePaise: int,
-        requestedQuantity: int,
-        excludeSkuId: Optional[str] = None,
-        limit: int = defaultMaxSearchCandidates,
-        scoreThreshold: float = minCosineSimilarity,
-        maxPriceDeltaPct: float = maxPriceDeltaPercent,
-    ) -> List[ScoredPointCandidate]:
-        """Queries vector index with HSN, stock, and price-delta filters."""
-        rawPoints: List[Any] = []
-        if self._qdrant is not None and hasattr(self._qdrant, "search"):
-            rawPoints = self._qdrant.search(
-                collectionName=qdrantCollectionName,
-                queryVector=queryVector,
-                limit=limit,
-                scoreThreshold=scoreThreshold,
-                filterHsnCode=hsnCode,
-                excludeSkuId=excludeSkuId,
-            )
-        else:
-            rawPoints = self._inMemorySearch(queryVector, hsnCode, excludeSkuId, scoreThreshold, limit)
-
-        qualified: List[ScoredPointCandidate] = []
-        for pt in rawPoints:
-            payload = pt.payload if hasattr(pt, "payload") else pt.get("payload", {})
-            score = pt.score if hasattr(pt, "score") else pt.get("score", 0.0)
-            candPrice = payload.get("baseUnitPricePaise", 0)
-            candStock = payload.get("availableStock", 0)
-
-            if candStock < requestedQuantity:
-                continue
-
-            priceDeltaPct = abs(candPrice - originalPricePaise) / originalPricePaise * 100.0
-            if priceDeltaPct > maxPriceDeltaPct:
-                continue
-
-            candidateSkuId = payload.get("skuId", "")
-            qualified.append(ScoredPointCandidate(skuId=candidateSkuId, score=score, payload=payload))
-
-        return qualified
 
 
 __all__ = [

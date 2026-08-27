@@ -32,70 +32,41 @@ from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions impor
 
 def _setupMandates(budgetPaise: int, unitPricePaise: int, quantity: int = 1, singleLimit: int = 2000000) -> tuple:
     """Helper creating signed test mandate trio."""
-    uPriv, _ = generateKeyPair()
-    mPriv, _ = generateKeyPair()
-    aPriv, _ = generateKeyPair()
-
-    uSigner = Ed25519Signer(uPriv)
-    mSigner = Ed25519Signer(mPriv)
-    aSigner = Ed25519Signer(aPriv)
+    uSigner = Ed25519Signer(generateKeyPair()[0])
+    mSigner = Ed25519Signer(generateKeyPair()[0])
+    aSigner = Ed25519Signer(generateKeyPair()[0])
 
     intentM = createSignedIntentMandate(
-        mandateId="M-I-01",
-        userSigner=uSigner,
-        delegatedAgentDid=aSigner.getAgentDid(),
-        maxBudgetPaise=budgetPaise,
-        upiCircleDelegationToken="upi_tok",
-        singleTransactionLimitPaise=singleLimit,
-        authorizedCategories=["electronics"],
+        mandateId="M-I-01", userSigner=uSigner, delegatedAgentDid=aSigner.getAgentDid(),
+        maxBudgetPaise=budgetPaise, upiCircleDelegationToken="upi_tok",
+        singleTransactionLimitPaise=singleLimit, authorizedCategories=["electronics"],
         validUntilTimestamp=2000000000,
     )
-
     lineTaxable = computeLineItemTotal(unitPricePaise, quantity)
     gst = computeGstBreakdown(lineTaxable, 18, isIntraState=True)
     totalPaise = computeCartSettlementTotal(lineTaxable, gst["totalTaxPaise"], shippingPaise=0, discountPaise=0)
 
     item = CartItemSchema(
-        skuId="SKU-ELEC-01",
-        quantity=quantity,
-        unitPricePaise=unitPricePaise,
-        hsnCode="84713010",
-        gstRatePercent=18,
-        lineTotalPaise=lineTaxable,
+        skuId="SKU-ELEC-01", quantity=quantity, unitPricePaise=unitPricePaise,
+        hsnCode="84713010", gstRatePercent=18, lineTotalPaise=lineTaxable,
     )
     taxBreakdown = TaxBreakdownSchema(
-        cgstPaise=gst["cgstPaise"],
-        sgstPaise=gst["sgstPaise"],
-        igstPaise=gst["igstPaise"],
-        totalTaxPaise=gst["totalTaxPaise"],
+        cgstPaise=gst["cgstPaise"], sgstPaise=gst["sgstPaise"],
+        igstPaise=gst["igstPaise"], totalTaxPaise=gst["totalTaxPaise"],
     )
     cartM = createSignedCartMandate(
-        cartId="M-C-01",
-        merchantSigner=mSigner,
-        merchantGstin="29AAAAA0000A1Z5",
-        merchantStateCode="29",
-        buyerDeliveryPincode="560001",
-        buyerDeliveryStateCode="29",
-        items=[item],
-        taxableSubtotalPaise=lineTaxable,
-        taxBreakdown=taxBreakdown,
-        shippingPaise=0,
-        discountPaise=0,
-        totalPaise=totalPaise,
-        inventoryLockToken="lock_tok",
-        inventoryLockExpiresAt=2000000000,
+        cartId="M-C-01", merchantSigner=mSigner, merchantGstin="29AAAAA0000A1ZY",
+        merchantStateCode="29", buyerDeliveryPincode="560001", buyerDeliveryStateCode="29",
+        items=[item], taxableSubtotalPaise=lineTaxable, taxBreakdown=taxBreakdown,
+        shippingPaise=0, discountPaise=0, totalPaise=totalPaise,
+        inventoryLockToken="lock_tok", inventoryLockExpiresAt=2000000000,
     )
-
     execM = createSignedExecutionMandate(
-        executionId="M-E-01",
-        buyerAgentSigner=aSigner,
-        intentMandate=intentM,
-        cartMandate=cartM,
-        settlementAmountPaise=totalPaise,
-        upiCircleToken="upi_tok",
+        executionId="M-E-01", buyerAgentSigner=aSigner, intentMandate=intentM,
+        cartMandate=cartM, settlementAmountPaise=totalPaise, upiCircleToken="upi_tok",
     )
-
     return intentM, cartM, execM
+
 
 
 def testBudgetGateWithinBudgetPasses() -> None:

@@ -1,0 +1,44 @@
+{
+  "name": "@razorpay/agent-buyer-sdk",
+  "version": "2.0.0",
+  "description": "Standalone TypeScript Buyer SDK for autonomous AI agent discovery, PoW negotiation, AP2 mandate signing, and 2PC settlement across RazorAgent Mesh",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test --import tsx test/**/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "keywords": [
+    "razorpay",
+    "agentic-commerce",
+    "buyer-sdk",
+    "ap2-mandates",
+    "ed25519",
+    "proof-of-work",
+    "x402",
+    "upi-circle",
+    "smart-wait"
+  ],
+  "author": "RazorAgent Mesh Team",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "tweetnacl": "^1.0.3",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "@types/uuid": "^10.0.0",
+    "fast-check": "^4.9.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}

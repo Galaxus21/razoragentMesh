@@ -5,6 +5,11 @@ import time
 import uuid
 from typing import Any, Dict, Optional, Tuple
 
+from ..constants.gatewayConstants import (
+    httpStatusForbidden,
+    httpStatusOk,
+    httpStatusPaymentRequired,
+)
 from ..constants.negotiationConstants import (
     microFeePerTurnPaise,
     powChallengeTtlSeconds,
@@ -23,27 +28,8 @@ from ..schemas.x402ChallengeSchema import (
     PowVerificationResult,
 )
 
-
 powEscalatedLeadingZeros: int = 5
 powHighLoadThreshold: int = 100
-
-
-def evaluateDynamicDifficulty(clientIp: str, requestCount: int) -> int:
-    """Evaluates dynamic PoW leading zero difficulty based on client request count."""
-    if requestCount >= powHighLoadThreshold:
-        return powEscalatedLeadingZeros
-    return powLeadingZeros
-
-
-def solvePoWChallenge(challenge: str, difficultyZeros: int = powLeadingZeros) -> int:
-    """Finds integer nonce yielding required leading hex zeros for given challenge."""
-    targetPrefix = "0" * difficultyZeros
-    nonce = 0
-    while True:
-        candidateBytes = f"{challenge}:{nonce}".encode("utf-8")
-        if hashlib.sha256(candidateBytes).hexdigest().startswith(targetPrefix):
-            return nonce
-        nonce += 1
 
 
 class IngressAntiSpamShield:
@@ -144,24 +130,42 @@ class IngressAntiSpamShield:
     ) -> Tuple[int, str]:
         """Processes request through combined PoW and micro-escrow authorization gate."""
         if not challengeToken or powNonce is None:
-            return 402, "HTTP 402: Micro-escrow and PoW challenge required"
+            return httpStatusPaymentRequired, "HTTP 402: Micro-escrow and PoW challenge required"
 
         if challengeToken not in self.activeChallenges:
-            return 403, "HTTP 403: Invalid or expired challenge"
+            return httpStatusForbidden, "HTTP 403: Invalid or expired challenge"
 
         if not self.verifyPoWSolution(challengeToken, powNonce):
-            return 403, "HTTP 403: Invalid Proof-of-Work solution"
+            return httpStatusForbidden, "HTTP 403: Invalid Proof-of-Work solution"
 
         if not escrowSessionToken or escrowSessionToken not in self.authorizedEscrowTokens:
-            return 402, "HTTP 402: x402-INR micro-escrow token exhausted"
+            return httpStatusPaymentRequired, "HTTP 402: x402-INR micro-escrow token exhausted"
 
         balance = self.authorizedEscrowTokens[escrowSessionToken]
         if balance < microFeePerTurnPaise:
-            return 402, "HTTP 402: Insufficient micro-escrow balance"
+            return httpStatusPaymentRequired, "HTTP 402: Insufficient micro-escrow balance"
 
         self.authorizedEscrowTokens[escrowSessionToken] -= microFeePerTurnPaise
         self.llmInvocationsCount += 1
-        return 200, "OK"
+        return httpStatusOk, "OK"
+
+
+def evaluateDynamicDifficulty(clientIp: str, requestCount: int) -> int:
+    """Evaluates dynamic PoW leading zero difficulty based on client request count."""
+    if requestCount >= powHighLoadThreshold:
+        return powEscalatedLeadingZeros
+    return powLeadingZeros
+
+
+def solvePoWChallenge(challenge: str, difficultyZeros: int = powLeadingZeros) -> int:
+    """Finds integer nonce yielding required leading hex zeros for given challenge."""
+    targetPrefix = "0" * difficultyZeros
+    nonce = 0
+    while True:
+        candidateBytes = f"{challenge}:{nonce}".encode("utf-8")
+        if hashlib.sha256(candidateBytes).hexdigest().startswith(targetPrefix):
+            return nonce
+        nonce += 1
 
 
 __all__ = [

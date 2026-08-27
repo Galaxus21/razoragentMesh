@@ -68,6 +68,48 @@ class MockRedisAsync:
         self.expirations[key] = time.time() + seconds
         return True
 
+    async def rpush(self, key: str, *values: Any) -> int:
+        self._isExpired(key)
+        if key not in self.store or not isinstance(self.store[key], list):
+            self.store[key] = []
+        for val in values:
+            self.store[key].append(val)
+        return len(self.store[key])
+
+    async def lpop(self, key: str) -> Optional[str]:
+        if self._isExpired(key):
+            return None
+        lst = self.store.get(key)
+        if isinstance(lst, list) and len(lst) > 0:
+            val = lst.pop(0)
+            return str(val) if val is not None else None
+        return None
+
+    async def llen(self, key: str) -> int:
+        if self._isExpired(key):
+            return 0
+        lst = self.store.get(key)
+        return len(lst) if isinstance(lst, list) else 0
+
+    async def lrange(self, key: str, start: int, stop: int) -> List[str]:
+        if self._isExpired(key):
+            return []
+        lst = self.store.get(key)
+        if not isinstance(lst, list):
+            return []
+        end = None if stop == -1 else stop + 1
+        sliceItems = lst[start:end]
+        return [str(item) for item in sliceItems]
+
+    async def delete(self, *keys: str) -> int:
+        count = 0
+        for key in keys:
+            if key in self.store:
+                self.store.pop(key, None)
+                self.expirations.pop(key, None)
+                count += 1
+        return count
+
     async def flushdb(self) -> bool:
         self.store.clear()
         self.expirations.clear()

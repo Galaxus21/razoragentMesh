@@ -131,57 +131,30 @@ def compileCommercialContractAst(
     return ast, astHash
 
 
-def testTc02MultiTurnNegotiationConvergence(
-    agentKeyFixtures: Dict[str, Any],
-) -> None:
+def testTc02MultiTurnNegotiationConvergence(agentKeyFixtures: Dict[str, Any]) -> None:
     """TC-02: B2B Dynamic Multi-Turn Negotiation — 3-turn Rubinstein-Stahl convergence at ₹3,350."""
     buyerKey = agentKeyFixtures["buyerAgent"]
     merchantKey = agentKeyFixtures["merchantNode"]
+    negotiator = RubinsteinStahlNegotiator(skuId="SKU-104", quantity=negotiationQuantity, escrowBalancePaise=initialEscrowPoolPaise)
 
-    negotiator = RubinsteinStahlNegotiator(
-        skuId="SKU-104",
-        quantity=negotiationQuantity,
-        escrowBalancePaise=initialEscrowPoolPaise,
-    )
-
-    # Turn 1: Buyer ₹3,300, Seller ₹3,450 (Spread: ₹150)
     turn1 = negotiator.executeTurn(1, 330000, 345000)
-    assert turn1.turnNumber == 1
-    assert turn1.spreadPaise == 15000
-    assert not turn1.isConverged
+    assert turn1.turnNumber == 1 and turn1.spreadPaise == 15000 and not turn1.isConverged
 
-    # Turn 2: Buyer ₹3,330, Seller ₹3,380 (Spread: ₹50)
     turn2 = negotiator.executeTurn(2, 333000, 338000)
-    assert turn2.turnNumber == 2
-    assert turn2.spreadPaise == 5000
-    assert not turn2.isConverged
+    assert turn2.turnNumber == 2 and turn2.spreadPaise == 5000 and not turn2.isConverged
 
-    # Turn 3: Buyer ₹3,350, Seller ₹3,350 (Converged)
     turn3 = negotiator.executeTurn(3, agreedUnitPricePaise, agreedUnitPricePaise)
-    assert turn3.turnNumber == 3
-    assert turn3.spreadPaise == 0
-    assert turn3.isConverged
+    assert turn3.turnNumber == 3 and turn3.spreadPaise == 0 and turn3.isConverged
 
-    # Micro-escrow accounting assertions
-    assert negotiator.cumulativeMicroFeesPaise == 150
-    assert negotiator.escrowBalancePaise == 4850
+    assert negotiator.cumulativeMicroFeesPaise == 150 and negotiator.escrowBalancePaise == 4850
 
-    # Compile AST & Verify Deterministic Total
     ast, astHash = compileCommercialContractAst(
-        skuId="SKU-104",
-        quantity=negotiationQuantity,
-        agreedUnitPrice=agreedUnitPricePaise,
-        turns=3,
-        buyerDid=buyerKey["did"],
-        merchantDid=merchantKey["did"],
-        timestamp=1755936000,
+        skuId="SKU-104", quantity=negotiationQuantity, agreedUnitPrice=agreedUnitPricePaise,
+        turns=3, buyerDid=buyerKey["did"], merchantDid=merchantKey["did"], timestamp=1755936000,
     )
+    assert ast.agreedUnitPricePaise == 335000 and ast.taxableSubtotalPaise == 16750000
+    assert ast.totalTaxPaise == 3015000 and ast.totalGrossPaise == 19765000 and len(astHash) == 64
 
-    assert ast.agreedUnitPricePaise == 335000
-    assert ast.taxableSubtotalPaise == 16750000
-    assert ast.totalTaxPaise == 3015000
-    assert ast.totalGrossPaise == 19765000
-    assert len(astHash) == 64
 
 
 def testTc02NonMonotonicConcessionViolation() -> None:

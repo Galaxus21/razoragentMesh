@@ -1,9 +1,10 @@
 """Merchant product catalog CRUD routes."""
 
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from ..catalog.catalogManager import catalogManager
+from ..exceptions.merchantExceptions import CatalogNotFoundException
 from ..schemas.universalProductSchema import UniversalProductListing
 from .dependencies import getRedisClient
 
@@ -43,10 +44,7 @@ async def getSku(
     """Retrieves a single product listing by merchant DID and SKU identifier."""
     listing = await catalogManager.getListing(redis, merchantDid, skuId)
     if listing is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"SKU '{skuId}' not found for merchant '{merchantDid}'",
-        )
+        raise CatalogNotFoundException(f"SKU '{skuId}' not found for merchant '{merchantDid}'")
     return listing
 
 
@@ -82,10 +80,7 @@ async def deleteSku(
     """Deletes product listing and removes inventory stock keys."""
     listing = await catalogManager.getListing(redis, merchantDid, skuId)
     if listing is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"SKU '{skuId}' not found for merchant '{merchantDid}'",
-        )
+        raise CatalogNotFoundException(f"SKU '{skuId}' not found for merchant '{merchantDid}'")
     await catalogManager.deleteListing(redis, merchantDid, skuId)
     return {
         "status": "deleted",

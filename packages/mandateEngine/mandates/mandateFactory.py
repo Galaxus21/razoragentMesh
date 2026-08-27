@@ -27,19 +27,6 @@ defaultCurrency: str = "INR"
 defaultIntentValiditySeconds: int = 86400
 
 
-def _buildIntentPayload(
-    mandateId: str, userDid: str, agentDid: str, budget: int, upiTok: str,
-    singleLimit: int, categories: list[str], validUntil: int, nonce: str, ts: int,
-) -> dict[str, Any]:
-    """Constructs dictionary for IntentMandate canonical serialization."""
-    return {
-        "authorizedCategories": categories, "currency": defaultCurrency, "delegatedAgentDid": agentDid,
-        "mandateId": mandateId, "maxBudgetPaise": budget, "nonce": nonce,
-        "singleTransactionLimitPaise": singleLimit, "timestamp": ts,
-        "upiCircleDelegationToken": upiTok, "userDid": userDid, "validUntilTimestamp": validUntil,
-    }
-
-
 def createSignedIntentMandate(
     mandateId: str, userSigner: Ed25519Signer, delegatedAgentDid: str, maxBudgetPaise: int,
     upiCircleDelegationToken: str, singleTransactionLimitPaise: int,
@@ -47,37 +34,21 @@ def createSignedIntentMandate(
     nonce: Optional[str] = None, timestamp: Optional[int] = None,
 ) -> IntentMandate:
     """Constructs and signs a new IntentMandate (M_I)."""
-    ts = timestamp or int(time.time())
-    non = nonce or generateNonce()
-    cats = authorizedCategories or []
-    validUntil = validUntilTimestamp or (ts + defaultIntentValiditySeconds)
-    pld = _buildIntentPayload(
+    timestampUnix = timestamp or int(time.time())
+    nonceValue = nonce or generateNonce()
+    categories = authorizedCategories or []
+    validUntil = validUntilTimestamp or (timestampUnix + defaultIntentValiditySeconds)
+    mandatePayload = _buildIntentPayload(
         mandateId, userSigner.getAgentDid(), delegatedAgentDid, maxBudgetPaise,
-        upiCircleDelegationToken, singleTransactionLimitPaise, cats, validUntil, non, ts,
+        upiCircleDelegationToken, singleTransactionLimitPaise, categories, validUntil, nonceValue, timestampUnix,
     )
-    sig = userSigner.signCanonicalBytes(canonicalizeJson(pld))
+    detachedSignature = userSigner.signCanonicalBytes(canonicalizeJson(mandatePayload))
     return IntentMandate(
         mandateId=mandateId, userDid=userSigner.getAgentDid(), delegatedAgentDid=delegatedAgentDid,
-        maxBudgetPaise=maxBudgetPaise, currency=defaultCurrency, authorizedCategories=cats,
+        maxBudgetPaise=maxBudgetPaise, currency=defaultCurrency, authorizedCategories=categories,
         validUntilTimestamp=validUntil, upiCircleDelegationToken=upiCircleDelegationToken,
-        singleTransactionLimitPaise=singleTransactionLimitPaise, nonce=non, timestamp=ts, userSignature=sig,
+        singleTransactionLimitPaise=singleTransactionLimitPaise, nonce=nonceValue, timestamp=timestampUnix, userSignature=detachedSignature,
     )
-
-
-def _buildCartUnsignedPayload(
-    cartId: str, merchantDid: str, merchantGstin: str, merchantStateCode: str, pincode: str,
-    deliveryState: str, items: list[CartItemSchema], subtotal: int, taxBreakdown: TaxBreakdownSchema,
-    shipping: int, discount: int, total: int, lockToken: str, lockExpiry: int, nonce: str, timestamp: int,
-) -> dict[str, Any]:
-    """Constructs cart dictionary for JCS canonicalization."""
-    return {
-        "buyerDeliveryPincode": pincode, "buyerDeliveryStateCode": deliveryState, "cartId": cartId,
-        "discountPaise": discount, "inventoryLockExpiresAt": lockExpiry, "inventoryLockToken": lockToken,
-        "items": [item.model_dump() for item in items], "merchantDid": merchantDid,
-        "merchantGstin": merchantGstin, "merchantStateCode": merchantStateCode, "nonce": nonce,
-        "shippingPaise": shipping, "taxBreakdown": taxBreakdown.model_dump(),
-        "taxableSubtotalPaise": subtotal, "timestamp": timestamp, "totalPaise": total,
-    }
 
 
 def createSignedCartMandate(
@@ -88,22 +59,22 @@ def createSignedCartMandate(
     nonce: Optional[str] = None, timestamp: Optional[int] = None,
 ) -> CartMandate:
     """Constructs and signs a new CartMandate (M_C)."""
-    ts = timestamp or int(time.time())
-    non = nonce or generateNonce()
-    pld = _buildCartUnsignedPayload(
+    timestampUnix = timestamp or int(time.time())
+    nonceValue = nonce or generateNonce()
+    mandatePayload = _buildCartUnsignedPayload(
         cartId, merchantSigner.getAgentDid(), merchantGstin, merchantStateCode,
         buyerDeliveryPincode, buyerDeliveryStateCode, items, taxableSubtotalPaise,
         taxBreakdown, shippingPaise, discountPaise, totalPaise,
-        inventoryLockToken, inventoryLockExpiresAt, non, ts,
+        inventoryLockToken, inventoryLockExpiresAt, nonceValue, timestampUnix,
     )
-    sig = merchantSigner.signCanonicalBytes(canonicalizeJson(pld))
+    detachedSignature = merchantSigner.signCanonicalBytes(canonicalizeJson(mandatePayload))
     return CartMandate(
         cartId=cartId, merchantDid=merchantSigner.getAgentDid(), merchantGstin=merchantGstin,
         merchantStateCode=merchantStateCode, buyerDeliveryPincode=buyerDeliveryPincode,
         buyerDeliveryStateCode=buyerDeliveryStateCode, items=items, taxableSubtotalPaise=taxableSubtotalPaise,
         taxBreakdown=taxBreakdown, shippingPaise=shippingPaise, discountPaise=discountPaise,
         totalPaise=totalPaise, inventoryLockToken=inventoryLockToken, inventoryLockExpiresAt=inventoryLockExpiresAt,
-        nonce=non, timestamp=ts, merchantSignature=sig,
+        nonce=nonceValue, timestamp=timestampUnix, merchantSignature=detachedSignature,
     )
 
 
@@ -113,21 +84,21 @@ def createSignedExecutionMandate(
     nonce: Optional[str] = None, timestamp: Optional[int] = None,
 ) -> ExecutionMandate:
     """Constructs and signs a new ExecutionMandate (M_E) binding Intent and Cart hashes."""
-    ts = timestamp or int(time.time())
-    non = nonce or generateNonce()
-    iHash = computeMandateHash(intentMandate)
-    cHash = computeMandateHash(cartMandate)
-    pld = {
-        "buyerAgentDid": buyerAgentSigner.getAgentDid(), "cartMandateHash": cHash,
-        "currency": defaultCurrency, "executionId": executionId, "intentMandateHash": iHash,
-        "nonce": non, "settlementAmountPaise": settlementAmountPaise, "timestamp": ts,
+    timestampUnix = timestamp or int(time.time())
+    nonceValue = nonce or generateNonce()
+    intentHash = computeMandateHash(intentMandate)
+    cartHash = computeMandateHash(cartMandate)
+    mandatePayload = {
+        "buyerAgentDid": buyerAgentSigner.getAgentDid(), "cartMandateHash": cartHash,
+        "currency": defaultCurrency, "executionId": executionId, "intentMandateHash": intentHash,
+        "nonce": nonceValue, "settlementAmountPaise": settlementAmountPaise, "timestamp": timestampUnix,
         "upiCircleToken": upiCircleToken,
     }
-    sig = buyerAgentSigner.signCanonicalBytes(canonicalizeJson(pld))
+    detachedSignature = buyerAgentSigner.signCanonicalBytes(canonicalizeJson(mandatePayload))
     return ExecutionMandate(
         executionId=executionId, buyerAgentDid=buyerAgentSigner.getAgentDid(),
-        intentMandateHash=iHash, cartMandateHash=cHash, settlementAmountPaise=settlementAmountPaise,
-        currency=defaultCurrency, upiCircleToken=upiCircleToken, nonce=non, timestamp=ts, agentSignature=sig,
+        intentMandateHash=intentHash, cartMandateHash=cartHash, settlementAmountPaise=settlementAmountPaise,
+        currency=defaultCurrency, upiCircleToken=upiCircleToken, nonce=nonceValue, timestamp=timestampUnix, agentSignature=detachedSignature,
     )
 
 
@@ -138,20 +109,78 @@ def createSignedAmendmentMandate(
     nonce: Optional[str] = None, timestamp: Optional[int] = None,
 ) -> AmendmentMandate:
     """Constructs dual-signed AmendmentMandate (M_A) for out-of-stock healing."""
-    ts = timestamp or int(time.time())
-    non = nonce or generateNonce()
-    pHash = computeMandateHash(previousCartMandate)
-    nHash = computeMandateHash(newCartMandate)
-    pld = {
+    timestampUnix = timestamp or int(time.time())
+    nonceValue = nonce or generateNonce()
+    previousHash = computeMandateHash(previousCartMandate)
+    newHash = computeMandateHash(newCartMandate)
+    mandatePayload = {
         "amendmentId": amendmentId, "amendmentReason": amendmentReason,
-        "newCartMandateHash": nHash, "nonce": non, "previousCartMandateHash": pHash,
-        "priceDeltaPaise": priceDeltaPaise, "substitutedSkuMapping": substitutedSkuMapping, "timestamp": ts,
+        "newCartMandateHash": newHash, "nonce": nonceValue, "previousCartMandateHash": previousHash,
+        "priceDeltaPaise": priceDeltaPaise, "substitutedSkuMapping": substitutedSkuMapping, "timestamp": timestampUnix,
     }
-    b = canonicalizeJson(pld)
+    canonicalPayloadBytes = canonicalizeJson(mandatePayload)
     return AmendmentMandate(
-        amendmentId=amendmentId, previousCartMandateHash=pHash, newCartMandateHash=nHash,
+        amendmentId=amendmentId, previousCartMandateHash=previousHash, newCartMandateHash=newHash,
         substitutedSkuMapping=substitutedSkuMapping, priceDeltaPaise=priceDeltaPaise,
-        amendmentReason=amendmentReason, nonce=non, timestamp=ts,
-        agentSignature=buyerAgentSigner.signCanonicalBytes(b),
-        merchantSignature=merchantSigner.signCanonicalBytes(b),
+        amendmentReason=amendmentReason, nonce=nonceValue, timestamp=timestampUnix,
+        agentSignature=buyerAgentSigner.signCanonicalBytes(canonicalPayloadBytes),
+        merchantSignature=merchantSigner.signCanonicalBytes(canonicalPayloadBytes),
     )
+
+
+def _buildIntentPayload(
+    mandateId: str, userDid: str, delegatedAgentDid: str, maxBudgetPaise: int,
+    upiCircleDelegationToken: str, singleTransactionLimitPaise: int,
+    authorizedCategories: list[str], validUntilTimestamp: int, nonceValue: str,
+    timestampUnix: int,
+) -> dict[str, Any]:
+    """Constructs dictionary for IntentMandate canonical serialization."""
+    return {
+        "authorizedCategories": authorizedCategories, "currency": defaultCurrency,
+        "delegatedAgentDid": delegatedAgentDid, "mandateId": mandateId,
+        "maxBudgetPaise": maxBudgetPaise, "nonce": nonceValue,
+        "singleTransactionLimitPaise": singleTransactionLimitPaise, "timestamp": timestampUnix,
+        "upiCircleDelegationToken": upiCircleDelegationToken, "userDid": userDid,
+        "validUntilTimestamp": validUntilTimestamp,
+    }
+
+
+def _buildCartUnsignedPayload(
+    cartId: str, merchantDid: str, merchantGstin: str, merchantStateCode: str,
+    buyerDeliveryPincode: str, buyerDeliveryStateCode: str, items: list[CartItemSchema],
+    taxableSubtotalPaise: int, taxBreakdown: TaxBreakdownSchema, shippingPaise: int,
+    discountPaise: int, totalPaise: int, inventoryLockToken: str,
+    inventoryLockExpiresAt: int, nonceValue: str, timestampUnix: int,
+) -> dict[str, Any]:
+    """Constructs cart dictionary for JCS canonicalization."""
+    return {
+        "buyerDeliveryPincode": buyerDeliveryPincode,
+        "buyerDeliveryStateCode": buyerDeliveryStateCode,
+        "cartId": cartId,
+        "discountPaise": discountPaise,
+        "inventoryLockExpiresAt": inventoryLockExpiresAt,
+        "inventoryLockToken": inventoryLockToken,
+        "items": [item.model_dump() for item in items],
+        "merchantDid": merchantDid,
+        "merchantGstin": merchantGstin,
+        "merchantStateCode": merchantStateCode,
+        "nonce": nonceValue,
+        "shippingPaise": shippingPaise,
+        "taxBreakdown": taxBreakdown.model_dump(),
+        "taxableSubtotalPaise": taxableSubtotalPaise,
+        "timestamp": timestampUnix,
+        "totalPaise": totalPaise,
+    }
+
+
+__all__ = [
+    "computeMandateHash",
+    "createSignedAmendmentMandate",
+    "createSignedCartMandate",
+    "createSignedExecutionMandate",
+    "createSignedIntentMandate",
+    "defaultCurrency",
+    "defaultIntentValiditySeconds",
+    "verifyMandateChain",
+    "verifyMandateHashChain",
+]

@@ -21,7 +21,6 @@
   "author": "RazorAgent Mesh Team",
   "license": "Apache-2.0",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.5.0",
     "ioredis": "^5.4.1",
     "tweetnacl": "^1.0.3",
     "uuid": "^10.0.0",

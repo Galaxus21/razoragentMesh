@@ -190,78 +190,49 @@ def testAstContractCompilation() -> None:
     assert len(astHash) == 64
 
 
+async def _testGatewayNegotiationStep(client: AsyncClient, challengeToken: str, escrowToken: str) -> None:
+    negPayload = {
+        "skuId": "SKU-CHAIR-001", "quantity": 5, "turnNumber": 1,
+        "buyerBidPaise": 330000, "sellerAskPaise": 345000,
+        "buyerAgentDid": "did:agent:app_buyer", "merchantDid": "did:agent:app_merchant",
+    }
+    respNegFail = await client.post("/api/v1/mesh/negotiate", json=negPayload)
+    assert respNegFail.status_code == 402
+
+    solNonce = solvePoWChallenge(challengeToken)
+    headers = {
+        headerPowChallenge: challengeToken,
+        headerPowSolution: str(solNonce),
+        headerEscrowToken: escrowToken,
+    }
+    respNeg1 = await client.post("/api/v1/mesh/negotiate", json=negPayload, headers=headers)
+    assert respNeg1.status_code == 200
+    stepData = respNeg1.json()["stepResult"]
+    assert stepData["turnNumber"] == 1 and not stepData["isConverged"]
+
+
 @pytest.mark.asyncio
 async def testGatewayAppEndpoints() -> None:
     """Integration test for FastAPI gateway application endpoints."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        # 1. Health check
         respHealth = await client.get("/api/v1/mesh/health")
-        assert respHealth.status_code == 200
-        assert respHealth.json()["status"] == "healthy"
+        assert respHealth.status_code == 200 and respHealth.json()["status"] == "healthy"
 
-        # 2. Challenge endpoint
         respChal = await client.get("/api/v1/mesh/challenge")
         assert respChal.status_code == 200
-        chalData = respChal.json()
-        challengeToken = chalData["challengeToken"]
+        challengeToken = respChal.json()["challengeToken"]
 
-        # 3. Create Escrow Session
-        respEscrow = await client.post(
-            "/api/v1/mesh/escrow",
-            json={"buyerAgentDid": "did:agent:app_buyer", "initialHoldPaise": 5000},
-        )
-        assert respEscrow.status_code == 200
+        respEscrow = await client.post("/api/v1/mesh/escrow", json={"buyerAgentDid": "did:agent:app_buyer", "initialHoldPaise": 5000})
+        assert respEscrow.status_code == 201
         escrowToken = respEscrow.json()["sessionToken"]
 
-        # 4. Attempt negotiate without PoW -> 402/403
-        respNegFail = await client.post(
-            "/api/v1/mesh/negotiate",
-            json={
-                "skuId": "SKU-CHAIR-001",
-                "quantity": 5,
-                "turnNumber": 1,
-                "buyerBidPaise": 330000,
-                "sellerAskPaise": 345000,
-                "buyerAgentDid": "did:agent:app_buyer",
-                "merchantDid": "did:agent:app_merchant",
-            },
-        )
-        assert respNegFail.status_code == 402
+        await _testGatewayNegotiationStep(client, challengeToken, escrowToken)
 
-        # 5. Solve PoW and negotiate
-        solNonce = solvePoWChallenge(challengeToken)
-        headers = {
-            headerPowChallenge: challengeToken,
-            headerPowSolution: str(solNonce),
-            headerEscrowToken: escrowToken,
-        }
-        respNeg1 = await client.post(
-            "/api/v1/mesh/negotiate",
-            json={
-                "skuId": "SKU-CHAIR-001",
-                "quantity": 5,
-                "turnNumber": 1,
-                "buyerBidPaise": 330000,
-                "sellerAskPaise": 345000,
-                "buyerAgentDid": "did:agent:app_buyer",
-                "merchantDid": "did:agent:app_merchant",
-            },
-            headers=headers,
-        )
-        assert respNeg1.status_code == 200
-        stepData = respNeg1.json()["stepResult"]
-        assert stepData["turnNumber"] == 1
-        assert not stepData["isConverged"]
-
-        # 6. Release unspent escrow
-        respRel = await client.post(
-            "/api/v1/mesh/escrow/release",
-            headers={headerEscrowToken: escrowToken},
-        )
+        respRel = await client.post("/api/v1/mesh/escrow/release", headers={headerEscrowToken: escrowToken})
         assert respRel.status_code == 200
-        assert respRel.json()["totalDebitedPaise"] == 50
-        assert respRel.json()["refundedBalancePaise"] == 4950
+        assert respRel.json()["totalDebitedPaise"] == 50 and respRel.json()["refundedBalancePaise"] == 4950
+
 
 
 class MockPolicyRedis:

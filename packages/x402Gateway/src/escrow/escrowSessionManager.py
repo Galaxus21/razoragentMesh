@@ -5,7 +5,7 @@ import uuid
 from typing import Any, Dict, Optional, Tuple
 from pydantic import BaseModel, ConfigDict, Field
 
-from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import validateIntegerPaise
+from ..constants.arithmeticUtils import validateIntegerPaise
 from ..constants.negotiationConstants import (
     defaultSessionTtlSeconds,
     initialEscrowPoolPaise,

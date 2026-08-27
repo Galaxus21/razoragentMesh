@@ -5,7 +5,7 @@ import hmac
 import uuid
 from typing import Any, Dict, Optional
 
-from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import validateIntegerPaise
+from ..constants.arithmeticUtils import validateIntegerPaise
 from ..constants.negotiationConstants import (
     defaultGatewaySecret,
     defaultSessionTtlSeconds,

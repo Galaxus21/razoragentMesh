@@ -5,6 +5,7 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from ..constants.gatewayConstants import httpStatusPaymentRequired
 from ..constants.negotiationConstants import (
     headerAuthenticate,
     headerEscrowToken,
@@ -39,7 +40,7 @@ class X402ChallengeMiddleware(BaseHTTPMiddleware):
             f'escrowEndpoint="/api/v1/mesh/escrow"'
         )
         body = {
-            "status": 402,
+            "status": httpStatusPaymentRequired,
             "error": "PAYMENT_REQUIRED",
             "protocol": protocolName,
             "tokenCostPaise": microFeePerTurnPaise,
@@ -47,7 +48,7 @@ class X402ChallengeMiddleware(BaseHTTPMiddleware):
             "message": "Dynamic negotiation requires ₹0.50 micro-escrow debit per turn",
         }
         return JSONResponse(
-            status_code=402,
+            status_code=httpStatusPaymentRequired,
             content=body,
             headers={headerAuthenticate: challengeHeaderValue},
         )

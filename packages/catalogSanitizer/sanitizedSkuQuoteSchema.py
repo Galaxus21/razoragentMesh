@@ -3,7 +3,7 @@
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-from razoragentMesh.packages.catalogSanitizer.sanitizerConstants import (
+from .sanitizerConstants import (
     defaultCurrency,
     hsnCodeRegexPattern,
     maxAllowedGstRate,
@@ -14,6 +14,7 @@ from razoragentMesh.packages.catalogSanitizer.sanitizerConstants import (
     quoteHashLength,
     skuIdRegexPattern,
 )
+
 
 
 class TaxBreakdownSchema(BaseModel):
@@ -57,9 +58,9 @@ class SanitizedSkuQuote(BaseModel):
         gt=0,
         description="Offered unit price after tier discounts in integer paise",
     )
-    currency: Literal["INR"] = Field(
+    currency: Literal[defaultCurrency] = Field(
         default=defaultCurrency,
-        description="ISO currency code (strictly INR)",
+        description=f"ISO currency code (strictly {defaultCurrency})",
     )
     hsnCode: str = Field(
         pattern=hsnCodeRegexPattern,

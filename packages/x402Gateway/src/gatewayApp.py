@@ -6,6 +6,11 @@ from typing import Any, AsyncGenerator, Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .constants.gatewayConstants import (
+    defaultGatewayDescription,
+    defaultGatewayTitle,
+    defaultGatewayVersion,
+)
 from .constants.negotiationConstants import (
     endpointHealth,
     protocolName,
@@ -47,9 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def createGatewayApp() -> FastAPI:
     """App factory initializing FastAPI instance with routes and middleware."""
     gatewayApp = FastAPI(
-        title="RazorAgent Mesh x402 Gateway",
-        version="2.0.0",
-        description="HTTP 402-INR micro-metered negotiation and AST compilation service",
+        title=defaultGatewayTitle,
+        version=defaultGatewayVersion,
+        description=defaultGatewayDescription,
         lifespan=lifespan,
     )
 

@@ -1,14 +1,27 @@
 """Merchant onboarding registrar handling GSTIN validation, DID minting, and keypair generation."""
 
-import re
 import time
 from nacl.signing import SigningKey
 
+try:
+    from razoragentMesh.packages.mandateEngine.tax.gstinValidator import (
+        computeGstinChecksum,
+        validateGstin,
+    )
+except ImportError:
+    try:
+        from packages.mandateEngine.tax.gstinValidator import (
+            computeGstinChecksum,
+            validateGstin,
+        )
+    except ImportError:
+        from mandateEngine.tax.gstinValidator import (
+            computeGstinChecksum,
+            validateGstin,
+        )
+
 from ..constants.merchantConstants import (
     didMerchantPrefix,
-    gstCharsTable,
-    gstinLength,
-    gstinRegexPattern,
 )
 from ..schemas.merchantSchema import (
     MerchantKeypairRecord,
@@ -18,30 +31,8 @@ from ..schemas.merchantSchema import (
 
 keyHexSubstrLength: int = 16
 
-
-def _computeGstinChecksum(gstin14: str) -> str:
-    """Calculates standard Indian GSTIN 15th character checksum using Luhn mod-36 algorithm."""
-    total = 0
-    for idx in range(14):
-        val = gstCharsTable.index(gstin14[idx])
-        factor = 1 if (idx % 2 == 0) else 2
-        product = val * factor
-        total += (product // 36) + (product % 36)
-    checkCode = (36 - (total % 36)) % 36
-    return gstCharsTable[checkCode]
-
-
-def validateGstin(gstin: str) -> bool:
-    """Validates an Indian GSTIN against format regex and mod-36 checksum."""
-    if not isinstance(gstin, str):
-        return False
-    cleanGstin = gstin.strip().upper()
-    if len(cleanGstin) != gstinLength:
-        return False
-    if not re.match(gstinRegexPattern, cleanGstin):
-        return False
-    expectedCheckChar = _computeGstinChecksum(cleanGstin[:14])
-    return cleanGstin[14] == expectedCheckChar
+# Backwards compatibility alias
+_computeGstinChecksum = computeGstinChecksum
 
 
 def mintMerchantDid(publicKeyHex: str) -> str:
@@ -86,6 +77,7 @@ def buildMerchantProfile(
 
 __all__ = [
     "buildMerchantProfile",
+    "computeGstinChecksum",
     "generateMerchantKeypair",
     "mintMerchantDid",
     "validateGstin",
