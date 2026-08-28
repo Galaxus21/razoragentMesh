@@ -77,3 +77,235 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--text-muted));
 }
+
+/* Dynamic Markdown Typography & Styling */
+.markdown-content {
+  color: rgb(var(--text-secondary));
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  color: rgb(var(--text-primary));
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.markdown-content h1 {
+  font-size: 1.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgb(var(--border-subtle));
+}
+
+.markdown-content > h1:first-child,
+.markdown-content > h1:first-of-type {
+  margin-top: 0;
+}
+
+.markdown-content h2 {
+  font-size: 1.25rem;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid rgb(var(--border-subtle));
+}
+
+.markdown-content h3 {
+  font-size: 1rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content p {
+  margin-bottom: 1rem;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.markdown-content li {
+  margin-bottom: 0.375rem;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid rgb(var(--accent-primary));
+  background-color: rgba(var(--accent-subtle), 0.2);
+  padding: 0.75rem 1rem;
+  border-radius: 0 0.375rem 0.375rem 0;
+  margin: 1.25rem 0;
+  color: rgb(var(--text-primary));
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.8125rem;
+  border: 1px solid rgb(var(--border-subtle));
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.markdown-content tr:nth-child(even) {
+  background-color: rgba(var(--surface-container), 0.3);
+}
+
+.markdown-content th {
+  background-color: rgb(var(--surface-container));
+  color: rgb(var(--text-primary));
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid rgb(var(--border-subtle));
+}
+
+.markdown-content td {
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid rgb(var(--border-subtle));
+}
+
+.markdown-content :not(pre) > code {
+  font-family: var(--font-mono), monospace;
+  background-color: rgb(var(--bg-base));
+  border: 1px solid rgb(var(--border-subtle));
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  color: rgb(var(--accent-primary));
+}
+
+.markdown-content pre {
+  background-color: rgb(var(--bg-base));
+  border: 1px solid rgb(var(--border-subtle));
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.code-block-wrapper pre,
+.code-tabbed-group pre {
+  border: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  color: rgb(var(--text-primary));
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.markdown-content a {
+  color: rgb(var(--accent-primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-content hr {
+  border: 0;
+  border-top: 1px solid rgb(var(--border-subtle));
+  margin: 1.5rem 0;
+}
+
+/* Syntax Highlighting Palette */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-operator {
+  color: #6366f1;
+  font-weight: 500;
+}
+
+.hljs-string,
+.hljs-addition,
+.hljs-regexp {
+  color: #16a34a;
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol {
+  color: #d97706;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-name {
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attr {
+  color: #8b5cf6;
+}
+
+.hljs-built_in,
+.hljs-type {
+  color: #db2777;
+}
+
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-operator {
+  color: #818cf8;
+}
+
+.dark .hljs-string,
+.dark .hljs-addition,
+.dark .hljs-regexp {
+  color: #4ade80;
+}
+
+.dark .hljs-number,
+.dark .hljs-literal,
+.dark .hljs-symbol {
+  color: #fbbf24;
+}
+
+.dark .hljs-comment,
+.dark .hljs-quote {
+  color: #71717a;
+}
+
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-name {
+  color: #38bdf8;
+}
+
+.dark .hljs-variable,
+.dark .hljs-template-variable,
+.dark .hljs-attr {
+  color: #c084fc;
+}
+
+.dark .hljs-built_in,
+.dark .hljs-type {
+  color: #f472b6;
+}

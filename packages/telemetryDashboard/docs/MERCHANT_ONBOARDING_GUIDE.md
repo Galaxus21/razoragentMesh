@@ -1,0 +1,125 @@
+# Merchant Onboarding & Universal SKU Studio Guide
+
+A comprehensive guide for merchants and enterprise catalog providers registering Ed25519 DIDs, configuring dynamic bullion formulas, defining volume discount tiers, and automating statutory GSTR-1 tax compliance.
+
+---
+
+## 1. Merchant Identity & DID Derivation
+
+Every merchant on RazorAgent Mesh is identified by an immutable Decentralized Identifier (`did:razoragent:merchant:<hex16>`) derived from an Ed25519 cryptographic public key.
+
+```bash
+# Register Merchant Identity via cURL on Merchant API (Port 4002)
+curl -X POST http://localhost:4002/api/v1/merchant/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "merchantName": "Tanishq Flagship Enclave",
+    "publicKeyHex": "9f8e7d6c5b4a3210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "razorpayAccountId": "acc_N0xMerchantGold99",
+    "settlementSplitBps": 9800,
+    "gstin": "27AAACG0123M1Z5"
+  }'
+```
+
+```javascript
+// Register Merchant Identity via Fetch API on Merchant API (Port 4002)
+const response = await fetch("http://localhost:4002/api/v1/merchant/register", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    merchantName: "Tanishq Flagship Enclave",
+    publicKeyHex: "9f8e7d6c5b4a3210fedcba9876543210fedcba9876543210fedcba9876543210",
+    razorpayAccountId: "acc_N0xMerchantGold99",
+    settlementSplitBps: 9800,
+    gstin: "27AAACG0123M1Z5",
+  }),
+});
+const merchant = await response.json();
+console.log("Registered DID:", merchant.merchantDid);
+```
+
+### Verification & Validation Rules
+- **Luhn Mod-36 GSTIN Check**: The 15-character Indian GSTIN is verified using the statutory Luhn Mod-36 checksum algorithm.
+- **Razorpay Route Account**: Linked accounts must match the pattern `acc_[A-Za-z0-9]+` for automated 2PC split transfers.
+
+---
+
+## 2. Multi-Channel Catalog Ingestion
+
+RazorAgent Mesh supports 4 ingestion adapters for populating and vectorizing merchant catalogs:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   CATALOG INGESTION & VECTOR PIPELINE                  │
+├───────────────────┬───────────────────┬────────────────────────────────┤
+│ Ingestion Channel │ Trigger / Format  │ Processing Pipeline            │
+├───────────────────┼───────────────────┼────────────────────────────────┤
+│ REST Single SKU   │ POST /catalog/sku │ Real-time sanitization & embed │
+│ CSV Batch Sync    │ Multipart Upload  │ 500-row chunked vectorization  │
+│ Shopify Webhooks  │ products/create   │ Automated payload transform    │
+│ ERP Delta Feed    │ JSON Polling Sync │ Idempotent versioned upserts   │
+└───────────────────┴───────────────────┴────────────────────────────────┘
+```
+
+### Multi-Tier Volume Discount Configuration
+Merchants can define tiered volume discount curves in Basis Points (1 BPS = 0.01%):
+
+```json
+{
+  "skuId": "sku_cotton_oxford_shirt",
+  "basePricePaise": 249900,
+  "volumeTiers": [
+    { "minQuantity": 3, "discountBps": 500 },
+    { "minQuantity": 10, "discountBps": 1000 },
+    { "minQuantity": 25, "discountBps": 1500 }
+  ]
+}
+```
+
+---
+
+## 3. Dynamic Bullion Spot Pricing (INV-05)
+
+For gold and silver precious metals, pricing is calculated dynamically from the live MCX Spot Oracle with a 5-second cache:
+
+> **Bullion Spot Formula:**  
+> `UnitPricePaise = ⌊(SpotPerGramPaise × PurityCarats) / 24⌋ × WeightGrams + MakingChargesPaise`
+
+```json
+{
+  "skuId": "sku_gold_chain_22k_10g",
+  "title": "22K Solid Yellow Gold Rope Chain (10g)",
+  "verticalDomain": "Jewelry",
+  "pricingEngine": "BULLION_DYNAMIC",
+  "weightGrams": 10.0,
+  "purityCarats": 22,
+  "makingChargesPaise": 450000,
+  "hsnCode": "7113"
+}
+```
+
+---
+
+## 4. Vertical Domain Facet Schema
+
+Catalogs support specialized industry facets with custom attribute normalization:
+
+| Industry Domain | Key Schema Attributes | Example Payload |
+|---|---|---|
+| **Jewelry** | Purity (`18K`/`22K`/`24K`), Weight (g), Making Charges | `{"purity": "22K", "weightGrams": 10.5}` |
+| **Apparel** | Size (`S`/`M`/`L`/`XL`), Color, Fabric, GSM | `{"size": "L", "fabric": "Cotton", "gsm": 220}` |
+| **Pharma** | Active Molecule, Schedule Class, Expiry Batch | `{"molecule": "Paracetamol", "dosage": "650mg"}` |
+| **FMCG** | Net Weight, Shelf Life, Organic Certification | `{"shelfLifeDays": 180, "organic": true}` |
+
+---
+
+## 5. Statutory HSN Chapter Resolution & Tax Rules (INV-04)
+
+Every SKU maps to an official Indian Harmonized System of Nomenclature (HSN) chapter:
+
+| HSN Code | Chapter Category | GST Rate | Statutory Split |
+|---|---|---|---|
+| **`7113`** | Gold & Precious Jewelry | **3.0%** | 1.5% CGST + 1.5% SGST (or 3.0% IGST) |
+| **`6109`** | Cotton & Knitted Apparel | **5.0%** | 2.5% CGST + 2.5% SGST (or 5.0% IGST) |
+| **`3004`** | Essential Pharmaceuticals | **5.0%** | 2.5% CGST + 2.5% SGST (or 5.0% IGST) |
+| **`8471`** | Computing & Electronics | **18.0%** | 9.0% CGST + 9.0% SGST (or 18.0% IGST) |

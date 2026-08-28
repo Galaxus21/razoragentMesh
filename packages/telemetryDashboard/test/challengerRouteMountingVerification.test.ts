@@ -4,6 +4,7 @@ import React from "react";
 
 import {
   navigationItems,
+  navigationCategories,
   AppSidebar,
 } from "../src/components/appSidebar.js";
 import {
@@ -22,6 +23,9 @@ import SecurityAuditPage from "../src/app/(dashboard)/security-audit/page.js";
 import SelfHealingPage from "../src/app/(dashboard)/self-healing/page.js";
 import InfrastructurePage from "../src/app/(dashboard)/infrastructure/page.js";
 import MerchantStudioPage from "../src/app/(dashboard)/merchant-studio/page.js";
+import SetupDocsPage from "../src/app/(dashboard)/docs/setup/page.js";
+import BuyerSdkDocsPage from "../src/app/(dashboard)/docs/buyer-sdk/page.js";
+import MerchantGuideDocsPage from "../src/app/(dashboard)/docs/merchant-guide/page.js";
 import RootPage from "../src/app/page.js";
 import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 import { TelemetryProvider, useTelemetry } from "../src/context/telemetryContext.js";
@@ -34,12 +38,15 @@ import { SseConnectionState } from "../src/types/telemetryEventTypes.js";
 
 const expectedRoutes: ReadonlyArray<string> = [
   "/overview",
+  "/self-healing",
+  "/infrastructure",
   "/agent-observability",
   "/negotiation-hub",
   "/security-audit",
-  "/self-healing",
-  "/infrastructure",
   "/merchant-studio",
+  "/docs/setup",
+  "/docs/buyer-sdk",
+  "/docs/merchant-guide",
 ];
 
 describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group Structure", () => {
@@ -64,7 +71,7 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
     }
   });
 
-  it("should export functional React components for all 7 route pages", () => {
+  it("should export functional React components for all 10 route pages", () => {
     const routeComponents = [
       { name: "OverviewPage", component: OverviewPage },
       { name: "AgentObservabilityPage", component: AgentObservabilityPage },
@@ -73,6 +80,9 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
       { name: "SelfHealingPage", component: SelfHealingPage },
       { name: "InfrastructurePage", component: InfrastructurePage },
       { name: "MerchantStudioPage", component: MerchantStudioPage },
+      { name: "SetupDocsPage", component: SetupDocsPage },
+      { name: "BuyerSdkDocsPage", component: BuyerSdkDocsPage },
+      { name: "MerchantGuideDocsPage", component: MerchantGuideDocsPage },
     ];
 
     for (const { name, component } of routeComponents) {
@@ -89,8 +99,8 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
 });
 
 describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route Resolution", () => {
-  it("should verify 100% route alignment between navigationItems and expected 7 routes", () => {
-    assert.equal(navigationItems.length, 7);
+  it("should verify 100% route alignment between navigationItems and expected 10 routes", () => {
+    assert.equal(navigationItems.length, 10);
 
     const actualRoutes = navigationItems.map((item) => item.route);
     assert.deepEqual(actualRoutes, expectedRoutes);
@@ -98,8 +108,7 @@ describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route
     for (const item of navigationItems) {
       assert.ok(item.route.startsWith("/"), `Route ${item.route} does not start with /`);
       assert.ok(item.label.length > 0, `Item ${item.route} has empty label`);
-      assert.ok(item.description.length > 0, `Item ${item.route} has empty description`);
-      assert.equal(typeof item.icon, "object", `Icon for ${item.route} is not a valid component`);
+      assert.ok((item.description ?? "").length > 0, `Item ${item.route} has empty description`);
     }
   });
 

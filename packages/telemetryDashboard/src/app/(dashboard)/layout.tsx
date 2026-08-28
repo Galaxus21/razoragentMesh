@@ -19,13 +19,13 @@ function DashboardShell({ children }: DashboardShellProps): React.JSX.Element {
   const telemetry = useTelemetry();
 
   return (
-    <div className="flex min-h-screen bg-bgBase text-textPrimary antialiased">
+    <div className="flex h-screen overflow-hidden bg-bgBase text-textPrimary antialiased">
       <AppSidebar
         isCollapsed={isCollapsed}
         onToggle={toggleSidebar}
         activeRoute={pathname}
       />
-      <div className="flex flex-1 flex-col min-w-0 min-h-screen">
+      <div className="flex flex-1 flex-col min-w-0 h-full overflow-hidden">
         <DashboardHeader
           connectionState={telemetry.connectionState}
           isConnected={telemetry.isConnected}

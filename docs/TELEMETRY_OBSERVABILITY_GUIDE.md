@@ -1,0 +1,731 @@
+# 📡 RazorAgent Mesh v2.0 — Real-Time Telemetry & Event Streaming Specification
+
+---
+
+## 1. Real-Time Telemetry Architecture
+
+The **RazorAgent Mesh v2.0** telemetry pipeline provides a high-throughput, low-latency asynchronous event streaming backbone for autonomous multi-agent commerce. It captures the entire lifecycle of multi-agent interactions across all protocol layers—including Model Context Protocol (MCP) JSON-RPC execution, Rubinstein-Ståhl bilateral bargaining concessions, sub-300ms vector semantic self-healing, AP2 cryptographic mandate signing, and 2-Phase Commit (2PC) multi-party settlements.
+
+### 1.1 Asynchronous Pub-Sub Architecture
+
+The telemetry pipeline operates on an asynchronous **Server-Sent Events (SSE)** publish-subscribe model implemented via Python's `asyncio` primitives in `mandateEngine/telemetryEmitter.py`.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                RAZORAGENT MESH DISTRIBUTED RUNTIME                               │
+│                                                                                                  │
+│   ┌─────────────────────┐    ┌─────────────────────┐    ┌────────────────────────────────────┐   │
+│   │   MCP Tool Server   │    │     x402 Gateway    │    │      Mandate Settlement Engine     │   │
+│   │   (Port 8001 / RPC) │    │  (Bargaining/Escrow)│    │      (AP2 2PC Enclave & Tax)       │   │
+│   └──────────┬──────────┘    └──────────┬──────────┘    └─────────────────┬──────────────────┘   │
+│              │                          │                                 │                      │
+│              │ emit(MCP_TOOL_CALL)      │ emit(BID_TURN_COMPLETED)        │ emit(MANDATE_SIGNED) │
+│              │ emit(MCP_TOOL_RESULT)    │ emit(NEGOTIATION_CONVERGED)     │ emit(PAYMENT_CAPTURED)│
+│              │                          │ emit(POW_CHALLENGE_SOLVED)      │ emit(ROUTE_ROLLBACK) │
+│              │                          │                                 │ emit(BUDGET_BLOCKED) │
+│              └──────────────────────────┼─────────────────────────────────┘                      │
+│                                         ▼                                                        │
+│                     ┌───────────────────────────────────────┐                                    │
+│                     │       TelemetryEventEmitter Engine    │                                    │
+│                     │  - Global Singleton Instance          │                                    │
+│                     │  - asyncio.Lock synchronization       │                                    │
+│                     │  - Client Queues: capacity = 500      │                                    │
+│                     │  - Heartbeat Generator: 15s interval  │                                    │
+│                     └───────────────────┬───────────────────┘                                    │
+└─────────────────────────────────────────┼────────────────────────────────────────────────────────┘
+                                          │
+                                          │ HTTP GET /api/v1/telemetry/stream
+                                          │ Content-Type: text/event-stream
+                                          ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                             CONSUMING CLIENTS & OBSERVABILITY AGENTS                             │
+│                                                                                                  │
+│   ┌──────────────────────────┐  ┌──────────────────────────┐  ┌──────────────────────────────┐   │
+│   │ Autonomous Auditor Bots  │  │ Enterprise SIEM Ingestion│  │ Resilient EventSource Clients│   │
+│   │ (Cryptographic Verifier) │  │ (Logstash / Prometheus)  │  │ (Exponential Backoff Stream) │   │
+│   └──────────────────────────┘  └──────────────────────────┘  └──────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.2 Core Operational & Architectural Invariants
+
+1. **Subscriber Queue Isolation & Capacity:** Every connected listener receives a dedicated `asyncio.Queue[str]` configured with a capacity of **500 event frames** (`defaultQueueCapacity = 500`).
+2. **Non-Blocking Ingestion & Backpressure Handling:** Event publishing executes via `put_nowait()`. If a client queue saturates because of slow network consumption, the server drops the stale queue rather than blocking the producer pipeline, preventing memory leakage and system degradation.
+3. **Heartbeat Keep-Alive Frame:** When no event traffic occurs within **15 seconds** (`heartbeatIntervalSeconds = 15`), the server emits an SSE comment heartbeat frame (`: heartbeat\n\n`) to preserve TCP socket persistence across load balancers, NAT gateways, and reverse proxies.
+4. **Resilient Client Auto-Reconnection:** Client consumers implement exponential backoff reconnection logic:
+   $$\text{reconnectDelayMs} = \min\left(10000, 1000 \times 1.5^{(\text{attempt} - 1)}\right)$$
+   Reconnection allows client consumers to recover automatically from transient socket resets without data loss.
+5. **Thread-Safe Mutex Lock:** Registration, unregistration, and broadcast dispatch across active subscriber queues are guarded by `asyncio.Lock()`.
+
+---
+
+## 2. Server-Sent Events (SSE) Streaming API Reference
+
+### 2.1 Live Event Stream Endpoint (`GET /api/v1/telemetry/stream`)
+
+Subscribes an HTTP client to the live telemetry event stream using standard HTTP/1.1 or HTTP/2 Server-Sent Events.
+
+```http
+GET /api/v1/telemetry/stream HTTP/1.1
+Host: localhost:8000
+Accept: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+```
+
+#### Response Headers
+
+```http
+HTTP/1.1 200 OK
+Content-Type: text/event-stream; charset=utf-8
+Cache-Control: no-cache
+Connection: keep-alive
+X-Accel-Buffering: no
+Access-Control-Allow-Origin: *
+```
+
+#### SSE Wire Format
+
+Telemetry events are serialized to JSON with compact key-value separators (`,`, `:`) and prefixed with `data: ` and terminated by `\n\n`:
+
+```text
+data: {"eventId":"evt_mcp_001","eventType":"MCP_TOOL_CALL","timestampMs":1724750001234,"sessionId":"ses_buyer_42","payload":{"toolName":"get_live_sku_quote","callId":"call_99","callerAgentId":"agent_claude_01","parameters":{"skuId":"SKU-CORP-DESK-01"}}}
+
+: heartbeat
+
+data: {"eventId":"evt_pay_002","eventType":"PAYMENT_CAPTURED","timestampMs":1724750015678,"sessionId":"ses_buyer_42","payload":{"paymentId":"pay_route_123456","orderId":"order_mesh_9988","amountPaise":475000,"currency":"INR","status":"captured","transfers":[{"transferId":"trf_01","recipientAccountId":"acc_merchant_29","amountPaise":465500,"feePaise":0},{"transferId":"trf_02","recipientAccountId":"acc_protocol_fee","amountPaise":9500,"feePaise":0}],"gstrInvoiceHash":"a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"}}
+```
+
+---
+
+### 2.2 Telemetry Event Ingestion (`POST /api/v1/telemetry/events`)
+
+Allows internal microservices, external agent gateways, or testing harnesses to ingest telemetry frames into the broadcast queue.
+
+```http
+POST /api/v1/telemetry/events HTTP/1.1
+Host: localhost:8000
+Content-Type: application/json
+
+{
+  "eventId": "evt_neg_8819",
+  "eventType": "NEGOTIATION_CONVERGED",
+  "timestampMs": 1724750020100,
+  "sessionId": "ses_buyer_42",
+  "payload": {
+    "finalAgreedUnitPricePaise": 380000,
+    "totalTurns": 3,
+    "totalGrossPaise": 380000,
+    "contractAstHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}
+```
+
+#### Response (HTTP 200 OK)
+
+```json
+{
+  "status": "published",
+  "eventId": "evt_neg_8819",
+  "subscribersDelivered": 3
+}
+```
+
+---
+
+### 2.3 Health & Liveness Verification Endpoint (`GET /health`)
+
+Returns real-time service health status, active SSE subscriber counts, and subsystem connection readiness.
+
+```http
+GET /health HTTP/1.1
+Host: localhost:8000
+```
+
+#### Response (HTTP 200 OK)
+
+```json
+{
+  "status": "healthy",
+  "timestamp": 1724750030,
+  "layers": 7,
+  "activeSseSubscribers": 4,
+  "services": {
+    "redis": "connected",
+    "qdrant": "connected",
+    "mandateEngine": "ready",
+    "x402Gateway": "ready"
+  }
+}
+```
+
+---
+
+### 2.4 Command-Line Telemetry Stream Inspection
+
+Developers and infrastructure engineers can consume and inspect the unbuffered live SSE feed directly from the command line using `curl`:
+
+```bash
+# Stream unbuffered live telemetry events from local mesh gateway
+curl -N http://localhost:8000/api/v1/telemetry/stream
+```
+
+Python client consumption script:
+
+```python
+import httpx
+import json
+
+async def monitorTelemetryStream():
+    url = "http://localhost:8000/api/v1/telemetry/stream"
+    async with httpx.AsyncClient(timeout=None) as client:
+        async with client.stream("GET", url) as response:
+            print("Connected to RazorAgent Mesh Telemetry Stream...")
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    rawJson = line[6:]
+                    event = json.loads(rawJson)
+                    print(f"[{event['eventType']}] EventId: {event['eventId']} | Session: {event['sessionId']}")
+```
+
+---
+
+## 3. The 12 Canonical Event Schema Specifications
+
+All telemetry events extend the base immutable envelope `BaseTelemetryEvent<TType, TPayload>` and map directly to Pydantic models on the backend and TypeScript interfaces on the client.
+
+```typescript
+export interface BaseTelemetryEvent<TType extends TelemetryEventType, TPayload> {
+  readonly eventId: string;
+  readonly eventType: TType;
+  readonly timestampMs: number;
+  readonly sessionId: string;
+  readonly payload: TPayload;
+}
+```
+
+---
+
+### 1. `MCP_TOOL_CALL`
+Emitted when an autonomous AI buyer agent invokes a merchant Model Context Protocol (MCP) JSON-RPC tool (`get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`).
+
+#### TypeScript Schema
+```typescript
+export interface McpToolCallPayload {
+  readonly toolName: "get_live_sku_quote" | "reserve_inventory_lock" | "verify_shipping_sla" | string;
+  readonly callId: string;
+  readonly callerAgentId: string;
+  readonly parameters: Record<string, unknown>;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_mcp_call_101",
+  "eventType": "MCP_TOOL_CALL",
+  "timestampMs": 1724750100000,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "toolName": "get_live_sku_quote",
+    "callId": "call_rpc_8841",
+    "callerAgentId": "agent_procure_claude",
+    "parameters": {
+      "skuId": "SKU-GOLD-COIN-10G",
+      "quantity": 2,
+      "pincode": "560001"
+    }
+  }
+}
+```
+
+---
+
+### 2. `MCP_TOOL_RESULT`
+Emitted upon completion of an MCP tool invocation, reporting the execution status, output data, and exact latency in milliseconds (`durationMs`).
+
+#### TypeScript Schema
+```typescript
+export interface McpToolResultPayload {
+  readonly toolName: string;
+  readonly callId: string;
+  readonly success: boolean;
+  readonly result: Record<string, unknown>;
+  readonly durationMs: number;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_mcp_res_102",
+  "eventType": "MCP_TOOL_RESULT",
+  "timestampMs": 1724750100142,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "toolName": "get_live_sku_quote",
+    "callId": "call_rpc_8841",
+    "success": true,
+    "durationMs": 142,
+    "result": {
+      "skuId": "SKU-GOLD-COIN-10G",
+      "unitPricePaise": 7250000,
+      "stockAvailable": 15,
+      "hsnCode": "7113",
+      "gstRatePercent": 3
+    }
+  }
+}
+```
+
+---
+
+### 3. `BID_TURN_COMPLETED`
+Emitted after each Rubinstein-Ståhl bargaining turn, capturing the buyer's bid, the seller's ask, the spread in paise, and the anti-spam micro-escrow fee burn (50 paise/turn).
+
+#### TypeScript Schema
+```typescript
+export interface BidTurnCompletedPayload {
+  readonly turnNumber: number;
+  readonly maxTurns: number;
+  readonly buyerBidPaise: number;
+  readonly sellerAskPaise: number;
+  readonly spreadPaise: number;
+  readonly microFeePaidPaise: number;
+  readonly cumulativeMicroFeesPaise: number;
+  readonly status: "IN_PROGRESS" | "CONVERGED" | "EXHAUSTED";
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_bid_turn_103",
+  "eventType": "BID_TURN_COMPLETED",
+  "timestampMs": 1724750102500,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "turnNumber": 2,
+    "maxTurns": 5,
+    "buyerBidPaise": 7100000,
+    "sellerAskPaise": 7200000,
+    "spreadPaise": 100000,
+    "microFeePaidPaise": 50,
+    "cumulativeMicroFeesPaise": 100,
+    "status": "IN_PROGRESS"
+  }
+}
+```
+
+---
+
+### 4. `NEGOTIATION_CONVERGED`
+Emitted when the buyer bid and seller ask reach mathematical equilibrium $(\text{spreadPaise} \le 0)$, binding the agreed unit price $P^*$ and compiling the RFC 8785 Abstract Syntax Tree (AST) contract hash.
+
+#### TypeScript Schema
+```typescript
+export interface NegotiationConvergedPayload {
+  readonly finalAgreedUnitPricePaise: number;
+  readonly totalTurns: number;
+  readonly totalGrossPaise: number;
+  readonly contractAstHash: string;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_neg_conv_104",
+  "eventType": "NEGOTIATION_CONVERGED",
+  "timestampMs": 1724750103800,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "finalAgreedUnitPricePaise": 7150000,
+    "totalTurns": 3,
+    "totalGrossPaise": 14300000,
+    "contractAstHash": "3f8b82c61f22e89d5b4a92c0182743818e97f014872658930472195047820542"
+  }
+}
+```
+
+---
+
+### 5. `MANDATE_SIGNED`
+Emitted during each step of the 4-phase AP2 mandate chain lifecycle ($M_I \to M_C \to M_E \to M_A$), broadcasting non-repudiable Ed25519 signatures, RFC 8785 Canonical JSON previews, and hash bindings.
+
+#### TypeScript Schema
+```typescript
+export type MandateKind = "INTENT" | "CART" | "EXECUTION" | "AMENDMENT";
+
+export interface MandateSignedPayload {
+  readonly mandateType: MandateKind;
+  readonly mandateHash: string;
+  readonly signerKeyDid: string;
+  readonly signatureHex: string;
+  readonly boundChainHash?: string;
+  readonly totalAmountPaise?: number;
+  readonly maxBudgetPaise?: number;
+  readonly canonicalJcsPreview?: string;
+  readonly verificationStatus?: "VALID" | "INVALID";
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_mandate_105",
+  "eventType": "MANDATE_SIGNED",
+  "timestampMs": 1724750104200,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "mandateType": "EXECUTION",
+    "mandateHash": "d8e8fca2dc0f896fd7cb4cb0031ba2490021c322b7a976ab9495813359d9972b",
+    "signerKeyDid": "did:razoragent:buyer:9f8a3c2b1e0d4f5a6b7c8d9e0f1a2b3c",
+    "signatureHex": "5a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a596877869",
+    "boundChainHash": "c1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2",
+    "totalAmountPaise": 14729000,
+    "maxBudgetPaise": 15000000,
+    "canonicalJcsPreview": "{\"cartHash\":\"c1a2...\",\"executionNonce\":\"non_9918\",\"intentHash\":\"b4f1...\"}",
+    "verificationStatus": "VALID"
+  }
+}
+```
+
+---
+
+### 6. `PAYMENT_CAPTURED`
+Emitted when 2-Phase Commit (2PC) settlement executes across Razorpay Route accounts, logging the 3-way conserved split transfers and the statutory GSTR-1 SHA-256 tax hash.
+
+#### TypeScript Schema
+```typescript
+export interface RouteTransferItem {
+  readonly transferId: string;
+  readonly recipientAccountId: string;
+  readonly amountPaise: number;
+  readonly feePaise: number;
+}
+
+export interface PaymentCapturedPayload {
+  readonly paymentId: string;
+  readonly orderId: string;
+  readonly amountPaise: number;
+  readonly currency: "INR";
+  readonly status: "captured";
+  readonly transfers: ReadonlyArray<RouteTransferItem>;
+  readonly gstrInvoiceHash: string;
+  readonly cgstPaise?: number;
+  readonly sgstPaise?: number;
+  readonly igstPaise?: number;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_pay_106",
+  "eventType": "PAYMENT_CAPTURED",
+  "timestampMs": 1724750105500,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "paymentId": "pay_live_route_992817",
+    "orderId": "order_mesh_44819",
+    "amountPaise": 14729000,
+    "currency": "INR",
+    "status": "captured",
+    "transfers": [
+      {
+        "transferId": "trf_merch_01",
+        "recipientAccountId": "acc_merchant_karnataka_29",
+        "amountPaise": 14434420,
+        "feePaise": 0
+      },
+      {
+        "transferId": "trf_proto_02",
+        "recipientAccountId": "acc_protocol_fee_mesh",
+        "amountPaise": 294580,
+        "feePaise": 0
+      }
+    ],
+    "gstrInvoiceHash": "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069",
+    "cgstPaise": 214500,
+    "sgstPaise": 214500,
+    "igstPaise": 0
+  }
+}
+```
+
+---
+
+### 7. `OOS_HEALED`
+Emitted when the Vector Healer intercepts an out-of-stock SKU and executes an Approximate Nearest Neighbor (ANN) substitution in Qdrant within the sub-300ms SLA.
+
+#### TypeScript Schema
+```typescript
+export interface OosHealedPayload {
+  readonly originalSkuId: string;
+  readonly substituteSkuId: string;
+  readonly cosineSimilarity: number;
+  readonly originalPricePaise: number;
+  readonly substitutePricePaise: number;
+  readonly priceDeltaPaise: number;
+  readonly healingDurationMs: number;
+  readonly patchedMandateHash: string;
+  readonly negativeConstraintsPassed?: boolean;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_heal_107",
+  "eventType": "OOS_HEALED",
+  "timestampMs": 1724750106100,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "originalSkuId": "SKU-COTTON-SHIRT-BLUE-L",
+    "substituteSkuId": "SKU-LINEN-SHIRT-NAVY-L",
+    "cosineSimilarity": 0.9142,
+    "originalPricePaise": 199900,
+    "substitutePricePaise": 219900,
+    "priceDeltaPaise": 20000,
+    "healingDurationMs": 184,
+    "patchedMandateHash": "8a7c6e5d4f3b2a1009887766554433221100ffeeddccbbaa9988776655443322",
+    "negativeConstraintsPassed": true
+  }
+}
+```
+
+---
+
+### 8. `BUDGET_BLOCKED`
+Emitted when an autonomous cart or execution mandate attempts to exceed the user's delegated spending cap, triggering a deterministic block with 0 external API calls made.
+
+#### TypeScript Schema
+```typescript
+export interface BudgetBlockedPayload {
+  readonly intentBudgetPaise: number;
+  readonly attemptedAmountPaise: number;
+  readonly deltaPaise: number;
+  readonly blockedReason: string;
+  readonly razorpayCallsCount: 0;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_blocked_108",
+  "eventType": "BUDGET_BLOCKED",
+  "timestampMs": 1724750107000,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "intentBudgetPaise": 1000000,
+    "attemptedAmountPaise": 1250000,
+    "deltaPaise": 250000,
+    "blockedReason": "Execution amount 1250000 paise exceeds maximum delegated intent budget 1000000 paise",
+    "razorpayCallsCount": 0
+  }
+}
+```
+
+---
+
+### 9. `POW_CHALLENGE_SOLVED`
+Emitted upon verification of an ingress SHA-256 Proof-of-Work challenge, proving computational commitment to mitigate Sybil attacks and API flooding.
+
+#### TypeScript Schema
+```typescript
+export interface PowChallengeSolvedPayload {
+  readonly challenge: string;
+  readonly nonce: number;
+  readonly hash: string;
+  readonly solveDurationMs: number;
+  readonly leadingZeros: number;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_pow_109",
+  "eventType": "POW_CHALLENGE_SOLVED",
+  "timestampMs": 1724750107500,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "challenge": "mesh_pow_challenge_9941a8",
+    "nonce": 491204,
+    "hash": "00003a8f9c1b2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e",
+    "solveDurationMs": 38,
+    "leadingZeros": 4
+  }
+}
+```
+
+---
+
+### 10. `INVENTORY_LOCKED`
+Emitted when Redis acquires an atomic inventory reservation lock with a monotonically increasing fencing token and Time-To-Live (TTL).
+
+#### TypeScript Schema
+```typescript
+export interface InventoryLockedPayload {
+  readonly skuId: string;
+  readonly quantityLocked: number;
+  readonly lockToken: string;
+  readonly fencingToken: number;
+  readonly ttlSeconds: number;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_lock_110",
+  "eventType": "INVENTORY_LOCKED",
+  "timestampMs": 1724750108000,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "skuId": "SKU-GOLD-COIN-10G",
+    "quantityLocked": 2,
+    "lockToken": "lock_res_8841029481",
+    "fencingToken": 10492,
+    "ttlSeconds": 300
+  }
+}
+```
+
+---
+
+### 11. `ROUTE_ROLLBACK_TRIGGERED`
+Emitted when a secondary transfer in a 2-Phase Commit settlement fails, triggering LIFO compensation reverse transfers to ensure transactional atomicity.
+
+#### TypeScript Schema
+```typescript
+export interface RouteRollbackTriggeredPayload {
+  readonly transferId: string;
+  readonly failureReason: string;
+  readonly compensationAction: "reverse_transfer";
+  readonly rollbackStatus: "COMPLETED" | "FAILED";
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_rollback_111",
+  "eventType": "ROUTE_ROLLBACK_TRIGGERED",
+  "timestampMs": 1724750109000,
+  "sessionId": "ses_procure_alpha",
+  "payload": {
+    "transferId": "trf_logistics_03",
+    "failureReason": "Razorpay Route linked account acc_logistics_invalid suspended",
+    "compensationAction": "reverse_transfer",
+    "rollbackStatus": "COMPLETED"
+  }
+}
+```
+
+---
+
+### 12. `HEARTBEAT`
+Emitted periodically every 15 seconds to maintain keep-alive persistence on the SSE streaming channel.
+
+#### TypeScript Schema
+```typescript
+export interface HeartbeatPayload {
+  readonly serverTimestampMs: number;
+  readonly activeSessionsCount: number;
+}
+```
+
+#### JSON Payload
+```json
+{
+  "eventId": "evt_hb_112",
+  "eventType": "HEARTBEAT",
+  "timestampMs": 1724750115000,
+  "sessionId": "global_mesh",
+  "payload": {
+    "serverTimestampMs": 1724750115000,
+    "activeSessionsCount": 4
+  }
+}
+```
+
+---
+
+## 4. Metric Computation Algorithms & Mathematical Formulations
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 CORE PROTOCOL METRIC ENGINE                                      │
+│                                                                                                  │
+│  1. Total Settled Volume:                                                                        │
+│     V_settled = ∑ amountPaise_i   (for all PAYMENT_CAPTURED events)                              │
+│                                                                                                  │
+│  2. Settlement Success Rate (SSR):                                                               │
+│     SSR = ( N_captured / N_initiated ) × 100%                                                    │
+│                                                                                                  │
+│  3. Negotiation Convergence Rate (NCR):                                                          │
+│     NCR = ( N_converged / N_sessions ) × 100%                                                    │
+│                                                                                                  │
+│  4. Mandate Cryptographic Integrity Rate (MIR):                                                  │
+│     MIR = ( N_valid / N_mandates ) × 100%                                                        │
+│                                                                                                  │
+│  5. Average Vector Healing Latency (L_avg):                                                      │
+│     L_avg = ( 1 / K ) ∑ healingDurationMs_i   (SLA Target: L_avg < 300ms)                        │
+│                                                                                                  │
+│  6. Self-Healing SLA Pass Rate (SPR):                                                            │
+│     SPR = ( ∑ [ healingDurationMs_i ≤ 300 ∧ constraintsPassed_i == true ] / K ) × 100%          │
+│                                                                                                  │
+│  7. Anti-Spam Micro-Escrow Burn (F_burn):                                                        │
+│     F_burn = N_turns × 50 paise                                                                  │
+│                                                                                                  │
+│  8. Conserved Route Split Conservation (INV-04):                                                 │
+│     amountPaise = merchantNetPaise + protocolFeePaise + logisticsAmountPaise                     │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 4.1 Mathematical Formulations
+
+#### Total Settled Volume ($V_{\text{settled}}$)
+Aggregates the total settled transaction value in integer paise across all `PAYMENT_CAPTURED` events:
+$$V_{\text{settled}} = \sum_{i=1}^{M} \text{amountPaise}_i$$
+
+#### Settlement Success Rate ($\text{SSR}$)
+Measures the reliability of 2PC multi-party transfers:
+$$\text{SSR} = \frac{N_{\text{captured}}}{N_{\text{initiated}}} \times 100\% = \frac{N_{\text{captured}}}{N_{\text{captured}} + N_{\text{rollback}}} \times 100\%$$
+
+#### Negotiation Convergence Rate ($\text{NCR}$)
+Quantifies the efficiency of bilateral Rubinstein-Ståhl bargaining turns reaching equilibrium within the maximum turn boundary ($T \le 5$):
+$$\text{NCR} = \frac{N_{\text{converged}}}{N_{\text{converged}} + N_{\text{exhausted}}} \times 100\%$$
+
+#### Average Vector Healing Latency ($\overline{L}_{\text{healing}}$)
+Calculates the mean duration in milliseconds for the Vector Healer to resolve an out-of-stock exception via Qdrant cosine similarity search:
+$$\overline{L}_{\text{healing}} = \frac{1}{K} \sum_{i=1}^{K} \text{healingDurationMs}_i \quad (\text{Target SLA} < 300\text{ms})$$
+
+#### Self-Healing SLA Pass Rate ($\text{SPR}$)
+Measures the percentage of vector substitutions that both complete under the 300ms deadline and satisfy 100% of negative constraints:
+$$\text{SPR} = \frac{\sum_{i=1}^{K} \mathbb{I}(\text{healingDurationMs}_i \le 300 \land \text{negativeConstraintsPassed}_i = \text{true})}{K} \times 100\%$$
+
+#### Micro-Escrow Anti-Spam Fee Accumulation
+Calculates the total non-refundable anti-spam burn collected across all completed bargaining turns:
+$$F_{\text{cumulative}} = \sum_{j=1}^{T} \text{microFeePaidPaise}_j = T \times 50\text{ paise}$$
+
+#### Conserved Route Settlement Invariant (INV-04)
+Ensures zero-loss conservation of funds across multi-party split transfers:
+$$\text{amountPaise} \equiv \text{merchantNetPaise} + \text{protocolFeePaise} + \text{logisticsAmountPaise}$$
+
+---
+
+## 5. Verification & Testing Reference
+
+Run the dedicated test suite verifying the telemetry emitter, SSE streaming async generator, subscriber queue management, and payload serialization:
+
+```bash
+# 1. Run Python telemetry emitter unit tests
+python -m pytest razoragentMesh/tests/testTelemetryEmitter.py -v
+
+# 2. Run full mandate engine test suite (including tax and telemetry)
+python -m pytest razoragentMesh/tests/unit/testMandatePatcherCore.py razoragentMesh/tests/unit/testMandatePatcherTax.py -v
+```
