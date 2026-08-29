@@ -79,9 +79,9 @@ To stop all services:
 docker compose down
 ```
 
-### 2. Run Test Suites & Invariant Benchmarks (1,545 Tests)
+### 2. Run Test Suites & Invariant Benchmarks (1,564 Tests)
 ```bash
-# Python Backend Core & Python Buyer SDK (1,212 tests)
+# Python Backend Core & Python Buyer SDK (1,231 tests)
 python -m pytest tests/ packages/buyerSdkPy/tests/ -q --tb=short
 
 # MCP Server Discovery Tools (112 tests)

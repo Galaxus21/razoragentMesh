@@ -4,7 +4,7 @@
 > **Hackathon Track:** Track 01 — AI Growth & Agentic Commerce (Razorpay AI Buildathon 2026)  
 > **Author:** Shubham Verma  
 > **Target Program:** Razorpay AI Builder Internship (Bangalore HQ)  
-> **Status:** Production Hardened (Version 2.0) | 1,545 / 1,545 Tests Passing (100% Green)  
+> **Status:** Production Hardened (Version 2.0) | 1,564 / 1,564 Tests Passing (100% Green)  
 
 ---
 
@@ -25,7 +25,7 @@
    - [6.2 Deep Dive into the 7 Dashboard Routes](#62-deep-dive-into-the-7-dashboard-routes)
 7. [How to Run, Test, and Interact with the Codebase](#7-how-to-run-test-and-interact-with-the-codebase)
    - [7.1 Quickstart with Docker Compose](#71-quickstart-with-docker-compose)
-   - [7.2 Running the Full 1,545 Test Matrix](#72-running-the-full-1545-test-matrix)
+   - [7.2 Running the Full 1,564 Test Matrix](#72-running-the-full-1564-test-matrix)
    - [7.3 Executing the 10 Adversarial Benchmark Scenarios (TC-01 to TC-10)](#73-executing-the-10-adversarial-benchmark-scenarios-tc-01-to-tc-10)
    - [7.4 Direct API & Tool Interaction (Curl & SDK Examples)](#74-direct-api--tool-interaction-curl--sdk-examples)
 8. [Master Presentation & Interview Playbook](#8-master-presentation--interview-playbook)
@@ -385,11 +385,11 @@ docker compose down
 
 ---
 
-### 7.2 Running the Full 1,545 Test Matrix
-The codebase features a production-hardened test suite of **1,545 tests** with **100% pass rate**:
+### 7.2 Running the Full 1,564 Test Matrix
+The codebase features a production-hardened test suite of **1,564 tests** with **100% pass rate**:
 
 ```powershell
-# 1. Python Backend & Python Buyer SDK (1,212 tests)
+# 1. Python Backend & Python Buyer SDK (1,231 tests)
 python -m pytest tests/ packages/buyerSdkPy/tests/ -q --tb=short
 
 # 2. MCP Discovery Server Tools (112 tests)
@@ -549,8 +549,8 @@ console.log(`Payment Captured: ${settlement.paymentId}`);
 - **Script:** *"To comply with RBI guidelines without manual OTPs for every turn, we implement Google AP2 over NPCI UPI Circle Mode 2. The human authorizes a delegated spending cap; the merchant signs a Cart Mandate; the buyer agent signs an Execution Mandate with Ed25519 keys. The settlement executes over Razorpay Route, instantly capturing payment, executing 3-way splits, and generating GSTR-compliant invoice breakdowns in under 800ms."*
 
 #### Scene 5: Hiring Pitch & Close `[4:15 - 5:00]`
-- **Visual:** Candidate webcam with GitHub repo stats (1,545 tests passing 100%) and architecture blueprint.
-- **Script:** *"RazorAgent Mesh directly expands Merchant GMV, lifts checkout conversion, and captures Agentic Payment Volume on Razorpay rails. Built with strict typing, integer-paise determinism, and 1,545 automated tests. I am Shubham Verma, and I'm ready on Day 1 to help Razorpay pioneer the agentic economy. Thank you!"*
+- **Visual:** Candidate webcam with GitHub repo stats (1,564 tests passing 100%) and architecture blueprint.
+- **Script:** *"RazorAgent Mesh directly expands Merchant GMV, lifts checkout conversion, and captures Agentic Payment Volume on Razorpay rails. Built with strict typing, integer-paise determinism, and 1,564 automated tests. I am Shubham Verma, and I'm ready on Day 1 to help Razorpay pioneer the agentic economy. Thank you!"*
 
 ---
 
@@ -561,7 +561,7 @@ Today's checkouts require human eyes and SMS OTPs. When AI procurement agents bu
 2. **B2B Dynamic Negotiation** via HTTP 402-INR, micro-metered at ₹0.50 per turn to kill spam, converging contracts over a Rubinstein-Ståhl state machine in $<1.5\text{s}$.
 3. **Sub-300ms Vector Self-Healing** using Qdrant ANN and FastEmbed to substitute out-of-stock items while strictly respecting allergen and brand negative constraints.
 4. **Cryptographic Settlement** using Google AP2 mandates over NPCI UPI Circle Mode 2, with strict integer-paise arithmetic, 2PC Razorpay Route split transfers, and GSTR-1 tax invoicing.
-The entire system is production-hardened with 1,545 tests passing at 100% and a real-time Google Stitch Telemetry Dashboard. I'm ready to bring this architecture to Razorpay Bangalore HQ!"*
+The entire system is production-hardened with 1,564 tests passing at 100% and a real-time Google Stitch Telemetry Dashboard. I'm ready to bring this architecture to Razorpay Bangalore HQ!"*
 
 ---
 
@@ -586,7 +586,7 @@ The entire system is production-hardened with 1,545 tests passing at 100% and a 
 
 ## 🏆 Summary Checklist for Demo & Submission
 - [x] Docker Compose stack verified (`docker compose up --build`)
-- [x] 1,545 / 1,545 tests passing across all 5 test runners (100% green)
+- [x] 1,564 / 1,564 tests passing across all 5 test runners (100% green)
 - [x] 10 / 10 adversarial benchmarks passing (`testTc01` to `testTc10`)
 - [x] Google Stitch Telemetry Dashboard verified across all 7 routes
 - [x] Merchant SKU Studio tested with volume tiers, bullion formulas, and 4 vertical facets
