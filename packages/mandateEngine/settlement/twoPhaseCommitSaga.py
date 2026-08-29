@@ -1,5 +1,6 @@
 """Two-Phase Commit (2PC) state machine logic with rollback compensation."""
 
+import logging
 import time
 from typing import TYPE_CHECKING, Optional
 
@@ -32,6 +33,8 @@ from .settlementExceptions import (
     SettlementCompensationTriggeredException,
 )
 from .splitManifestBuilder import SplitTransferManifest
+
+logger = logging.getLogger(__name__)
 
 # Must stay in sync with CompensationDlq's key format (compensationDlq.py) -- see
 # _buildReversalIdempotencyKey for why the two paths must agree.
@@ -105,8 +108,11 @@ class TwoPhaseCommitSaga:
                 try:
                     if await effectiveDlq.isAlreadyCompensated(completedTransfer.id):
                         continue
-                except Exception:
-                    pass
+                except Exception as lookupErr:
+                    logger.warning(
+                        "DLQ compensated-check unavailable for %s (%s); proceeding with reversal",
+                        completedTransfer.id, lookupErr,
+                    )
 
             try:
                 reversalRes = await self._routeClient.reverseTransfer(
@@ -121,8 +127,12 @@ class TwoPhaseCommitSaga:
                 if effectiveDlq is not None:
                     try:
                         await effectiveDlq.markCompensated(completedTransfer.id, reversalId=reversalRes.id)
-                    except Exception:
-                        pass
+                    except Exception as markErr:
+                        logger.warning(
+                            "Reversal %s succeeded but could not be marked compensated (%s); "
+                            "a later retry will be deduplicated by idempotency key",
+                            completedTransfer.id, markErr,
+                        )
                 reversals.append(reversalRes)
             except Exception as revErr:
                 if effectiveDlq is not None:
@@ -139,8 +149,17 @@ class TwoPhaseCommitSaga:
                                 "failureReason": failureReason,
                             },
                         )
-                    except Exception:
-                        pass
+                    except Exception as dlqErr:
+                        # Last line of defence: the DLQ is what guarantees a failed reversal is
+                        # eventually retried. If its enqueue also fails, the reversal is lost
+                        # entirely -- money stayed moved with no record. Never swallow this.
+                        logger.error(
+                            "2PC compensation LOST: transfer %s (%s paise to %s) failed reversal "
+                            "(%s) AND could not be enqueued to the DLQ (%s). Manual reconciliation "
+                            "required.",
+                            completedTransfer.id, completedTransfer.amount,
+                            completedTransfer.account, revErr, dlqErr,
+                        )
                 reversals.append(None)
 
         return reversals
