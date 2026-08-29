@@ -1,0 +1,18 @@
+{
+  "description": "Canonical GST vectors consumed by both the Python and TypeScript test suites, so the two languages cannot silently diverge on statutory tax math.",
+  "rule": "intra-state: cgst = sgst = floor(taxablePaise * ratePercent * 100 / 20000); total = cgst + sgst. inter-state: igst = floor(taxablePaise * ratePercent * 100 / 10000); total = igst.",
+  "vectors": [
+    { "taxablePaise": 100000, "ratePercent": 5, "intraState": true, "cgstPaise": 2500, "sgstPaise": 2500, "igstPaise": 0, "totalTaxPaise": 5000 },
+    { "taxablePaise": 100030, "ratePercent": 5, "intraState": true, "cgstPaise": 2500, "sgstPaise": 2500, "igstPaise": 0, "totalTaxPaise": 5000 },
+    { "taxablePaise": 100000, "ratePercent": 12, "intraState": true, "cgstPaise": 6000, "sgstPaise": 6000, "igstPaise": 0, "totalTaxPaise": 12000 },
+    { "taxablePaise": 100000, "ratePercent": 18, "intraState": true, "cgstPaise": 9000, "sgstPaise": 9000, "igstPaise": 0, "totalTaxPaise": 18000 },
+    { "taxablePaise": 100000, "ratePercent": 28, "intraState": true, "cgstPaise": 14000, "sgstPaise": 14000, "igstPaise": 0, "totalTaxPaise": 28000 },
+    { "taxablePaise": 100000, "ratePercent": 18, "intraState": false, "cgstPaise": 0, "sgstPaise": 0, "igstPaise": 18000, "totalTaxPaise": 18000 },
+    { "taxablePaise": 99999, "ratePercent": 5, "intraState": true, "cgstPaise": 2499, "sgstPaise": 2499, "igstPaise": 0, "totalTaxPaise": 4998 },
+    { "taxablePaise": 1, "ratePercent": 5, "intraState": true, "cgstPaise": 0, "sgstPaise": 0, "igstPaise": 0, "totalTaxPaise": 0 },
+    { "taxablePaise": 0, "ratePercent": 18, "intraState": true, "cgstPaise": 0, "sgstPaise": 0, "igstPaise": 0, "totalTaxPaise": 0 },
+    { "taxablePaise": 33333, "ratePercent": 5, "intraState": true, "cgstPaise": 833, "sgstPaise": 833, "igstPaise": 0, "totalTaxPaise": 1666 },
+    { "taxablePaise": 101, "ratePercent": 5, "intraState": true, "cgstPaise": 2, "sgstPaise": 2, "igstPaise": 0, "totalTaxPaise": 4 },
+    { "taxablePaise": 5000000, "ratePercent": 3, "intraState": true, "cgstPaise": 75000, "sgstPaise": 75000, "igstPaise": 0, "totalTaxPaise": 150000 }
+  ]
+}

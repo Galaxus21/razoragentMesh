@@ -90,23 +90,24 @@ class TestZeroFloatingPointDrift:
         """Fuzzes odd taxable amounts across all standard GST tax rates (0, 5, 12, 18, 28%)."""
         for scenario in getCanonicalOddPaiseScenarios():
             gst = computeGstBreakdown(scenario.taxablePaise, scenario.gstRatePercent, isIntraState=scenario.isIntraState)
-            assert gst["cgstPaise"] == scenario.expectedCgstPaise
-            assert gst["sgstPaise"] == scenario.expectedSgstPaise
-            assert gst["igstPaise"] == scenario.expectedIgstPaise
-            assert gst["totalTaxPaise"] == scenario.expectedTotalTaxPaise
-            assert gst["cgstPaise"] + gst["sgstPaise"] + gst["igstPaise"] == gst["totalTaxPaise"]
+            assert gst.cgstPaise == scenario.expectedCgstPaise
+            assert gst.sgstPaise == scenario.expectedSgstPaise
+            assert gst.igstPaise == scenario.expectedIgstPaise
+            assert gst.totalTaxPaise == scenario.expectedTotalTaxPaise
+            assert gst.cgstPaise + gst.sgstPaise + gst.igstPaise == gst.totalTaxPaise
 
         rates = [0, 5, 12, 18, 28]
         oddAmounts = [1, 2, 3, 7, 13, 99, 101, 103, 333, 999, 1976501, 10000000007]
         for amt in oddAmounts:
             for rate in rates:
                 gstIntra = computeGstBreakdown(amt, rate, isIntraState=True)
-                assert gstIntra["cgstPaise"] + gstIntra["sgstPaise"] == gstIntra["totalTaxPaise"]
-                assert gstIntra["totalTaxPaise"] == (amt * rate) // 100
+                assert gstIntra.cgstPaise == gstIntra.sgstPaise
+                assert gstIntra.cgstPaise + gstIntra.sgstPaise == gstIntra.totalTaxPaise
+                assert gstIntra.totalTaxPaise == 2 * ((amt * rate) // 200)
 
                 gstInter = computeGstBreakdown(amt, rate, isIntraState=False)
-                assert gstInter["igstPaise"] == gstInter["totalTaxPaise"]
-                assert gstInter["totalTaxPaise"] == (amt * rate) // 100
+                assert gstInter.igstPaise == gstInter.totalTaxPaise
+                assert gstInter.totalTaxPaise == (amt * rate) // 100
 
     def testTcsWithholdingIntraAndInterState(self) -> None:
         """Asserts TCS withholding computation exactness (0.5% + 0.5% intra, 1.0% inter)."""

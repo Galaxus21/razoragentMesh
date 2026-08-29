@@ -42,26 +42,27 @@ def testComputeGstBreakdownIntraState() -> None:
     """Verifies intra-state 50/50 split with zero penny loss floor division."""
     # 100 paise at 18% GST -> 18 paise total -> CGST 9, SGST 9, IGST 0
     res = computeGstBreakdown(100, 18, isIntraState=True)
-    assert res["totalTaxPaise"] == 18
-    assert res["cgstPaise"] == 9
-    assert res["sgstPaise"] == 9
-    assert res["igstPaise"] == 0
+    assert res.totalTaxPaise == 18
+    assert res.cgstPaise == 9
+    assert res.sgstPaise == 9
+    assert res.igstPaise == 0
 
-    # Odd amount test: 101 paise at 5% GST -> total = (101 * 5)//100 = 5 paise
-    # CGST (2% rate) = (101 * 2)//100 = 2 paise, SGST = 5 - 2 = 3 paise (conservation of paise)
+    # Odd amount test: 101 paise at 5% GST -> CGST and SGST are each the 2.5% half-rate:
+    # (101 * 250)//20000 = 2 paise, applied identically -> total = 4 paise.
     oddRes = computeGstBreakdown(101, 5, isIntraState=True)
-    assert oddRes["totalTaxPaise"] == 5
-    assert oddRes["cgstPaise"] + oddRes["sgstPaise"] == oddRes["totalTaxPaise"]
-    assert oddRes["igstPaise"] == 0
+    assert oddRes.totalTaxPaise == 4
+    assert oddRes.cgstPaise == oddRes.sgstPaise == 2
+    assert oddRes.cgstPaise + oddRes.sgstPaise == oddRes.totalTaxPaise
+    assert oddRes.igstPaise == 0
 
 
 def testComputeGstBreakdownInterState() -> None:
     """Verifies inter-state 100% IGST application."""
     res = computeGstBreakdown(10000, 18, isIntraState=False)
-    assert res["totalTaxPaise"] == 1800
-    assert res["cgstPaise"] == 0
-    assert res["sgstPaise"] == 0
-    assert res["igstPaise"] == 1800
+    assert res.totalTaxPaise == 1800
+    assert res.cgstPaise == 0
+    assert res.sgstPaise == 0
+    assert res.igstPaise == 1800
 
 
 def testComputeTcsWithholding() -> None:

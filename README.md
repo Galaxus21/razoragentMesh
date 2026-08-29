@@ -22,15 +22,15 @@ As autonomous AI agents (enterprise procurement bots, ERP replenishment loops, a
 │ Layer 2: Negotiation    │ Fiat-Native HTTP 402-INR Micro-Metering + AST Contract State Mach │
 │ Layer 3: Resilience     │ Sub-300ms Vector Similarity (Qdrant) + Negative Constraint Filter │
 │ Layer 4: Settlement     │ Google AP2 Mandates + NPCI UPI Circle + Razorpay Route Split Rails │
-│ Layer 5: Telemetry      │ Real-Time SSE Stream + 5-Panel React/Next.js Live Dashboard       │
+│ Layer 5: Telemetry      │ Real-Time SSE Stream + 13-Route React/Next.js Live Dashboard      │
 └─────────────────────────┴───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. 10-Scenario Adversarial Benchmark Matrix
+## 2. Adversarial Benchmark Matrix (TC-01 → TC-25)
 
-All 10 benchmark scenarios are implemented under `tests/benchmarkHarness/` with genuine cryptographic and mathematical invariants:
+The 10 core protocol scenarios below are implemented under `tests/benchmarkHarness/` with genuine cryptographic and mathematical invariants. Protocol hardening extended the matrix to **TC-25** (ingestion & normalization, bullion & dynamic pricing, Smart Wait & temporal alerts) — see [`GUIDE.md`](./GUIDE.md) for the full mapping:
 
 | Test ID | Scenario Name | Invariants Verified | Assertions & Expected Outcome |
 | :--- | :--- | :--- | :--- |
@@ -74,9 +74,9 @@ To stop all services:
 docker compose down
 ```
 
-### 2. Run Test Suites & Invariant Benchmarks (1,497 Tests)
+### 2. Run Test Suites & Invariant Benchmarks (1,545 Tests)
 ```bash
-# Python Backend Core & Python Buyer SDK (1,241 tests)
+# Python Backend Core & Python Buyer SDK (1,212 tests)
 python -m pytest tests/ packages/buyerSdkPy/tests/ -q --tb=short
 
 # MCP Server Discovery Tools (112 tests)
@@ -85,9 +85,29 @@ Push-Location packages/mcpServer; npm test; Pop-Location
 # TypeScript Buyer SDK (91 tests)
 Push-Location packages/buyerSdkTs; npm test; Pop-Location
 
-# Telemetry Dashboard & SKU Studio (53 tests)
+# Telemetry Dashboard & SKU Studio (130 tests)
 Push-Location packages/telemetryDashboard; npm test; Pop-Location
 ```
+
+---
+
+## 3.1 Documentation Index
+
+Technical documentation lives in [`packages/telemetryDashboard/docs/`](./packages/telemetryDashboard/docs/)
+and is rendered live by the dashboard at `/docs/*`. It is co-located with the service that serves it,
+so the Docker build context stays self-contained.
+
+| Document | Live route | Scope |
+|---|---|---|
+| [`SETUP_GUIDE.md`](./packages/telemetryDashboard/docs/SETUP_GUIDE.md) | `/docs/setup` | Environment, container topology, and local setup |
+| [`DEVELOPER_ONBOARDING_GUIDE.md`](./packages/telemetryDashboard/docs/DEVELOPER_ONBOARDING_GUIDE.md) | `/docs/onboarding` | Full protocol topology, merchant onboarding, and buyer-agent lifecycle in TS and Python |
+| [`BUYER_AGENT_SDK_GUIDE.md`](./packages/telemetryDashboard/docs/BUYER_AGENT_SDK_GUIDE.md) | `/docs/buyer-sdk` | AI buyer agent SDK and AP2 protocol |
+| [`MERCHANT_ONBOARDING_GUIDE.md`](./packages/telemetryDashboard/docs/MERCHANT_ONBOARDING_GUIDE.md) | `/docs/merchant-guide` | Merchant onboarding and the universal SKU Studio |
+| [`TELEMETRY_OBSERVABILITY_GUIDE.md`](./packages/telemetryDashboard/docs/TELEMETRY_OBSERVABILITY_GUIDE.md) | `/docs/telemetry` | SSE streaming architecture, KPIs, and the 12 canonical event schemas |
+| [`GSTR1_INVOICE_SPECIFICATION.md`](./packages/telemetryDashboard/docs/GSTR1_INVOICE_SPECIFICATION.md) | `/docs/gstr1-invoice` | Statutory GST compliance, integer-paise arithmetic, JCS audit digest |
+
+Architecture and presentation material: [`GUIDE.md`](./GUIDE.md). Completed milestone log:
+[`PROJECT.md`](./PROJECT.md).
 
 ---
 

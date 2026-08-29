@@ -109,11 +109,13 @@ def testGstPennyConservationFuzz() -> None:
         rate = random.choice(rates)
         for isIntra in [True, False]:
             breakdown = computeGstBreakdown(subtotalPaise, rate, isIntra)
-            cgst, sgst, igst = breakdown["cgstPaise"], breakdown["sgstPaise"], breakdown["igstPaise"]
-            totalTax = breakdown["totalTaxPaise"]
+            cgst, sgst, igst = breakdown.cgstPaise, breakdown.sgstPaise, breakdown.igstPaise
+            totalTax = breakdown.totalTaxPaise
             assert totalTax == cgst + sgst + igst
             if isIntra:
-                assert igst == 0 and (cgst + sgst == totalTax) and (sgst >= cgst)
+                # cgst and sgst are computed via the identical half-rate expression, so
+                # they are exactly equal, not merely sgst >= cgst.
+                assert igst == 0 and (cgst + sgst == totalTax) and (sgst == cgst)
             else:
                 assert cgst == 0 and sgst == 0 and (igst == totalTax)
 

@@ -112,14 +112,14 @@ def compileCommercialContractAst(
     """Compiles negotiated terms into immutable AST and computes canonical JCS SHA-256 hash."""
     taxable = computeLineItemTotal(agreedUnitPrice, quantity)
     gst = computeGstBreakdown(taxable, gstRatePercent, isIntraState=True)
-    gross = computeCartSettlementTotal(taxable, gst["totalTaxPaise"])
+    gross = computeCartSettlementTotal(taxable, gst.totalTaxPaise)
 
     ast = CommercialContractAst(
         skuId=skuId,
         quantity=quantity,
         agreedUnitPricePaise=agreedUnitPrice,
         taxableSubtotalPaise=taxable,
-        totalTaxPaise=gst["totalTaxPaise"],
+        totalTaxPaise=gst.totalTaxPaise,
         totalGrossPaise=gross,
         settlementTurns=turns,
         buyerAgentDid=buyerDid,

@@ -53,6 +53,34 @@ class CategoryNotAuthorizedException(MandateEngineException):
     """Raised when an item category is not present in delegated authorization list."""
 
 
+class UnauthorizedAgentException(MandateEngineException):
+    """Raised when the agent that signed the ExecutionMandate is not the agent the user
+    delegated authority to in the IntentMandate.
+
+    Without this check the delegation is decorative: the verifying key is derived from the DID
+    carried inside the mandate itself, so any agent's own signature validates and any observer
+    of a signed IntentMandate could spend against it.
+    """
+
+
+class CumulativeBudgetExceededException(MandateEngineException):
+    """Raised when cumulative spend recorded against an IntentMandate would exceed its
+    maxBudgetPaise ceiling, as distinct from a single transaction exceeding it."""
+
+
+class CartAlreadySettledException(MandateEngineException):
+    """Raised when a CartMandate that has already been settled is presented again.
+
+    The nonce ledger only prevents replaying an identical ExecutionMandate; without this
+    guard a buyer can mint a fresh ExecutionMandate (new nonce) against the same signed cart
+    and settle it repeatedly.
+    """
+
+
+class InventoryLockExpiredException(MandateEngineException):
+    """Raised when settlement is attempted after the cart's inventory reservation has lapsed."""
+
+
 class SingleTransactionLimitExceededException(MandateEngineException):
     """Raised when transaction amount exceeds delegated single transaction limit."""
 

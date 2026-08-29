@@ -21,8 +21,20 @@ idPrefixDelivery: str = "del_"
 httpStatusOkMin: int = 200
 httpStatusOkMax: int = 300
 
+# Callback URL SSRF Guard
+requiredCallbackScheme: str = "https"
+devModeCallbackScheme: str = "http"
+devModeCallbackHost: str = "localhost"
+# Dedicated opt-in flag (not the app-wide ENVIRONMENT var, whose own default is
+# "development") so the HTTPS requirement stays on by default in every deployment,
+# including this one, unless someone deliberately enables it for a local demo.
+allowLocalhostCallbackEnvVar: str = "ALLOW_LOCALHOST_CALLBACK"
+
 __all__ = [
+    "allowLocalhostCallbackEnvVar",
     "defaultWebhookTimeoutSeconds",
+    "devModeCallbackHost",
+    "devModeCallbackScheme",
     "eventPriceDropTriggered",
     "headerMeshDeliveryId",
     "headerMeshEvent",
@@ -35,6 +47,7 @@ __all__ = [
     "minTtlSeconds",
     "redisAlertLookupPrefix",
     "redisAlertPriceDropPrefix",
+    "requiredCallbackScheme",
     "statusAlertActive",
     "statusAlertCancelled",
     "statusDispatchFailed",

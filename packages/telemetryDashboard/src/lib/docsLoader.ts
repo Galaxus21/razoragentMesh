@@ -10,7 +10,7 @@ export interface DocContent {
 
 const docFilenameMap: Readonly<Record<string, string>> = {
   setup: "SETUP_GUIDE.md",
-  onboarding: "SETUP_GUIDE.md",
+  onboarding: "DEVELOPER_ONBOARDING_GUIDE.md",
   "buyer-sdk": "BUYER_AGENT_SDK_GUIDE.md",
   "merchant-guide": "MERCHANT_ONBOARDING_GUIDE.md",
   telemetry: "TELEMETRY_OBSERVABILITY_GUIDE.md",
@@ -19,20 +19,20 @@ const docFilenameMap: Readonly<Record<string, string>> = {
 
 const defaultTitleMap: Readonly<Record<string, string>> = {
   setup: "System Setup & Environment Architecture",
-  onboarding: "System Setup & Environment Architecture",
+  onboarding: "Developer Onboarding & Integration Guide",
   "buyer-sdk": "AI Buyer Agent SDK & AP2 Protocol Guide",
   "merchant-guide": "Merchant Onboarding & Universal SKU Studio",
   telemetry: "Telemetry & SSE Observability Guide",
   "gstr1-invoice": "GSTR-1 Statutory Tax Invoicing Specification",
 };
 
+// Package-local only: documentation rendered by this service must live inside the service
+// directory. Parent-traversal lookups (`../docs`) break Docker build-context isolation.
 function resolveDocsDirectory(): string {
   const currentWorkingDir = process.cwd();
   const candidatePaths = [
     path.resolve(currentWorkingDir, "docs"),
     path.resolve(currentWorkingDir, "src/docs"),
-    path.resolve(currentWorkingDir, "../../docs"),
-    path.resolve(currentWorkingDir, "../docs"),
   ];
 
   for (const candidate of candidatePaths) {

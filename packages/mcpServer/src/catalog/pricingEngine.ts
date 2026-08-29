@@ -1,7 +1,7 @@
 import {
   bpsDivisor,
   percentDivisor,
-  halfGstDivisor,
+  intraStateHalfBpsDivisor,
   millisPerSecond,
   discountTypeVolumeTier,
   discountTypeCampaign,
@@ -103,9 +103,11 @@ export function calculateGstBreakdown(
   }
   const isIntraState = merchantState.trim().toUpperCase() === buyerState.trim().toUpperCase();
   if (isIntraState) {
-    const halfRateBps = Math.floor((gstRatePercent * percentDivisor) / halfGstDivisor);
-    const cgstPaise = Math.floor((taxableAmountPaise * halfRateBps) / bpsDivisor);
-    const sgstPaise = Math.floor((taxableAmountPaise * halfRateBps) / bpsDivisor);
+    const rateBps = gstRatePercent * percentDivisor;
+    // CGST and SGST are the same levy at half the combined rate, computed with the
+    // same expression, so they are equal by construction rather than by coincidence.
+    const cgstPaise = Math.floor((taxableAmountPaise * rateBps) / intraStateHalfBpsDivisor);
+    const sgstPaise = cgstPaise;
     return { cgstPaise, sgstPaise, igstPaise: zeroPaise, totalTaxPaise: cgstPaise + sgstPaise };
   }
   const rateBps = Math.floor(gstRatePercent * percentDivisor);

@@ -1,7 +1,10 @@
 """Cross-SDK Empirical Compatibility & Adversarial Invariant Test: TypeScript buyerSdkTs <-> Python."""
 
 import json
+import os
 import subprocess
+from pathlib import Path
+
 import pytest
 from razoragentMesh.packages.buyerSdkPy.razoragent_buyer_sdk.agentKeyManager import (
     AgentKeyManager as PyAgentKeyManager,
@@ -24,16 +27,23 @@ from razoragentMesh.packages.buyerSdkPy.razoragent_buyer_sdk.powSolver import (
     verifyPoWSolution as pyVerifyPoWSolution,
 )
 from razoragentMesh.packages.mandateEngine.crypto.ed25519Verifier import Ed25519Verifier as PyEd25519Verifier
+from razoragentMesh.packages.mandateEngine.verification.arithmeticEnclave import computeGstBreakdown
+
+_fixturesDir = Path(__file__).parent / "fixtures"
 
 
-def _runNodeScript(script: str) -> str:
-    """Executes a Node.js ES module script in buyerSdkTs directory via stdin to preserve UTF-8."""
-    import os
-    targetCwd = "packages/buyerSdkTs" if os.path.isdir("packages/buyerSdkTs") else "razoragentMesh/packages/buyerSdkTs"
+def _resolvePackageCwd(packageName: str) -> str:
+    """Locates a workspace package directory relative to either the repo root or its parent."""
+    relative = f"packages/{packageName}"
+    return relative if os.path.isdir(relative) else f"razoragentMesh/{relative}"
+
+
+def _runNodeScript(script: str, package: str = "buyerSdkTs") -> str:
+    """Executes a Node.js ES module script inside the given package directory via stdin, to preserve UTF-8."""
     res = subprocess.run(
         ["node", "--import", "tsx", "--input-type=module"],
         input=script.encode("utf-8"),
-        cwd=targetCwd,
+        cwd=_resolvePackageCwd(package),
         capture_output=True,
         check=False,
     )
@@ -94,12 +104,22 @@ console.log(JSON.stringify({{ isValid }}));
 
 
 def testJcsCanonicalizationCrossEquivalence() -> None:
-    """Verify byte-for-byte identity of JCS canonical bytes and SHA-256 digests between TS and Python."""
+    """Verify byte-for-byte identity of JCS canonical bytes and SHA-256 digests between TS and Python.
+
+    The astral-plane case below is the one that actually exercises RFC 8785's UTF-16
+    key-ordering rule: Python's native string sort is by Unicode code point, so a key
+    made of an astral character (U+1F600, encoded as a UTF-16 surrogate pair) and a key
+    made of a high-BMP character (U+FF01) sort in OPPOSITE order between naive Python
+    sorting and JS/RFC 8785 UTF-16 sorting. Every other case here uses plain ASCII or
+    BMP keys, where code-point order and UTF-16 order agree -- so it alone would pass
+    even with the ordering bug this test is meant to catch.
+    """
     testCases = [
         {"zebra": 1, "apple": 2, "mango": 3},
         {"nested": {"b": 2, "a": 1}, "list": [{"z": 10, "y": 20}]},
         {"emptyObj": {}, "emptyList": [], "zero": 0, "negative": -100},
         {"unicode": "Razorpay ⚡ Autonomous Agent 🇮🇳", "status": "CONFIRMED"},
+        {"\U0001F600": "astral-key", "！": "bmp-key", "zebra": "ascii-key"},
     ]
 
     for payload in testCases:
@@ -117,6 +137,43 @@ console.log(JSON.stringify({{ tsCanonical, tsDigest }}));
         data = json.loads(output)
         assert data["tsCanonical"] == pyBytes.decode("utf-8")
         assert data["tsDigest"] == pyDigest
+
+
+def testGstCrossLanguageEquivalence() -> None:
+    """Verify the Python settlement enclave and the TypeScript MCP quoter compute byte-identical
+    GST for every golden vector. This is the test that would have caught the two real bugs found in
+    review: Python's percent-rate split going asymmetric on odd GST slabs, and a 1-paise total drift
+    between the two languages' formulas -- both silent, because no prior test compared them directly."""
+    vectors = json.loads((_fixturesDir / "gstGoldenVectors.json").read_text(encoding="utf-8"))["vectors"]
+
+    for vector in vectors:
+        pyResult = computeGstBreakdown(vector["taxablePaise"], vector["ratePercent"], isIntraState=vector["intraState"])
+        assert pyResult.cgstPaise == vector["cgstPaise"]
+        assert pyResult.sgstPaise == vector["sgstPaise"]
+        assert pyResult.igstPaise == vector["igstPaise"]
+        assert pyResult.totalTaxPaise == vector["totalTaxPaise"]
+        if vector["intraState"]:
+            assert pyResult.cgstPaise == pyResult.sgstPaise
+
+    nodeScript = f"""
+import {{ calculateGstBreakdown }} from './src/catalog/pricingEngine.js';
+const vectors = {json.dumps(vectors)};
+const results = vectors.map((v) => {{
+    const merchantState = 'KA';
+    const buyerState = v.intraState ? 'KA' : 'MH';
+    return calculateGstBreakdown(v.taxablePaise, v.ratePercent, merchantState, buyerState);
+}});
+console.log(JSON.stringify(results));
+"""
+    output = _runNodeScript(nodeScript, package="mcpServer")
+    tsResults = json.loads(output)
+
+    assert len(tsResults) == len(vectors)
+    for vector, tsResult in zip(vectors, tsResults):
+        assert tsResult["cgstPaise"] == vector["cgstPaise"], vector
+        assert tsResult["sgstPaise"] == vector["sgstPaise"], vector
+        assert tsResult["igstPaise"] == vector["igstPaise"], vector
+        assert tsResult["totalTaxPaise"] == vector["totalTaxPaise"], vector
 
 
 def testCrossMandateHashEquivalence() -> None:

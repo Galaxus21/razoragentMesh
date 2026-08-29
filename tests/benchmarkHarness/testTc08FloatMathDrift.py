@@ -63,15 +63,15 @@ def testTc08ExactZeroDriftIntegerPaiseConservation() -> None:
 
     # 18% GST calculation (Intra-State: 9% CGST + 9% SGST)
     gstBreakdown = computeGstBreakdown(taxableSubtotal, 18, isIntraState=True)
-    assert gstBreakdown["cgstPaise"] == 1507500  # ₹15,075.00
-    assert gstBreakdown["sgstPaise"] == 1507500  # ₹15,075.00
-    assert gstBreakdown["igstPaise"] == 0
-    assert gstBreakdown["totalTaxPaise"] == 3015000  # ₹30,150.00
+    assert gstBreakdown.cgstPaise == 1507500  # ₹15,075.00
+    assert gstBreakdown.sgstPaise == 1507500  # ₹15,075.00
+    assert gstBreakdown.igstPaise == 0
+    assert gstBreakdown.totalTaxPaise == 3015000  # ₹30,150.00
 
     # Penny conservation check: CGST + SGST must exactly equal totalTaxPaise
     assert (
-        gstBreakdown["cgstPaise"] + gstBreakdown["sgstPaise"]
-        == gstBreakdown["totalTaxPaise"]
+        gstBreakdown.cgstPaise + gstBreakdown.sgstPaise
+        == gstBreakdown.totalTaxPaise
     )
 
     # Section 52 TCS Withholding (1% total = 0.5% CGST + 0.5% SGST = 83,750 + 83,750 paise = 167,500 paise)
@@ -82,6 +82,6 @@ def testTc08ExactZeroDriftIntegerPaiseConservation() -> None:
 
     # Gross Settlement Total
     grossTotal = computeCartSettlementTotal(
-        taxableSubtotal, gstBreakdown["totalTaxPaise"], shippingPaise=0, discountPaise=0
+        taxableSubtotal, gstBreakdown.totalTaxPaise, shippingPaise=0, discountPaise=0
     )
     assert grossTotal == 19765000  # Exactly ₹1,97,650.00 with 0% drift

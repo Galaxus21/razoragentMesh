@@ -30,13 +30,16 @@ const expectedRouteList: ReadonlyArray<string> = [
   "/security-audit",
   "/merchant-studio",
   "/docs/setup",
+  "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
+  "/docs/telemetry",
+  "/docs/gstr1-invoice",
 ];
 
 const mockSessionPrefix = "session-challenger-m2-";
 const stressToggleIterations = 10000;
-const expectedTotalNavItems = 10;
+const expectedTotalNavItems = 13;
 
 function simulateLocalStorageReader(rawValue: string | null): boolean {
   if (rawValue === null) {
@@ -113,7 +116,7 @@ describe("Milestone 2 Challenger 1: Sidebar State Machine & Storage Edge Cases",
 });
 
 describe("Milestone 2 Challenger 1: App Shell Navigation & Route Resolution", () => {
-  it("should contain exactly 10 valid navigation items matching the Stitch specification", () => {
+  it("should contain exactly 13 valid navigation items matching the Stitch specification", () => {
     assert.equal(navigationItems.length, expectedTotalNavItems);
 
     const routes = navigationItems.map((item) => item.route);

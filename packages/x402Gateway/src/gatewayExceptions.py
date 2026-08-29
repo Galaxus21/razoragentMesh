@@ -45,6 +45,15 @@ class InvalidBidPayloadException(GatewayBaseException):
     """Raised when input bid payload fails domain or schema validation."""
 
 
+class UnsafeCallbackUrlException(GatewayBaseException, ValueError):
+    """Raised when a webhook callback URL targets a non-HTTPS, private, loopback,
+    or link-local address, to prevent server-side request forgery (SSRF).
+
+    Also inherits ValueError so Pydantic field validators can raise it directly
+    and have it converted into a 422 response, rather than an unhandled 500.
+    """
+
+
 try:
     from razoragentMesh.packages.mandateEngine import ArithmeticDriftException
 except Exception:
@@ -65,4 +74,5 @@ __all__ = [
     "NonMonotonicConcessionViolation",
     "PowChallengeExpiredException",
     "PowReplayDetectedException",
+    "UnsafeCallbackUrlException",
 ]

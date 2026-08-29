@@ -28,6 +28,7 @@ from .splitManifestBuilder import (
     defaultProtocolFeeAccount,
     defaultProtocolFeePaise,
 )
+from ..verification.settlementLedger import SettlementLedger
 from .twoPhaseCommitSaga import TwoPhaseCommitSaga
 
 capturedStatus: str = "captured"
@@ -58,6 +59,7 @@ class SettlementOrchestrator:
         protocolFeePaise: int = defaultProtocolFeePaise,
         logisticsAccount: str = defaultLogisticsAccount,
         dlq: Optional["CompensationDlq"] = None,
+        settlementLedger: Optional[SettlementLedger] = None,
     ) -> None:
         self._routeClient = routeClient
         self._nonceLedger = nonceLedger
@@ -65,10 +67,12 @@ class SettlementOrchestrator:
         self.protocolFeePaise = protocolFeePaise
         self.logisticsAccount = logisticsAccount
         self._dlq = dlq
+        self._settlementLedger = settlementLedger
         self._saga = TwoPhaseCommitSaga(
             routeClient=self._routeClient,
             nonceLedger=self._nonceLedger,
             dlq=self._dlq,
+            settlementLedger=self._settlementLedger,
         )
 
     def buildSplitManifest(

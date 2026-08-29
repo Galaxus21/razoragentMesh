@@ -150,33 +150,34 @@ def test_f01_compute_cart_settlement_total_gross() -> None:
 def test_f02_gst_intra_state_50_50_split() -> None:
     """F02-1: Intra-state transaction splits GST 50/50 between CGST and SGST with IGST=0."""
     gst = computeGstBreakdown(taxableSubtotalPaise=100000, gstRatePercent=18, isIntraState=True)
-    assert gst["cgstPaise"] == 9000
-    assert gst["sgstPaise"] == 9000
-    assert gst["igstPaise"] == 0
-    assert gst["totalTaxPaise"] == 18000
+    assert gst.cgstPaise == 9000
+    assert gst.sgstPaise == 9000
+    assert gst.igstPaise == 0
+    assert gst.totalTaxPaise == 18000
 
 
 def test_f02_gst_inter_state_100_igst() -> None:
     """F02-2: Inter-state transaction routes 100% GST to IGST with CGST=0, SGST=0."""
     gst = computeGstBreakdown(taxableSubtotalPaise=100000, gstRatePercent=18, isIntraState=False)
-    assert gst["cgstPaise"] == 0
-    assert gst["sgstPaise"] == 0
-    assert gst["igstPaise"] == 18000
-    assert gst["totalTaxPaise"] == 18000
+    assert gst.cgstPaise == 0
+    assert gst.sgstPaise == 0
+    assert gst.igstPaise == 18000
+    assert gst.totalTaxPaise == 18000
 
 
 def test_f02_gst_odd_paise_penny_conservation() -> None:
-    """F02-3: Odd taxable amount conserves exact pennies across CGST and SGST floor division."""
+    """F02-3: Odd taxable amount splits into exactly equal CGST and SGST via floor division."""
     gst = computeGstBreakdown(taxableSubtotalPaise=101, gstRatePercent=5, isIntraState=True)
-    assert gst["cgstPaise"] + gst["sgstPaise"] == gst["totalTaxPaise"]
-    assert gst["totalTaxPaise"] == (101 * 5) // 100
-    assert gst["igstPaise"] == 0
+    assert gst.cgstPaise == gst.sgstPaise
+    assert gst.cgstPaise + gst.sgstPaise == gst.totalTaxPaise
+    assert gst.totalTaxPaise == 2 * ((101 * 5) // 200)
+    assert gst.igstPaise == 0
 
 
 def test_f02_gst_zero_rated_exempt_goods() -> None:
     """F02-4: Zero-rated exempt goods calculate 0 paise tax across all components."""
     gst = computeGstBreakdown(taxableSubtotalPaise=500000, gstRatePercent=0, isIntraState=True)
-    assert gst["cgstPaise"] == 0 and gst["sgstPaise"] == 0 and gst["totalTaxPaise"] == 0
+    assert gst.cgstPaise == 0 and gst.sgstPaise == 0 and gst.totalTaxPaise == 0
 
 
 def test_f02_gst_section_52_tcs_withholding() -> None:
@@ -955,8 +956,8 @@ async def test_f16_e2e_multi_item_cart_procurement_workflow() -> None:
     
     tax1 = computeGstBreakdown(200000, 18, isIntraState=True)
     tax2 = computeGstBreakdown(100000, 3, isIntraState=True)
-    totalCgst = tax1["cgstPaise"] + tax2["cgstPaise"]
-    totalSgst = tax1["sgstPaise"] + tax2["sgstPaise"]
+    totalCgst = tax1.cgstPaise + tax2.cgstPaise
+    totalSgst = tax1.sgstPaise + tax2.sgstPaise
     totalTax = totalCgst + totalSgst
     totalGross = 300000 + totalTax
     

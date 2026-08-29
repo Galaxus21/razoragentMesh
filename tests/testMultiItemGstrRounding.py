@@ -215,10 +215,10 @@ def testTc12OddTaxFloorDivisionConservation() -> None:
             scenario.gstRatePercent,
             isIntraState=scenario.isIntraState,
         )
-        assert gst["cgstPaise"] == scenario.expectedCgstPaise
-        assert gst["sgstPaise"] == scenario.expectedSgstPaise
-        assert gst["igstPaise"] == scenario.expectedIgstPaise
-        assert gst["totalTaxPaise"] == scenario.expectedTotalTaxPaise
-        assert gst["cgstPaise"] + gst["sgstPaise"] + gst["igstPaise"] == gst["totalTaxPaise"]
+        assert gst.cgstPaise == scenario.expectedCgstPaise
+        assert gst.sgstPaise == scenario.expectedSgstPaise
+        assert gst.igstPaise == scenario.expectedIgstPaise
+        assert gst.totalTaxPaise == scenario.expectedTotalTaxPaise
+        assert gst.cgstPaise + gst.sgstPaise + gst.igstPaise == gst.totalTaxPaise
 
 

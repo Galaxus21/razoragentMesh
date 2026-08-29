@@ -75,32 +75,36 @@ class TestPropertyGstZeroDrift:
     @settings(max_examples=1000, deadline=None)
     @given(amount=paise_strategy, rate_bps=statutory_bps_strategy)
     def test_property_intra_state_statutory_slabs_conservation(self, amount: int, rate_bps: int) -> None:
-        """Property: For any paise (0-10^12) and statutory GST slab, cgst + sgst == total_gst strictly."""
+        """Property: For any paise (0-10^12) and statutory GST slab, CGST equals SGST exactly
+        and cgst + sgst == total_gst strictly."""
         res = calculate_gst(
             base_amount_paise=amount,
             tax_rate_bps=rate_bps,
             supplier_state_code="29",
             pos_state_code="29",
         )
+        assert res.cgstPaise == res.sgstPaise
         assert res.cgstPaise + res.sgstPaise == res.totalTaxPaise
         assert res.igstPaise == 0
         assert res.isIntraState is True
-        assert res.totalTaxPaise == (amount * rate_bps) // 10000
+        assert res.totalTaxPaise == 2 * ((amount * rate_bps) // 20000)
 
     @settings(max_examples=1000, deadline=None)
     @given(amount=paise_strategy, rate_bps=arbitrary_bps_strategy)
     def test_property_intra_state_arbitrary_bps_conservation(self, amount: int, rate_bps: int) -> None:
-        """Property: For any paise and arbitrary rate (0-10000 bps), cgst + sgst == total_gst."""
+        """Property: For any paise and arbitrary rate (0-10000 bps), CGST equals SGST exactly
+        and cgst + sgst == total_gst."""
         res = calculate_gst(
             base_amount_paise=amount,
             tax_rate_bps=rate_bps,
             supplier_state_code="29",
             pos_state_code="29",
         )
+        assert res.cgstPaise == res.sgstPaise
         assert res.cgstPaise + res.sgstPaise == res.totalTaxPaise
         assert res.igstPaise == 0
         assert res.isIntraState is True
-        assert res.totalTaxPaise == (amount * rate_bps) // 10000
+        assert res.totalTaxPaise == 2 * ((amount * rate_bps) // 20000)
 
     @settings(max_examples=1000, deadline=None)
     @given(amount=paise_strategy, rate_bps=arbitrary_bps_strategy)
@@ -121,11 +125,13 @@ class TestPropertyGstZeroDrift:
     @settings(max_examples=1000, deadline=None)
     @given(amount=paise_strategy, rate_percent=arbitrary_percent_strategy)
     def test_property_legacy_percent_gst_conservation(self, amount: int, rate_percent: int) -> None:
-        """Property: Legacy percent API strictly conserves CGST + SGST == totalTaxPaise."""
+        """Property: Legacy percent API computes CGST exactly equal to SGST and strictly
+        conserves CGST + SGST == totalTaxPaise."""
         res_intra = computeGstBreakdown(amount, rate_percent, isIntraState=True)
+        assert res_intra.cgstPaise == res_intra.sgstPaise
         assert res_intra.cgstPaise + res_intra.sgstPaise == res_intra.totalTaxPaise
         assert res_intra.igstPaise == 0
-        assert res_intra.totalTaxPaise == (amount * rate_percent) // 100
+        assert res_intra.totalTaxPaise == 2 * ((amount * rate_percent) // 200)
 
         res_inter = computeGstBreakdown(amount, rate_percent, isIntraState=False)
         assert res_inter.cgstPaise == 0

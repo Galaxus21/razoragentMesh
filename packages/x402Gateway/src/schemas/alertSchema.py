@@ -1,7 +1,19 @@
 """Pydantic schemas for price-drop alert subscriptions and webhook payloads."""
 
+import os
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from ..constants.alertConstants import allowLocalhostCallbackEnvVar
+from .callbackUrlValidator import validateCallbackUrl
+
+
+def _validateCallbackUrlField(candidateUrl: str) -> str:
+    """Applies the shared SSRF guard. Reads the opt-in flag directly from the
+    environment, matching the lightweight os.getenv pattern X402GatewaySettings
+    already uses, rather than importing the settings singleton into a schema module."""
+    allowLocalhostCallback = os.getenv(allowLocalhostCallbackEnvVar, "").lower() in ("1", "true")
+    return validateCallbackUrl(candidateUrl, allowLocalhostCallback=allowLocalhostCallback)
 
 
 class PriceDropAlert(BaseModel):
@@ -17,6 +29,8 @@ class PriceDropAlert(BaseModel):
     expiresAtUnix: int = Field(gt=0)
     createdAtUnix: int = Field(gt=0)
     status: str = Field(default="active")
+
+    _validateCallbackUrl = field_validator("callbackUrl")(_validateCallbackUrlField)
 
 
 class PriceDropDispatchResult(BaseModel):
@@ -42,6 +56,8 @@ class PriceDropAlertRegisterRequest(BaseModel):
     callbackUrl: str = Field(min_length=1)
     buyerAgentId: str = Field(min_length=1)
     expiresAtUnix: int = Field(gt=0)
+
+    _validateCallbackUrl = field_validator("callbackUrl")(_validateCallbackUrlField)
 
 
 class PriceDropAlertResponse(BaseModel):

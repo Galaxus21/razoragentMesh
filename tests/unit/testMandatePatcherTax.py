@@ -170,8 +170,8 @@ def testMandatePatcherMultiSlabTaxConservation(agentKeyFixtures: Dict[str, Any])
         substituteGstRatePercent=5, substituteHsnCode="3004",
         requestedQuantity=1, buyerAgentSigner=buyerSigner, merchantSigner=merchantSigner,
     )
-    assert healed5.taxBreakdown.cgstPaise == 2000
-    assert healed5.taxBreakdown.sgstPaise == 3000
+    assert healed5.taxBreakdown.cgstPaise == 2500
+    assert healed5.taxBreakdown.sgstPaise == 2500
     assert healed5.totalPaise == 105000
 
 
@@ -213,6 +213,6 @@ def testMandatePatcherOddPaiseGstRoundingConservation(agentKeyFixtures: Dict[str
 
     assert healed.taxableSubtotalPaise == 33333
     assert healed.taxBreakdown.cgstPaise == 2999
-    assert healed.taxBreakdown.sgstPaise == 3000
-    assert healed.taxBreakdown.totalTaxPaise == 5999
-    assert healed.totalPaise == 39332
+    assert healed.taxBreakdown.sgstPaise == 2999
+    assert healed.taxBreakdown.totalTaxPaise == 5998
+    assert healed.totalPaise == 39331

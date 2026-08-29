@@ -19,8 +19,11 @@ const expectedRouteList: ReadonlyArray<string> = [
   "/security-audit",
   "/merchant-studio",
   "/docs/setup",
+  "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
+  "/docs/telemetry",
+  "/docs/gstr1-invoice",
 ];
 
 const expectedLabelList: ReadonlyArray<string> = [
@@ -32,8 +35,11 @@ const expectedLabelList: ReadonlyArray<string> = [
   "Security & Audit",
   "Merchant Studio",
   "System Setup",
+  "Developer Onboarding",
   "Buyer SDK",
   "Merchant Guide",
+  "Telemetry & SSE",
+  "GSTR-1 Invoicing",
 ];
 
 const expectedCategoryIds: ReadonlyArray<string> = [
@@ -101,19 +107,19 @@ describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
     }
   });
 
-  it("should register exactly 10 unique navigation routes across all categories", () => {
-    assert.equal(navigationItems.length, 10);
+  it("should register exactly 13 unique navigation routes across all categories", () => {
+    assert.equal(navigationItems.length, 13);
 
     const routes = navigationItems.map((item) => item.route);
     const uniqueRoutes = new Set(routes);
-    assert.equal(uniqueRoutes.size, 10);
+    assert.equal(uniqueRoutes.size, 13);
 
     for (const expectedRoute of expectedRouteList) {
       assert.ok(uniqueRoutes.has(expectedRoute), `Missing route: ${expectedRoute}`);
     }
   });
 
-  it("should map descriptive labels and valid properties for all 10 child items", () => {
+  it("should map descriptive labels and valid properties for all 13 child items", () => {
     const labels = navigationItems.map((item) => item.label);
     for (let index = 0; index < expectedLabelList.length; index += 1) {
       assert.equal(labels[index], expectedLabelList[index]);

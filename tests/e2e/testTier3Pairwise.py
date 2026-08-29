@@ -108,11 +108,11 @@ def test_p01_f01_integer_math_and_f02_statutory_gst() -> None:
     assert taxable_subtotal == 16750000
 
     gst = computeGstBreakdown(taxable_subtotal, 18, isIntraState=True)
-    assert gst["cgstPaise"] == 1507500
-    assert gst["sgstPaise"] == 1507500
-    assert gst["totalTaxPaise"] == 3015000
+    assert gst.cgstPaise == 1507500
+    assert gst.sgstPaise == 1507500
+    assert gst.totalTaxPaise == 3015000
 
-    gross_total = computeCartSettlementTotal(taxable_subtotal, gst["totalTaxPaise"])
+    gross_total = computeCartSettlementTotal(taxable_subtotal, gst.totalTaxPaise)
     assert gross_total == 19765000
 
 
@@ -148,8 +148,8 @@ def test_p04_f02_statutory_gst_and_f09_gstin_validation() -> None:
     assert is_intra is False  # Karnataka (29) vs Maharashtra (27)
     
     gst = computeGstBreakdown(taxableSubtotalPaise=100000, gstRatePercent=18, isIntraState=is_intra)
-    assert gst["igstPaise"] == 18000
-    assert gst["cgstPaise"] == 0 and gst["sgstPaise"] == 0
+    assert gst.igstPaise == 18000
+    assert gst.cgstPaise == 0 and gst.sgstPaise == 0
 
 
 def test_p05_f02_statutory_gst_and_f10_gstr1_invoice() -> None:
@@ -157,7 +157,7 @@ def test_p05_f02_statutory_gst_and_f10_gstr1_invoice() -> None:
     actors = setup_e2e_actors()
     item = CartItemSchema(skuId="SKU-INV", quantity=2, unitPricePaise=50000, hsnCode="8504", gstRatePercent=18, lineTotalPaise=100000)
     gst = computeGstBreakdown(100000, 18, isIntraState=True)
-    tax = TaxBreakdownSchema(cgstPaise=gst["cgstPaise"], sgstPaise=gst["sgstPaise"], igstPaise=0, totalTaxPaise=gst["totalTaxPaise"])
+    tax = TaxBreakdownSchema(cgstPaise=gst.cgstPaise, sgstPaise=gst.sgstPaise, igstPaise=0, totalTaxPaise=gst.totalTaxPaise)
     cart = createSignedCartMandate(
         cartId="M-C-INV", merchantSigner=actors.merchant_nexus, merchantGstin="29AABCU9603R1ZJ",
         merchantStateCode="29", buyerDeliveryPincode="560001", buyerDeliveryStateCode="29",
@@ -185,9 +185,10 @@ def test_p06_f02_statutory_gst_and_f12_hsn_directory() -> None:
     
     # Intra-state calculation on ₹50,000 (5,000,000 paise)
     gst = computeGstBreakdown(taxableSubtotalPaise=5000000, gstRatePercent=resolved_rate, isIntraState=True)
-    assert gst["totalTaxPaise"] == 150000
-    assert gst["cgstPaise"] == 5000000 * 1 // 100 # 1% CGST = 50000
-    assert gst["sgstPaise"] == 150000 - 50000     # 2% SGST remainder = 100000
+    assert gst.totalTaxPaise == 150000
+    # CGST and SGST are each the 1.5% half-rate, so they are exactly equal: 75000 + 75000 = 150000.
+    assert gst.cgstPaise == 75000
+    assert gst.sgstPaise == 75000
 
 
 @pytest.mark.asyncio

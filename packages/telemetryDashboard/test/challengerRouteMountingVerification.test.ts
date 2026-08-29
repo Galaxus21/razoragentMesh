@@ -45,8 +45,11 @@ const expectedRoutes: ReadonlyArray<string> = [
   "/security-audit",
   "/merchant-studio",
   "/docs/setup",
+  "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
+  "/docs/telemetry",
+  "/docs/gstr1-invoice",
 ];
 
 describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group Structure", () => {
@@ -99,8 +102,8 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
 });
 
 describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route Resolution", () => {
-  it("should verify 100% route alignment between navigationItems and expected 10 routes", () => {
-    assert.equal(navigationItems.length, 10);
+  it("should verify 100% route alignment between navigationItems and expected 13 routes", () => {
+    assert.equal(navigationItems.length, 13);
 
     const actualRoutes = navigationItems.map((item) => item.route);
     assert.deepEqual(actualRoutes, expectedRoutes);

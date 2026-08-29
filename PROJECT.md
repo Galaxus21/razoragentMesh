@@ -1,12 +1,19 @@
 # Project: RazorAgent Mesh Refactoring
 
+> **Status: COMPLETED MILESTONE RECORD (M1–M5).** This is the work log for the math-isolation,
+> durable-DLQ, GSTIN-validation, and property-test milestones — all delivered. It is kept for
+> traceability, not as a live architecture reference.
+>
+> For the current architecture see [`GUIDE.md`](./GUIDE.md); for the ongoing knowledge graph see
+> [`../.agents/rules/project-knowledge-base.md`](../.agents/rules/project-knowledge-base.md).
+
 ## Architecture
 RazorAgent Mesh is a production-grade autonomous agent commerce mesh consisting of:
 - **Layer 1: Merchant Ingestion & Onboarding** (`packages/merchantApi`) — Merchant registrar, catalog indexing, vector search, GSTIN verification.
 - **Layer 2: x402 Gateway & Negotiation** (`packages/x402Gateway`) — Proof-of-work challenge, micro-escrow, and Rubinstein-Ståhl bilateral bargaining FSM.
 - **Layer 3: Vector Self-Healing** (`packages/vectorHealer`) — Out-of-stock autonomous healing and SKU substitution.
 - **Layer 4: Mandate Engine & 2PC Settlement** (`packages/mandateEngine`) — Cryptographic mandate verification (Ed25519 JCS), statutory tax breakdown, and two-phase commit (2PC) distributed settlement saga with Razorpay Route.
-- **Client SDKs & Enclave Math** (`packages/buyerSdkPy`, `packages/buyerSdkTs`, `packages/enclaveMath`) — Zero-drift integer paise arithmetic and buyer agents.
+- **Client SDKs** (`packages/buyerSdkPy`, `packages/buyerSdkTs`) — Standalone buyer agents. Zero-drift integer-paise arithmetic lives in the `mandateEngine` arithmetic enclave, not a separate package.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
@@ -25,7 +32,7 @@ RazorAgent Mesh is a production-grade autonomous agent commerce mesh consisting 
 | 12 | Property Test: Luhn Mod-36 Invariants | Hypothesis suite verifying valid GSTIN roundtrip and single-char mutation falsification | M4 | DONE |
 | 13 | Property Test: Ed25519 JCS Canonical Invariants | Hypothesis & fast-check suites verifying canonical JCS ordering, sign/verify, and float ban | M4 | DONE |
 | 14 | Standardize Vector Payload Schema Naming | Consistent O(1) in-place Qdrant payload patching standardized to `in_stock` field | M5 | DONE |
-| 15 | Comprehensive Monorepo Regression Gate | Verify all 1,497 tests and new property test suites pass with zero regressions | M5 | DONE |
+| 15 | Comprehensive Monorepo Regression Gate | Verify all 1,545 tests and new property test suites pass with zero regressions | M5 | DONE |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |

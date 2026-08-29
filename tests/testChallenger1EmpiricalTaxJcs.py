@@ -54,11 +54,11 @@ def _buildSlabItems(slabs: List[int], quantities: List[int], unitPrices: List[in
         taxable = computeLineItemTotal(price, qty)
         expTaxables.append(taxable)
         gst = computeGstBreakdown(taxable, rate, isIntraState=isIntraState)
-        assert gst["totalTaxPaise"] == gst["cgstPaise"] + gst["sgstPaise"] + gst["igstPaise"]
-        expTaxes.append(gst["totalTaxPaise"])
-        expCgst.append(gst["cgstPaise"])
-        expSgst.append(gst["sgstPaise"])
-        expIgst.append(gst["igstPaise"])
+        assert gst.totalTaxPaise == gst.cgstPaise + gst.sgstPaise + gst.igstPaise
+        expTaxes.append(gst.totalTaxPaise)
+        expCgst.append(gst.cgstPaise)
+        expSgst.append(gst.sgstPaise)
+        expIgst.append(gst.igstPaise)
         items.append(CartItemSchema(
             skuId=f"SKU-SLAB-{rate}", quantity=qty, unitPricePaise=price,
             hsnCode=f"84{rate:02d}00", gstRatePercent=rate, lineTotalPaise=taxable,
@@ -184,8 +184,8 @@ class TestAsymmetricDiscountAndPennyConservation:
             for amt in range(1, 501):
                 oddAmt = amt * 2 + 1
                 resIntra = computeGstBreakdown(oddAmt, rate, isIntraState=True)
-                assert resIntra["cgstPaise"] + resIntra["sgstPaise"] == resIntra["totalTaxPaise"]
-                assert resIntra["igstPaise"] == 0
+                assert resIntra.cgstPaise + resIntra.sgstPaise == resIntra.totalTaxPaise
+                assert resIntra.igstPaise == 0
                 resInter = computeGstBreakdown(oddAmt, rate, isIntraState=False)
-                assert resInter["igstPaise"] == resInter["totalTaxPaise"]
-                assert resInter["cgstPaise"] == 0 and resInter["sgstPaise"] == 0
+                assert resInter.igstPaise == resInter.totalTaxPaise
+                assert resInter.cgstPaise == 0 and resInter.sgstPaise == 0

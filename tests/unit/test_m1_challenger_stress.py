@@ -233,33 +233,33 @@ class TestGstStatutoryPrecisionAndSlabs:
 
             if is_intra:
                 # Fund conservation invariant: CGST + SGST == total_tax
-                assert gst.cgst_paise + gst.sgst_paise == gst.total_tax_paise
-                assert gst.igst_paise == 0
-                assert gst.is_intra_state is True
-                assert gst.cgst_paise >= 0
-                assert gst.sgst_paise >= 0
+                assert gst.cgstPaise + gst.sgstPaise == gst.totalTaxPaise
+                assert gst.igstPaise == 0
+                assert gst.isIntraState is True
+                assert gst.cgstPaise >= 0
+                assert gst.sgstPaise >= 0
 
-                # Parity invariant for even basis points
-                if rate_bps % 2 == 0:
-                    assert abs(gst.sgst_paise - gst.cgst_paise) <= 1
+                # CGST and SGST are computed via the identical half-rate expression, so they
+                # are exactly equal for every basis-point rate -- odd or even, no tolerance needed.
+                assert gst.cgstPaise == gst.sgstPaise
             else:
                 # Inter-state invariant: IGST == total_tax
-                assert gst.igst_paise == gst.total_tax_paise
-                assert gst.cgst_paise == 0
-                assert gst.sgst_paise == 0
-                assert gst.is_intra_state is False
+                assert gst.igstPaise == gst.totalTaxPaise
+                assert gst.cgstPaise == 0
+                assert gst.sgstPaise == 0
+                assert gst.isIntraState is False
 
     def test_state_code_whitespace_resilience(self) -> None:
         """Tests that state codes with spaces are trimmed and compared correctly."""
         gst_intra = calculate_gst(10000, 1800, " 29 ", "29\t")
-        assert gst_intra.is_intra_state is True
-        assert gst_intra.cgst_paise == 900
-        assert gst_intra.sgst_paise == 900
-        assert gst_intra.igst_paise == 0
+        assert gst_intra.isIntraState is True
+        assert gst_intra.cgstPaise == 900
+        assert gst_intra.sgstPaise == 900
+        assert gst_intra.igstPaise == 0
 
         gst_inter = calculate_gst(10000, 1800, " 29 ", " 27 ")
-        assert gst_inter.is_intra_state is False
-        assert gst_inter.igst_paise == 1800
+        assert gst_inter.isIntraState is False
+        assert gst_inter.igstPaise == 1800
 
 
 class TestRouteSplitsOverdraftAndConservation:
@@ -284,19 +284,19 @@ class TestRouteSplitsOverdraftAndConservation:
                 continue
 
             result = calculate_route_splits(order, comm_bps, flat_fee, shipping_paise=shipping)
-            assert result.order_paise == order
-            assert result.merchant_paise + result.total_fee_paise == order
-            assert result.total_fee_paise == result.protocol_fee_paise + result.logistics_amount_paise
-            assert result.protocol_fee_paise == result.commission_paise + result.flat_fee_paise
-            assert result.merchant_paise >= 0
+            assert result.orderPaise == order
+            assert result.merchantNetPaise + result.totalFeePaise == order
+            assert result.totalFeePaise == result.protocolFeePaise + result.logisticsAmountPaise
+            assert result.protocolFeePaise == result.commissionPaise + result.flatFeePaise
+            assert result.merchantNetPaise >= 0
 
     def test_route_splits_exact_overdraft_boundary(self) -> None:
         """Tests boundary when deductions == order (allowed, merchant=0) vs deductions == order + 1 (overdraft)."""
         order = 1000
         # deductions = 1000 (comm=200, flat=300, ship=500)
         res = calculate_route_splits(order, 2000, 300, shipping_paise=500)
-        assert res.merchant_paise == 0
-        assert res.total_fee_paise == 1000
+        assert res.merchantNetPaise == 0
+        assert res.totalFeePaise == 1000
 
         # deductions = 1001 -> must raise ArithmeticDriftException
         with pytest.raises(ArithmeticDriftException):
@@ -313,13 +313,13 @@ class TestSpendingCapTransitionsAndLimits:
         # Exactly at cap
         res_exact = evaluate_spending_cap(cumulative_paise=70_000, delta_paise=30_000, cap_paise=cap)
         assert res_exact.allowed is True
-        assert res_exact.remaining_daily_paise == 0
+        assert res_exact.remainingDailyPaise == 0
 
         # 1 paise breach
         res_breach = evaluate_spending_cap(cumulative_paise=70_000, delta_paise=30_001, cap_paise=cap)
         assert res_breach.allowed is False
-        assert res_breach.remaining_daily_paise == 30_000
-        assert "exceeds spending cap" in res_breach.violation_reason
+        assert res_breach.remainingDailyPaise == 30_000
+        assert "exceeds spending cap" in res_breach.violationReason
 
         # Single transaction limit exact boundary
         res_tx_ok = evaluate_spending_cap(cumulative_paise=10_000, delta_paise=25_000, cap_paise=cap, single_tx_limit_paise=25_000)
@@ -327,7 +327,7 @@ class TestSpendingCapTransitionsAndLimits:
 
         res_tx_breach = evaluate_spending_cap(cumulative_paise=10_000, delta_paise=25_001, cap_paise=cap, single_tx_limit_paise=25_000)
         assert res_tx_breach.allowed is False
-        assert "exceeds single transaction limit" in res_tx_breach.violation_reason
+        assert "exceeds single transaction limit" in res_tx_breach.violationReason
 
 
 class TestNormalizeInrCurrencyConversions:

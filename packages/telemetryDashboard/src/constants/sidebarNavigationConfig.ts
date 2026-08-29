@@ -63,8 +63,11 @@ export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
     icon: BookOpen,
     children: [
       { route: "/docs/setup", label: "System Setup", description: "Environment & Architecture Setup" },
+      { route: "/docs/onboarding", label: "Developer Onboarding", description: "End-to-End Integration Guide" },
       { route: "/docs/buyer-sdk", label: "Buyer SDK", description: "TypeScript & Python SDK Guide" },
       { route: "/docs/merchant-guide", label: "Merchant Guide", description: "Catalog Ingestion & Pricing" },
+      { route: "/docs/telemetry", label: "Telemetry & SSE", description: "Observability Event Streams" },
+      { route: "/docs/gstr1-invoice", label: "GSTR-1 Invoicing", description: "Statutory Tax Specification" },
     ],
   },
 ];

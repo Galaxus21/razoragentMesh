@@ -29,7 +29,10 @@ export const maxQuantity = 10000;
 
 export const bpsDivisor = 10000;
 export const percentDivisor = 100;
-export const halfGstDivisor = 2;
+// Divisor for the intra-state half-rate split (bpsDivisor * 2). Applying it once
+// (rather than halving the rate, then dividing again) keeps CGST and SGST exactly
+// equal and the total exactly conserved.
+export const intraStateHalfBpsDivisor = 20000;
 export const millisPerSecond = 1000;
 
 export const hexEncoding = "hex";

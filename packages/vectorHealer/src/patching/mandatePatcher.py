@@ -9,6 +9,7 @@ from razoragentMesh.packages.mandateEngine import (
     CartItemSchema,
     CartMandate,
     Ed25519Signer,
+    GstBreakdown,
     IntentMandate,
     TaxBreakdownSchema,
     computeCartSettlementTotal,
@@ -55,7 +56,7 @@ class MandatePatcher:
 def _recalculateSubtotals(
     unitPricePaise: int, quantity: int, gstRatePercent: int,
     shippingPaise: int, discountPaise: int,
-) -> tuple[int, dict[str, int], int]:
+) -> tuple[int, GstBreakdown, int]:
     """Calculates integer paise subtotal, statutory GST breakdown, and settlement total."""
     validateIntegerPaise(unitPricePaise, "substituteUnitPricePaise")
     validateIntegerPaise(quantity, "requestedQuantity")
@@ -64,7 +65,7 @@ def _recalculateSubtotals(
     newTaxable = computeLineItemTotal(unitPricePaise, quantity)
     newGst = computeGstBreakdown(newTaxable, gstRatePercent, isIntraState=True)
     newTotal = computeCartSettlementTotal(
-        taxableSubtotalPaise=newTaxable, totalTaxPaise=newGst["totalTaxPaise"],
+        taxableSubtotalPaise=newTaxable, totalTaxPaise=newGst.totalTaxPaise,
         shippingPaise=shippingPaise, discountPaise=discountPaise,
     )
     return newTaxable, newGst, newTotal
@@ -80,7 +81,7 @@ def _validateBudgetConstraint(newTotalPaise: int, intentMandate: Optional[Intent
 
 def _buildHealedCartMandate(
     orig: CartMandate, skuId: str, price: int, gstRate: int, hsn: str,
-    qty: int, taxable: int, gst: dict[str, int], total: int, signer: Ed25519Signer, ts: int,
+    qty: int, taxable: int, gst: GstBreakdown, total: int, signer: Ed25519Signer, ts: int,
 ) -> CartMandate:
     """Constructs and signs a new healed CartMandate with substitute SKU."""
     item = CartItemSchema(
@@ -88,8 +89,8 @@ def _buildHealedCartMandate(
         hsnCode=hsn, gstRatePercent=gstRate, lineTotalPaise=taxable,
     )
     taxBreakdown = TaxBreakdownSchema(
-        cgstPaise=gst["cgstPaise"], sgstPaise=gst["sgstPaise"],
-        igstPaise=gst["igstPaise"], totalTaxPaise=gst["totalTaxPaise"],
+        cgstPaise=gst.cgstPaise, sgstPaise=gst.sgstPaise,
+        igstPaise=gst.igstPaise, totalTaxPaise=gst.totalTaxPaise,
     )
     return createSignedCartMandate(
         cartId=f"cart_healed_{skuId.lower()}", merchantSigner=signer,

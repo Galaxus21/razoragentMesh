@@ -36,10 +36,10 @@ class TaxScenario:
 def getCanonicalOddPaiseScenarios() -> List[TaxScenario]:
     """Returns statutory test scenarios for odd paise, floor division, and TCS."""
     rawScenarios = [
-        (101, 5, True, 2, 3, 0, 5, 0),
-        (33333, 5, True, 666, 1000, 0, 1666, 332),
+        (101, 5, True, 2, 2, 0, 4, 0),
+        (33333, 5, True, 833, 833, 0, 1666, 332),
         (77777, 18, False, 0, 0, 13999, 13999, 777),
-        (99999, 18, True, 8999, 9000, 0, 17999, 998),
+        (99999, 18, True, 8999, 8999, 0, 17998, 998),
         (100000, 18, True, 9000, 9000, 0, 18000, 1000),
         (100000, 18, False, 0, 0, 18000, 18000, 1000),
     ]
@@ -87,9 +87,9 @@ def computeExpectedSettlementTotals(
     totalCgst, totalSgst, totalIgst = 0, 0, 0
     for item in items:
         gst = computeGstBreakdown(item.lineTotalPaise, item.gstRatePercent, isIntraState)
-        totalCgst += gst["cgstPaise"]
-        totalSgst += gst["sgstPaise"]
-        totalIgst += gst["igstPaise"]
+        totalCgst += gst.cgstPaise
+        totalSgst += gst.sgstPaise
+        totalIgst += gst.igstPaise
 
     totalTax = totalCgst + totalSgst + totalIgst
     tcs = computeTcsWithholding(taxableSubtotal, isIntraState)

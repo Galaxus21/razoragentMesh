@@ -142,7 +142,9 @@ def test_currency_normalization_and_attack_vectors():
         with pytest.raises(ArithmeticDriftException):
             normalize_inr_to_paise(bad)
 
-def test_backward_compatibility_and_dual_access():
+def test_function_name_aliasing_and_result_field_access():
+    """calculate_gst / GstBreakdown etc. expose one camelCase spelling per field; only the
+    module-level function names (snake_case vs camelCase) are deliberately dual-aliased."""
     assert validateIntegerPaise(100) == validate_integer_paise(100)
     assert calculateRouteSplits(1000, 500, 50).to_dict() == calculate_route_splits(1000, 500, 50).to_dict()
     assert evaluateSpendingCap(100, 50, 200).allowed == evaluate_spending_cap(100, 50, 200).allowed
@@ -154,23 +156,23 @@ def test_backward_compatibility_and_dual_access():
     assert computeLineItemTotal(100, 3) == compute_line_item_total(100, 3) == computeTotalPaise(100, 3)
 
     gst = calculate_gst(10000, 1800, '29', '29')
-    assert gst.cgstPaise == gst.cgst_paise == gst['cgstPaise'] == gst['cgst_paise'] == 900
-    assert gst.sgstPaise == gst.sgst_paise == gst['sgstPaise'] == gst['sgst_paise'] == 900
-    assert gst.igstPaise == gst.igst_paise == gst['igstPaise'] == 0
-    assert gst.totalTaxPaise == gst.total_tax_paise == gst['totalTaxPaise'] == 1800
-    assert gst.isIntraState is gst.is_intra_state is gst['isIntraState'] is True
+    assert gst.cgstPaise == 900
+    assert gst.sgstPaise == 900
+    assert gst.igstPaise == 0
+    assert gst.totalTaxPaise == 1800
+    assert gst.isIntraState is True
     assert isinstance(gst.to_dict(), dict)
 
     split = calculate_route_splits(10000, 200, 50, shipping_paise=500)
-    assert split.orderPaise == split.order_paise == split['orderPaise'] == 10000
-    assert split.merchantNetPaise == split.merchant_paise == split['merchantNetPaise'] == 9250
-    assert split.totalFeePaise == split.total_fee_paise == split['totalFeePaise'] == 750
+    assert split.orderPaise == 10000
+    assert split.merchantNetPaise == 9250
+    assert split.totalFeePaise == 750
     assert isinstance(split.to_dict(), dict)
 
     sc = evaluate_spending_cap(10000, 5000, 20000)
-    assert sc.allowed is sc['allowed'] is True
-    assert sc.remainingDailyPaise == sc.remaining_daily_paise == sc['remainingDailyPaise'] == 5000
-    assert sc.violationReason == sc.violation_reason == sc['violationReason'] == ''
+    assert sc.allowed is True
+    assert sc.remainingDailyPaise == 5000
+    assert sc.violationReason == ''
 
     res_gw = gw_calc_route_splits(5000, 100, 20)
     assert res_gw.merchantNetPaise == 4930

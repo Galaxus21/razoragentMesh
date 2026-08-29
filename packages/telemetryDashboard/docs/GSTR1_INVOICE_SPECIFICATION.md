@@ -70,7 +70,7 @@ Financial calculations in RazorAgent Mesh are strictly isolated inside the **Ari
 
 ### 2.2 Invariant INV-02: Deterministic Statutory GST Calculation
 
-GST is computed independently per itemized line item using statutory floor division, followed by exact penny conservation to ensure that $\text{CGST} + \text{SGST} \equiv \text{totalTax}$.
+GST is computed independently per itemized line item using statutory floor division. CGST and SGST are two separate levies, each charged at exactly half the combined rate, so both components are computed with the identical expression and are therefore always equal. The line total is defined as their sum, which makes penny conservation structural rather than something a rounding rule has to recover.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -87,8 +87,8 @@ GST is computed independently per itemized line item using statutory floor divis
 │                                │                      │                                          │
 │             ┌──────────────────┴───────────────┐      └────────────────────────────┐             │
 │             ▼                                  ▼                                   ▼             │
-│  CGST = ⌊ (Taxable × Rate/2) / 100 ⌋   SGST = TotalTax - CGST           IGST = ⌊ (Taxable × Rate) / 100 ⌋
-│  IGST = 0                                                               CGST = 0, SGST = 0       │
+│  CGST = SGST = ⌊ (Taxable × Rate) / 200 ⌋                               IGST = ⌊ (Taxable × Rate) / 100 ⌋
+│  TotalTax = CGST + SGST,  IGST = 0                                      CGST = 0, SGST = 0       │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -97,12 +97,15 @@ $$\text{isIntraState} \iff \text{merchantStateCode} \equiv \text{buyerDeliverySt
 
 #### Intra-State Formulation (CGST + SGST)
 For supplies where the merchant and delivery location share the same two-digit GST state code:
-$$\text{totalTaxPaise} = \left\lfloor \frac{\text{taxableAmountPaise} \times \text{gstRatePercent}}{100} \right\rfloor$$
-$$\text{cgstPaise} = \left\lfloor \frac{\text{taxableAmountPaise} \times \lfloor \text{gstRatePercent} / 2 \rfloor}{100} \right\rfloor$$
-$$\text{sgstPaise} = \text{totalTaxPaise} - \text{cgstPaise}$$
+$$\text{cgstPaise} = \text{sgstPaise} = \left\lfloor \frac{\text{taxableAmountPaise} \times \text{gstRatePercent}}{200} \right\rfloor$$
+$$\text{totalTaxPaise} = \text{cgstPaise} + \text{sgstPaise}$$
 $$\text{igstPaise} = 0$$
 
-> **Exact Conservation Guarantee:** Because $\text{sgstPaise}$ is defined as $\text{totalTaxPaise} - \text{cgstPaise}$, the sum $\text{cgstPaise} + \text{sgstPaise} \equiv \text{totalTaxPaise}$ is mathematically guaranteed with zero drift.
+> **Statutory Equality Guarantee:** CGST and SGST are distinct levies each charged at half the combined rate, so they must be *equal*, not merely sum to the total. Both are computed from the identical expression, which makes that equality hold by construction for every rate — including odd slabs such as 5%, where deriving one component as the remainder of the other would produce an illegal asymmetric split (2% / 3% instead of 2.5% / 2.5%).
+>
+> **Exact Conservation Guarantee:** Because $\text{totalTaxPaise}$ is *defined* as $\text{cgstPaise} + \text{sgstPaise}$, the identity $\text{cgstPaise} + \text{sgstPaise} \equiv \text{totalTaxPaise}$ holds with zero drift by definition.
+>
+> The single division by $200$ (equivalently, by $20{,}000$ when the rate is expressed in basis points) is deliberate: halving the rate first and then flooring twice would discard up to one paise per line item and put this engine one paise out of step with the TypeScript MCP quoter.
 
 #### Inter-State Formulation (IGST)
 For supplies across differing state jurisdictions:

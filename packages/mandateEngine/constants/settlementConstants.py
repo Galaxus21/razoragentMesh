@@ -8,6 +8,10 @@ defaultEngineVersion: str = "2.0.0"
 paisePerRupee: int = 100
 basisPointsDivisor: int = 10000
 percentDivisor: int = 100
+# Divisor for the intra-state half-rate split (basisPointsDivisor * 2).
+# Applying it once (rather than halving the rate, then dividing again) keeps
+# CGST and SGST exactly equal and the total exactly conserved.
+intraStateHalfBpsDivisor: int = 20000
 millisecondsPerSecond: int = 1000
 
 # TCS Statutory Rates
@@ -36,6 +40,7 @@ __all__ = [
     "basisPointsDivisor",
     "defaultEngineTitle",
     "defaultEngineVersion",
+    "intraStateHalfBpsDivisor",
     "maxValidGstRate",
     "millisecondsPerSecond",
     "minValidGstRate",

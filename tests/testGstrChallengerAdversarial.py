@@ -113,30 +113,30 @@ class TestArithmeticInvariantsAndOddNumbers:
         """Tests that odd taxable amounts split into integer CGST/SGST without drifting."""
         oddScenario = next(s for s in getCanonicalOddPaiseScenarios() if s.taxablePaise == 99999)
         gst = computeGstBreakdown(oddScenario.taxablePaise, oddScenario.gstRatePercent, isIntraState=oddScenario.isIntraState)
-        assert gst["cgstPaise"] == oddScenario.expectedCgstPaise
-        assert gst["sgstPaise"] == oddScenario.expectedSgstPaise
-        assert gst["totalTaxPaise"] == oddScenario.expectedTotalTaxPaise
+        assert gst.cgstPaise == oddScenario.expectedCgstPaise
+        assert gst.sgstPaise == oddScenario.expectedSgstPaise
+        assert gst.totalTaxPaise == oddScenario.expectedTotalTaxPaise
 
         line = GstrLineItem(
             skuId="SKU-ODD-01", hsnCode="8471", quantity=3, unitPricePaise=33333,
             taxableAmountPaise=oddScenario.taxablePaise, gstRatePercent=oddScenario.gstRatePercent,
-            cgstPaise=gst["cgstPaise"], sgstPaise=gst["sgstPaise"], igstPaise=0,
-            totalLinePaise=oddScenario.taxablePaise + gst["totalTaxPaise"],
+            cgstPaise=gst.cgstPaise, sgstPaise=gst.sgstPaise, igstPaise=0,
+            totalLinePaise=oddScenario.taxablePaise + gst.totalTaxPaise,
         )
         inv = GstrInvoicePayload(
             invoiceNumber="INV-ODD-001", invoiceDate="2026-08-24T16:00:00Z",
             sellerGstin="29AAAAA0000A1ZY", merchantStateCode="29", placeOfSupplyStateCode="29",
             isIntraState=True, lineItems=[line], taxableAmountPaise=oddScenario.taxablePaise,
-            totalCgstPaise=gst["cgstPaise"], totalSgstPaise=gst["sgstPaise"], totalIgstPaise=0,
-            totalTaxPaise=gst["totalTaxPaise"], totalTcsPaise=oddScenario.expectedTcsPaise,
-            shippingPaise=0, discountPaise=0, grandTotalPaise=oddScenario.taxablePaise + gst["totalTaxPaise"],
+            totalCgstPaise=gst.cgstPaise, totalSgstPaise=gst.sgstPaise, totalIgstPaise=0,
+            totalTaxPaise=gst.totalTaxPaise, totalTcsPaise=oddScenario.expectedTcsPaise,
+            shippingPaise=0, discountPaise=0, grandTotalPaise=oddScenario.taxablePaise + gst.totalTaxPaise,
             cryptographicAuditHash="2" * 64,
         )
         htmlOut = renderGstrInvoiceHtml(inv)
         assert formatPaiseToInr(oddScenario.taxablePaise) == "₹999.99"
-        assert formatPaiseToInr(gst["cgstPaise"]) == "₹89.99"
-        assert formatPaiseToInr(gst["sgstPaise"]) == "₹90.00"
-        assert "₹999.99" in htmlOut and "₹89.99" in htmlOut and "₹90.00" in htmlOut and "₹1179.98" in htmlOut
+        assert formatPaiseToInr(gst.cgstPaise) == "₹89.99"
+        assert formatPaiseToInr(gst.sgstPaise) == "₹89.99"
+        assert "₹999.99" in htmlOut and "₹89.99" in htmlOut and "₹1179.97" in htmlOut
 
     def testFiftyLineItemsStressCart(self) -> None:
         """Tests rendering of a 50-line item invoice with high volume."""

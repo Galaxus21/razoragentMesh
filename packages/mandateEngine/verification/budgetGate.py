@@ -12,6 +12,7 @@ from ..settlement.settlementExceptions import (
     CategoryNotAuthorizedException,
     MandateExpiredException,
     SingleTransactionLimitExceededException,
+    UnauthorizedAgentException,
 )
 from .arithmeticEnclave import (
     computeCartSettlementTotal,
@@ -35,6 +36,8 @@ def validateBudgetGate(
             f"Intent mandate expired at {intentMandate.validUntilTimestamp} (current: {evalTime})"
         )
 
+    _verifyDelegatedAgent(intentMandate, executionMandate)
+
     enclaveTotal = _recomputeEnclaveTotal(cartMandate)
     settlementAmt = executionMandate.settlementAmountPaise
     if enclaveTotal != settlementAmt or cartMandate.totalPaise != settlementAmt:
@@ -48,6 +51,25 @@ def validateBudgetGate(
     return True
 
 
+def _verifyDelegatedAgent(
+    intentMandate: IntentMandate,
+    executionMandate: ExecutionMandate,
+) -> None:
+    """Binds the executing agent to the agent the user actually delegated authority to.
+
+    The Ed25519 verifying key is derived from the DID carried inside each mandate, so a
+    signature proves only that the mandate is self-consistent -- not that its signer was
+    authorized. Without this comparison, any party holding a user's signed IntentMandate could
+    mint their own ExecutionMandate against it and spend the delegated budget.
+    """
+    if executionMandate.buyerAgentDid != intentMandate.delegatedAgentDid:
+        raise UnauthorizedAgentException(
+            f"Executing agent {executionMandate.buyerAgentDid} is not the delegated agent "
+            f"{intentMandate.delegatedAgentDid} authorized by intent mandate "
+            f"{intentMandate.mandateId}: ₹0 charged"
+        )
+
+
 def _recomputeEnclaveTotal(cartMandate: CartMandate) -> int:
     """Calculates total paise from items and taxes using pure integer arithmetic."""
     isIntraState = cartMandate.merchantStateCode == cartMandate.buyerDeliveryStateCode
@@ -58,7 +80,7 @@ def _recomputeEnclaveTotal(cartMandate: CartMandate) -> int:
         lineTaxable = computeLineItemTotal(item.unitPricePaise, item.quantity)
         gst = computeGstBreakdown(lineTaxable, item.gstRatePercent, isIntraState)
         recomputedSubtotal += lineTaxable
-        recomputedTax += gst["totalTaxPaise"]
+        recomputedTax += gst.totalTaxPaise
 
     return computeCartSettlementTotal(
         recomputedSubtotal,

@@ -13,7 +13,7 @@ import BuyerSdkDocsPage from "../src/app/(dashboard)/docs/buyer-sdk/page.js";
 import MerchantGuideDocsPage from "../src/app/(dashboard)/docs/merchant-guide/page.js";
 
 describe("Sidebar Accordion & 5-Category Taxonomy", () => {
-  it("should categorize all 10 routes into exactly 5 specific domain groupings", () => {
+  it("should categorize all 13 routes into exactly 5 specific domain groupings", () => {
     assert.equal(navigationCategories.length, 5);
 
     const categoryMap = new Map<string, ReadonlyArray<string>>();
@@ -42,13 +42,16 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
 
     assert.deepEqual(categoryMap.get("documentation"), [
       "/docs/setup",
+      "/docs/onboarding",
       "/docs/buyer-sdk",
       "/docs/merchant-guide",
+      "/docs/telemetry",
+      "/docs/gstr1-invoice",
     ]);
   });
 
-  it("should preserve flat navigationItems array containing all 10 routes", () => {
-    assert.equal(navigationItems.length, 10);
+  it("should preserve flat navigationItems array containing all 13 routes", () => {
+    assert.equal(navigationItems.length, 13);
     const flattenedRoutes = navigationCategories.flatMap((c) => c.children.map((ch) => ch.route));
     assert.deepEqual(navigationItems.map((i) => i.route), flattenedRoutes);
   });

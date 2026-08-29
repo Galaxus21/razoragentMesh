@@ -147,35 +147,35 @@ def test_f01_bva_fractional_float_nan_inf_rejections() -> None:
 def test_f02_bva_one_paise_at_18_percent_gst_zero_floor() -> None:
     """F02-B1: 1 paise taxable at 18% GST floors to 0 paise tax ((1*18)//100 == 0)."""
     gst = computeGstBreakdown(taxableSubtotalPaise=1, gstRatePercent=18, isIntraState=True)
-    assert gst["totalTaxPaise"] == 0
-    assert gst["cgstPaise"] == 0 and gst["sgstPaise"] == 0
+    assert gst.totalTaxPaise == 0
+    assert gst.cgstPaise == 0 and gst.sgstPaise == 0
 
 
 def test_f02_bva_99_paise_at_5_percent_gst_odd_floor() -> None:
-    """F02-B2: 99 paise taxable at 5% GST floors to 4 paise tax ((99*5)//100 = 4)."""
+    """F02-B2: 99 paise taxable at 5% GST floors to 4 paise tax, split into equal halves."""
     gst = computeGstBreakdown(taxableSubtotalPaise=99, gstRatePercent=5, isIntraState=True)
-    assert gst["totalTaxPaise"] == 4
-    # CGST (2% rate) = (99 * 2) // 100 = 1 paise, SGST = 4 - 1 = 3 paise (penny conservation)
-    assert gst["cgstPaise"] == 1
-    assert gst["sgstPaise"] == 3
-    assert gst["cgstPaise"] + gst["sgstPaise"] == 4
+    assert gst.totalTaxPaise == 4
+    # CGST and SGST are each the 2.5% half-rate: (99 * 250) // 20000 = 2 paise, applied identically.
+    assert gst.cgstPaise == 2
+    assert gst.sgstPaise == 2
+    assert gst.cgstPaise + gst.sgstPaise == 4
 
 
 def test_f02_bva_mega_transaction_10_billion_paise_gst() -> None:
     """F02-B3: Mega transaction of 10,000,000,000 paise (₹10 crore) computes exact tax."""
     subtotal = 10_000_000_000
     gst = computeGstBreakdown(taxableSubtotalPaise=subtotal, gstRatePercent=18, isIntraState=True)
-    assert gst["totalTaxPaise"] == 1_800_000_000
-    assert gst["cgstPaise"] == 900_000_000
-    assert gst["sgstPaise"] == 900_000_000
+    assert gst.totalTaxPaise == 1_800_000_000
+    assert gst.cgstPaise == 900_000_000
+    assert gst.sgstPaise == 900_000_000
 
 
 def test_f02_bva_highest_gst_slab_28_percent() -> None:
     """F02-B4: Highest standard GST luxury slab (28%) applies exact 14% CGST + 14% SGST."""
     gst = computeGstBreakdown(taxableSubtotalPaise=100000, gstRatePercent=28, isIntraState=True)
-    assert gst["cgstPaise"] == 14000
-    assert gst["sgstPaise"] == 14000
-    assert gst["totalTaxPaise"] == 28000
+    assert gst.cgstPaise == 14000
+    assert gst.sgstPaise == 14000
+    assert gst.totalTaxPaise == 28000
 
 
 def test_f02_bva_tcs_one_paise_boundary() -> None:

@@ -125,16 +125,16 @@ def _buildLineItemsAndTaxTotals(
                 unitPricePaise=invoiceItem.unitPricePaise,
                 taxableAmountPaise=lineTaxable,
                 gstRatePercent=invoiceItem.gstRatePercent,
-                cgstPaise=gst["cgstPaise"],
-                sgstPaise=gst["sgstPaise"],
-                igstPaise=gst["igstPaise"],
-                totalLinePaise=lineTaxable + gst["totalTaxPaise"],
+                cgstPaise=gst.cgstPaise,
+                sgstPaise=gst.sgstPaise,
+                igstPaise=gst.igstPaise,
+                totalLinePaise=lineTaxable + gst.totalTaxPaise,
             )
         )
         accumTaxable += lineTaxable
-        accumCgst += gst["cgstPaise"]
-        accumSgst += gst["sgstPaise"]
-        accumIgst += gst["igstPaise"]
+        accumCgst += gst.cgstPaise
+        accumSgst += gst.sgstPaise
+        accumIgst += gst.igstPaise
 
     return items, accumTaxable, accumCgst, accumSgst, accumIgst
 

@@ -62,8 +62,8 @@ def _buildCartAndExecution(
         hsnCode="8471", gstRatePercent=taxPercent, lineTotalPaise=subtotal,
     )
     tbSchema = TaxBreakdownSchema(
-        cgstPaise=tb["cgstPaise"], sgstPaise=tb["sgstPaise"],
-        igstPaise=tb["igstPaise"], totalTaxPaise=tb["totalTaxPaise"],
+        cgstPaise=tb.cgstPaise, sgstPaise=tb.sgstPaise,
+        igstPaise=tb.igstPaise, totalTaxPaise=tb.totalTaxPaise,
     )
     cart = createSignedCartMandate(
         cartId="cart_gate_stress", merchantSigner=merchantSigner,

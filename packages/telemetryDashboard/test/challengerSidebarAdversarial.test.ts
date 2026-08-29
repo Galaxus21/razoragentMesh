@@ -15,7 +15,7 @@ import MerchantGuideDocsPage from "../src/app/(dashboard)/docs/merchant-guide/pa
 
 const stressLoopIterations = 5000;
 const expectedCategoryCount = 5;
-const expectedTotalRouteCount = 10;
+const expectedTotalRouteCount = 13;
 
 const defaultCategoryIds: ReadonlyArray<string> = [
   "platformOps",

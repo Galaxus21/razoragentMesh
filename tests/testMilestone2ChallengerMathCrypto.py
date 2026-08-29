@@ -89,18 +89,20 @@ class TestTaxEngineAndIntegerMath:
         tcs = computeTcsWithholding(taxable, isIntra)
 
         if isIntra:
-            expectedCgst = (taxable * (rate // 2)) // 100
-            expectedTotal = (taxable * rate) // 100
-            assert gst["cgstPaise"] == expectedCgst
-            assert gst["sgstPaise"] == expectedTotal - expectedCgst
-            assert gst["igstPaise"] == 0 and gst["totalTaxPaise"] == expectedTotal
+            # CGST and SGST are each the half-rate applied independently, so they are
+            # always equal; the total is their sum, not a separately-floored full-rate value.
+            expectedCgst = (taxable * rate) // 200
+            expectedTotal = expectedCgst * 2
+            assert gst.cgstPaise == expectedCgst
+            assert gst.sgstPaise == expectedCgst
+            assert gst.igstPaise == 0 and gst.totalTaxPaise == expectedTotal
             assert tcs["tcsCgstPaise"] == (taxable * 50) // 10000
             assert tcs["tcsSgstPaise"] == (taxable * 50) // 10000
             assert tcs["totalTcsPaise"] == (taxable * 100) // 10000
         else:
-            assert gst["cgstPaise"] == 0 and gst["sgstPaise"] == 0
-            assert gst["igstPaise"] == (taxable * rate) // 100
-            assert gst["totalTaxPaise"] == (taxable * rate) // 100
+            assert gst.cgstPaise == 0 and gst.sgstPaise == 0
+            assert gst.igstPaise == (taxable * rate) // 100
+            assert gst.totalTaxPaise == (taxable * rate) // 100
             assert tcs["tcsIgstPaise"] == (taxable * 100) // 10000
             assert tcs["totalTcsPaise"] == (taxable * 100) // 10000
 
@@ -115,20 +117,22 @@ class TestTaxEngineAndIntegerMath:
             gst = computeGstBreakdown(taxable, rate, isIntra)
             tcs = computeTcsWithholding(taxable, isIntra)
 
-            assert isinstance(taxable, int) and isinstance(gst["totalTaxPaise"], int)
+            assert isinstance(taxable, int) and isinstance(gst.totalTaxPaise, int)
             if isIntra:
-                assert gst["cgstPaise"] + gst["sgstPaise"] == (taxable * rate) // 100
+                assert gst.cgstPaise == gst.sgstPaise
+                assert gst.cgstPaise + gst.sgstPaise == gst.totalTaxPaise
+                assert gst.totalTaxPaise == 2 * ((taxable * rate) // 200)
                 assert tcs["tcsCgstPaise"] == tcs["tcsSgstPaise"]
             else:
-                assert gst["igstPaise"] == (taxable * rate) // 100
+                assert gst.igstPaise == (taxable * rate) // 100
                 assert tcs["tcsCgstPaise"] == 0 and tcs["tcsSgstPaise"] == 0
 
     def testMonetaryStressHugeValue(self) -> None:
         hugeTaxable = 10_000_000_000_000
         hugeGst = computeGstBreakdown(hugeTaxable, 18, isIntraState=True)
-        assert hugeGst["cgstPaise"] == 900_000_000_000
-        assert hugeGst["sgstPaise"] == 900_000_000_000
-        assert hugeGst["totalTaxPaise"] == 1_800_000_000_000
+        assert hugeGst.cgstPaise == 900_000_000_000
+        assert hugeGst.sgstPaise == 900_000_000_000
+        assert hugeGst.totalTaxPaise == 1_800_000_000_000
         assert formatPaiseToInr(hugeTaxable) == "₹100000000000.00"
 
 

@@ -1,5 +1,6 @@
 """Two-Phase Commit (2PC) state machine logic with rollback compensation."""
 
+import time
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -17,6 +18,7 @@ from ..mandates.executionMandateSchema import ExecutionMandate
 from ..mandates.intentMandateSchema import IntentMandate
 from ..nonce.nonceLedger import NonceLedger
 from ..verification.budgetGate import validateBudgetGate
+from ..verification.settlementLedger import SettlementLedger
 from ..verification.signatureChainVerifier import verifyMandateChain
 from .razorpayRouteClient import (
     RazorpayRouteClient,
@@ -24,7 +26,10 @@ from .razorpayRouteClient import (
     RouteTransferResponse,
     TransferReversalResponse,
 )
-from .settlementExceptions import SettlementCompensationTriggeredException
+from .settlementExceptions import (
+    InventoryLockExpiredException,
+    SettlementCompensationTriggeredException,
+)
 from .splitManifestBuilder import SplitTransferManifest
 
 
@@ -36,10 +41,12 @@ class TwoPhaseCommitSaga:
         routeClient: RazorpayRouteClient,
         nonceLedger: NonceLedger,
         dlq: Optional["CompensationDlq"] = None,
+        settlementLedger: Optional[SettlementLedger] = None,
     ) -> None:
         self._routeClient = routeClient
         self._nonceLedger = nonceLedger
         self._dlq = dlq
+        self._settlementLedger = settlementLedger
 
     def verifyMandateSignatures(
         self,
@@ -194,16 +201,61 @@ class TwoPhaseCommitSaga:
         paymentId: str,
         serverTime: Optional[int] = None,
     ) -> None:
-        """Performs Phase 1 nonce, signature, hash chain, budget gate checks and capture."""
+        """Performs Phase 1 authentication, authorization, replay defence, and capture.
+
+        Ordering is deliberate: authenticate (signatures, hash chain), then authorize (budget
+        gate, delegated agent), and only then consume single-use state (nonce, cart claim,
+        spend counter). Consuming the nonce first would let an unauthenticated caller who
+        learns a nonce burn it and fail the legitimate settlement.
+        """
+        self.verifyMandateSignatures(intentMandate, cartMandate, executionMandate)
+        verifyMandateChain(intentMandate, cartMandate, executionMandate)
+        validateBudgetGate(intentMandate, cartMandate, executionMandate, serverTime)
+        _verifyInventoryLockActive(cartMandate, serverTime)
+
         await self._nonceLedger.validateAndRecordNonce(
             nonce=executionMandate.nonce,
             timestamp=executionMandate.timestamp,
             serverTime=serverTime,
         )
-        self.verifyMandateSignatures(intentMandate, cartMandate, executionMandate)
-        verifyMandateChain(intentMandate, cartMandate, executionMandate)
-        validateBudgetGate(intentMandate, cartMandate, executionMandate, serverTime)
+        await self._claimSettlementSlot(intentMandate, executionMandate, serverTime)
+
         await self._routeClient.capturePayment(
             paymentId=paymentId,
             amountPaise=executionMandate.settlementAmountPaise,
+        )
+
+    async def _claimSettlementSlot(
+        self,
+        intentMandate: IntentMandate,
+        executionMandate: ExecutionMandate,
+        serverTime: Optional[int] = None,
+    ) -> None:
+        """Claims the cart exactly once and books the spend against the mandate's cumulative cap."""
+        if self._settlementLedger is None:
+            return
+        await self._settlementLedger.claimCartSettlement(executionMandate.cartMandateHash)
+        await self._settlementLedger.recordCumulativeSpend(
+            mandateId=intentMandate.mandateId,
+            amountPaise=executionMandate.settlementAmountPaise,
+            maxBudgetPaise=intentMandate.maxBudgetPaise,
+            expiresAtUnix=intentMandate.validUntilTimestamp,
+            serverTime=serverTime,
+        )
+
+
+def _verifyInventoryLockActive(
+    cartMandate: CartMandate,
+    serverTime: Optional[int] = None,
+) -> None:
+    """Rejects settlement once the cart's inventory reservation has lapsed.
+
+    Without this the lock is advisory only: an expired reservation still settles, so stock
+    released back to other buyers can be sold twice.
+    """
+    evaluatedAt = serverTime if serverTime is not None else int(time.time())
+    if evaluatedAt > cartMandate.inventoryLockExpiresAt:
+        raise InventoryLockExpiredException(
+            f"Inventory lock {cartMandate.inventoryLockToken} expired at "
+            f"{cartMandate.inventoryLockExpiresAt} (now {evaluatedAt}): ₹0 charged"
         )

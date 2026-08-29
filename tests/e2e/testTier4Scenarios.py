@@ -124,12 +124,12 @@ async def test_s01_autonomous_b2b_hardware_purchase_inter_state() -> None:
     unit_price = 3500000 # ₹35,000
     taxable = computeLineItemTotal(unit_price, 1)
     gst = computeGstBreakdown(taxable, 18, isIntraState=False)
-    assert gst["igstPaise"] == 630000 and gst["cgstPaise"] == 0 and gst["sgstPaise"] == 0
-    total_paise = computeCartSettlementTotal(taxable, gst["totalTaxPaise"], shippingPaise=10000, discountPaise=0)
+    assert gst.igstPaise == 630000 and gst.cgstPaise == 0 and gst.sgstPaise == 0
+    total_paise = computeCartSettlementTotal(taxable, gst.totalTaxPaise, shippingPaise=10000, discountPaise=0)
     assert total_paise == 4140000
-    
+
     item = CartItemSchema(skuId="SKU-B2B-01", quantity=1, unitPricePaise=unit_price, hsnCode="8471", gstRatePercent=18, lineTotalPaise=taxable)
-    tax_breakdown = TaxBreakdownSchema(cgstPaise=0, sgstPaise=0, igstPaise=gst["igstPaise"], totalTaxPaise=gst["totalTaxPaise"])
+    tax_breakdown = TaxBreakdownSchema(cgstPaise=0, sgstPaise=0, igstPaise=gst.igstPaise, totalTaxPaise=gst.totalTaxPaise)
     
     cart = createSignedCartMandate(
         cartId="M-C-S01", merchantSigner=actors.merchant_nexus, merchantGstin="27ABCDE1234F1Z0",

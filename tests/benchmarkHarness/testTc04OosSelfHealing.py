@@ -56,9 +56,9 @@ class SelfHealingCartEngine:
     ) -> tuple[AmendmentMandate, CartMandate]:
         taxable = computeLineItemTotal(subPrice, reqQty)
         gst = computeGstBreakdown(taxable, subGstRate, isIntraState=True)
-        total = computeCartSettlementTotal(taxable, gst["totalTaxPaise"])
+        total = computeCartSettlementTotal(taxable, gst.totalTaxPaise)
         cartItem = CartItemSchema(skuId=subSkuId, quantity=reqQty, unitPricePaise=subPrice, hsnCode=hsnCode, gstRatePercent=subGstRate, lineTotalPaise=taxable)
-        taxBreakdown = TaxBreakdownSchema(cgstPaise=gst["cgstPaise"], sgstPaise=gst["sgstPaise"], igstPaise=0, totalTaxPaise=gst["totalTaxPaise"])
+        taxBreakdown = TaxBreakdownSchema(cgstPaise=gst.cgstPaise, sgstPaise=gst.sgstPaise, igstPaise=0, totalTaxPaise=gst.totalTaxPaise)
         newCart = createSignedCartMandate(
             cartId=f"cart_healed_{subSkuId.lower()}", merchantSigner=merchantSigner,
             merchantGstin=originalCart.merchantGstin, merchantStateCode=originalCart.merchantStateCode,
@@ -94,9 +94,9 @@ class SelfHealingCartEngine:
 def _buildOriginalOosCart(merchantSigner: Ed25519Signer, now: int) -> CartMandate:
     origTaxable = originalPricePaise
     origGst = computeGstBreakdown(origTaxable, 18, isIntraState=True)
-    origTotal = computeCartSettlementTotal(origTaxable, origGst["totalTaxPaise"])
+    origTotal = computeCartSettlementTotal(origTaxable, origGst.totalTaxPaise)
     item = CartItemSchema(skuId=originalOosSkuId, quantity=1, unitPricePaise=originalPricePaise, hsnCode="8471", gstRatePercent=18, lineTotalPaise=origTaxable)
-    taxBreakdown = TaxBreakdownSchema(cgstPaise=origGst["cgstPaise"], sgstPaise=origGst["sgstPaise"], igstPaise=0, totalTaxPaise=origGst["totalTaxPaise"])
+    taxBreakdown = TaxBreakdownSchema(cgstPaise=origGst.cgstPaise, sgstPaise=origGst.sgstPaise, igstPaise=0, totalTaxPaise=origGst.totalTaxPaise)
     return createSignedCartMandate(
         cartId="cart_orig_oos_sku101", merchantSigner=merchantSigner, merchantGstin="29AABCU9603R1ZJ",
         merchantStateCode="29", buyerDeliveryPincode="560001", buyerDeliveryStateCode="29",

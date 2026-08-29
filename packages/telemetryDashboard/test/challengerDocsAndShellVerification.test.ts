@@ -22,14 +22,17 @@ import MerchantStudioPage from "../src/app/(dashboard)/merchant-studio/page.js";
 import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 
 const expectedCategoryCount = 5;
-const expectedTotalRoutesCount = 10;
-const expectedDocsRoutesCount = 3;
+const expectedTotalRoutesCount = 13;
+const expectedDocsRoutesCount = 6;
 const expectedTelemetryRoutesCount = 7;
 
 const requiredDocsRouteUrls: ReadonlyArray<string> = [
   "/docs/setup",
+  "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
+  "/docs/telemetry",
+  "/docs/gstr1-invoice",
 ];
 
 const requiredTelemetryRouteUrls: ReadonlyArray<string> = [
@@ -97,7 +100,7 @@ describe("Empirical Challenger 2 — Link Integrity & Route Configuration Invari
     }
   });
 
-  it("should verify all 10 navigation items have valid URI paths and non-empty metadata", () => {
+  it("should verify all 13 navigation items have valid URI paths and non-empty metadata", () => {
     assert.equal(navigationItems.length, expectedTotalRoutesCount);
 
     const seenRoutes = new Set<string>();

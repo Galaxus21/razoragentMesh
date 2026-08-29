@@ -14,19 +14,27 @@ from .config import getMandateEngineSettings
 from .constants.settlementConstants import (
     defaultEngineTitle, defaultEngineVersion, millisecondsPerSecond, transferIdPrefix,
 )
+from .dependencies import (
+    getCompensationDlq, getNonceLedger, getRedisClient,
+    getSettlementLedger, getSettlementOrchestrator, getTelemetryEmitter,
+)
 from .mandates.cartMandateSchema import CartMandate
 from .mandates.executionMandateSchema import ExecutionMandate
 from .mandates.intentMandateSchema import IntentMandate
 from .nonce.nonceLedger import NonceLedger
+from .settlement.compensationDlq import CompensationDlq
 from .settlement.razorpayRouteClient import RazorpayRouteClient
 from .settlement.settlementExceptions import (
     ArithmeticDriftException, ArithmeticEnclaveMismatchException,
     BudgetExceededViolation, CategoryNotAuthorizedException,
     FutureTimestampException, InvalidPincodeException, MandateEngineException,
     MandateExpiredException, MandateHashChainMismatchException,
+    CartAlreadySettledException, CumulativeBudgetExceededException,
+    InventoryLockExpiredException,
     NonceReplayException, PaymentBlockedException,
     SettlementCompensationTriggeredException, SignatureVerificationFailedException,
     SingleTransactionLimitExceededException, TimestampExpiredException,
+    UnauthorizedAgentException,
 )
 from .settlement.settlementOrchestrator import SettlementOrchestrator, SettlementResult
 from .settlement.splitManifestBuilder import (
@@ -35,6 +43,7 @@ from .settlement.splitManifestBuilder import (
 from .telemetryEmitter import (
     TelemetryEventEmitter, TelemetryEventModel, globalTelemetryEmitter,
 )
+from .verification.settlementLedger import SettlementLedger
 
 
 class ExecuteSettlementRequestSchema(BaseModel):
@@ -119,9 +128,12 @@ async def _handleSettlementException(
     if isinstance(err, SettlementCompensationTriggeredException):
         await emitRollbackTelemetry(emitter, payload, str(err))
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Settlement compensation rollback triggered: {err}")
-    if isinstance(err, NonceReplayException):
+    if isinstance(err, (NonceReplayException, CartAlreadySettledException, InventoryLockExpiredException)):
         raise HTTPException(status.HTTP_409_CONFLICT, str(err))
-    if isinstance(err, (BudgetExceededViolation, PaymentBlockedException, CategoryNotAuthorizedException, SingleTransactionLimitExceededException)):
+    if isinstance(err, UnauthorizedAgentException):
+        await emitBudgetBlockedTelemetry(emitter, payload, str(err))
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(err))
+    if isinstance(err, (BudgetExceededViolation, CumulativeBudgetExceededException, PaymentBlockedException, CategoryNotAuthorizedException, SingleTransactionLimitExceededException)):
         await emitBudgetBlockedTelemetry(emitter, payload, str(err))
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err))
     if isinstance(err, (
@@ -151,42 +163,6 @@ def _registerTelemetryRoutes(app: FastAPI) -> None:
     ) -> Dict[str, Any]:
         delivered = await emitter.publishEvent(event)
         return {"status": "broadcasted", "subscribers": delivered}
-
-
-def getRedisClient(request: Request) -> Any:
-    """Retrieves Redis client instance from application state."""
-    return getattr(request.app.state, "redis", None)
-
-
-def getNonceLedger(request: Request) -> NonceLedger:
-    """Retrieves or instantiates NonceLedger from application state."""
-    ledger = getattr(request.app.state, "nonceLedger", None)
-    return ledger if ledger is not None else NonceLedger(getRedisClient(request))
-
-
-def getTelemetryEmitter(request: Request) -> TelemetryEventEmitter:
-    """Retrieves active telemetry emitter instance from application state."""
-    return getattr(request.app.state, "telemetryEmitter", globalTelemetryEmitter)
-
-
-def getSettlementOrchestrator(request: Request) -> SettlementOrchestrator:
-    """Retrieves or builds SettlementOrchestrator from application state."""
-    orchestrator = getattr(request.app.state, "settlementOrchestrator", None)
-    if orchestrator is not None:
-        return orchestrator
-    routeClient = getattr(request.app.state, "routeClient", None)
-    if routeClient is None:
-        routeClient = RazorpayRouteClient(isMockMode=True)
-        request.app.state.routeClient = routeClient
-    nonceLedger = getNonceLedger(request)
-    orchestrator = SettlementOrchestrator(
-        routeClient=routeClient, nonceLedger=nonceLedger,
-        protocolFeeAccount=defaultProtocolFeeAccount,
-        protocolFeePaise=defaultProtocolFeePaise,
-        logisticsAccount=defaultLogisticsAccount,
-    )
-    request.app.state.settlementOrchestrator = orchestrator
-    return orchestrator
 
 
 async def emitPaymentCapturedTelemetry(
@@ -243,6 +219,32 @@ async def emitBudgetBlockedTelemetry(
     await emitter.publishEvent(event)
 
 
+def _initializeSettlementState(app: FastAPI) -> None:
+    """Binds the shared Redis-backed settlement collaborators onto application state.
+
+    Each is created only if absent, so a test that pre-seeds app.state keeps its own doubles.
+    """
+    if not getattr(app.state, "nonceLedger", None):
+        app.state.nonceLedger = NonceLedger(app.state.redis)
+    if not getattr(app.state, "telemetryEmitter", None):
+        app.state.telemetryEmitter = globalTelemetryEmitter
+    if not getattr(app.state, "routeClient", None):
+        app.state.routeClient = RazorpayRouteClient(isMockMode=True)
+    if not getattr(app.state, "compensationDlq", None):
+        app.state.compensationDlq = CompensationDlq(redisClient=app.state.redis)
+    if not getattr(app.state, "settlementLedger", None):
+        app.state.settlementLedger = SettlementLedger(redisClient=app.state.redis)
+    if not getattr(app.state, "settlementOrchestrator", None):
+        app.state.settlementOrchestrator = SettlementOrchestrator(
+            routeClient=app.state.routeClient, nonceLedger=app.state.nonceLedger,
+            protocolFeeAccount=defaultProtocolFeeAccount,
+            protocolFeePaise=defaultProtocolFeePaise,
+            logisticsAccount=defaultLogisticsAccount,
+            dlq=app.state.compensationDlq,
+            settlementLedger=app.state.settlementLedger,
+        )
+
+
 @asynccontextmanager
 async def mandateAppLifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for initializing and terminating Redis and settlement state."""
@@ -253,19 +255,7 @@ async def mandateAppLifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             app.state.redis = None
 
-    if not getattr(app.state, "nonceLedger", None):
-        app.state.nonceLedger = NonceLedger(app.state.redis)
-    if not getattr(app.state, "telemetryEmitter", None):
-        app.state.telemetryEmitter = globalTelemetryEmitter
-    if not getattr(app.state, "routeClient", None):
-        app.state.routeClient = RazorpayRouteClient(isMockMode=True)
-    if not getattr(app.state, "settlementOrchestrator", None):
-        app.state.settlementOrchestrator = SettlementOrchestrator(
-            routeClient=app.state.routeClient, nonceLedger=app.state.nonceLedger,
-            protocolFeeAccount=defaultProtocolFeeAccount,
-            protocolFeePaise=defaultProtocolFeePaise,
-            logisticsAccount=defaultLogisticsAccount,
-        )
+    _initializeSettlementState(app)
 
     yield
 

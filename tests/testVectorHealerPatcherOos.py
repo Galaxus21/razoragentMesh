@@ -38,12 +38,12 @@ from razoragentMesh.packages.vectorHealer.src.patching import (
 def _buildSampleCart(merchantSigner: Ed25519Signer, cartId: str, taxable: int, gstRate: int = 18) -> CartMandate:
     now = int(time.time())
     gst = computeGstBreakdown(taxable, gstRate, isIntraState=True)
-    total = computeCartSettlementTotal(taxable, gst["totalTaxPaise"])
+    total = computeCartSettlementTotal(taxable, gst.totalTaxPaise)
     item = CartItemSchema(
         skuId="SKU-101", quantity=1, unitPricePaise=taxable,
         hsnCode="8471", gstRatePercent=gstRate, lineTotalPaise=taxable,
     )
-    tb = TaxBreakdownSchema(cgstPaise=gst["cgstPaise"], sgstPaise=gst["sgstPaise"], igstPaise=0, totalTaxPaise=gst["totalTaxPaise"])
+    tb = TaxBreakdownSchema(cgstPaise=gst.cgstPaise, sgstPaise=gst.sgstPaise, igstPaise=0, totalTaxPaise=gst.totalTaxPaise)
     return createSignedCartMandate(
         cartId=cartId, merchantSigner=merchantSigner, merchantGstin="29AABCU9603R1ZJ",
         merchantStateCode="29", buyerDeliveryPincode="560001", buyerDeliveryStateCode="29",
