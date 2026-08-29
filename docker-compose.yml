@@ -31,6 +31,8 @@ services:
       dockerfile: Dockerfile
     image: razoragent_mcp_server:latest
     container_name: razoragent_mcp_server
+    # NOTE: mcpServer speaks MCP over stdio, not HTTP -- nothing binds this port. The mapping
+    # is retained only so the reserved port is visible in the topology; see README section 3.
     ports:
       - "4001:4001"
     environment:

@@ -65,7 +65,12 @@ Services exposed:
 - **Mandate Settlement Engine API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Merchant Onboarding & Bullion API Docs:** [http://localhost:4002/docs](http://localhost:4002/docs)
 - **x402 Dynamic Negotiation Gateway Docs:** [http://localhost:4003/docs](http://localhost:4003/docs)
-- **MCP Discovery Server (JSON-RPC 2.0):** `http://localhost:4001`
+- **MCP Discovery Server (JSON-RPC 2.0):** stdio transport, **not HTTP**. It is driven by an
+  agent runtime over stdin/stdout, the standard MCP transport. To exercise it directly:
+
+  ```bash
+  echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | docker run -i --rm razoragent_mcp_server:latest node dist/mcpServerMain.js
+  ```
 - **Qdrant Vector DB Console:** [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
 - **Redis Nonce Ledger:** `localhost:6379`
 
@@ -106,8 +111,13 @@ so the Docker build context stays self-contained.
 | [`TELEMETRY_OBSERVABILITY_GUIDE.md`](./packages/telemetryDashboard/docs/TELEMETRY_OBSERVABILITY_GUIDE.md) | `/docs/telemetry` | SSE streaming architecture, KPIs, and the 12 canonical event schemas |
 | [`GSTR1_INVOICE_SPECIFICATION.md`](./packages/telemetryDashboard/docs/GSTR1_INVOICE_SPECIFICATION.md) | `/docs/gstr1-invoice` | Statutory GST compliance, integer-paise arithmetic, JCS audit digest |
 
-Architecture and presentation material: [`GUIDE.md`](./GUIDE.md). Completed milestone log:
-[`PROJECT.md`](./PROJECT.md).
+Repository-level documentation not served by the dashboard:
+
+| Document | Scope |
+|---|---|
+| [`docs/STATUTORY_RATES.md`](./docs/STATUTORY_RATES.md) | Where tax rates live, their citations and verification dates, and the procedure for keeping them true |
+| [`GUIDE.md`](./GUIDE.md) | Architecture and presentation material |
+| [`PROJECT.md`](./PROJECT.md) | Completed milestone log |
 
 ---
 
@@ -118,3 +128,60 @@ Architecture and presentation material: [`GUIDE.md`](./GUIDE.md). Completed mile
 3. **Cryptographic Mandate Signing:** Inspect the AP2 mandate explorer displaying real-time Ed25519 signature badges for $M_I$, $M_C$, and $M_E$.
 4. **OOS Self-Healing:** Trigger an out-of-stock event on SKU-101 and watch the Vector Diff Viewer substitute SKU-104 in $< 300\text{ms}$.
 5. **Razorpay Route 2PC Settlement:** Watch the live webhook feed capture payment and execute 3-way split transfers to Merchant, Protocol, and Logistics accounts.
+
+---
+
+## 5. Scope & Limitations
+
+This is a protocol prototype built for the Razorpay AI Buildathon, not a production payments
+system. The boundaries below are deliberate engineering choices made to keep the protocol layer
+the focus, and they are stated here so they read as decisions rather than oversights.
+
+### Deliberately out of scope
+
+**No authentication or authorization on the HTTP surface.** Merchant routes
+(`POST/PUT/DELETE` on catalog, policy, bulk-ingest, registration) are open, and merchant
+identity is a path parameter. Anyone who can reach the API can mutate any merchant's catalog.
+Production would need API keys or mTLS plus per-merchant authorization; the *agent-facing*
+settlement path is separately protected by Ed25519 mandate verification and AP2 delegation
+binding, which is where the protocol's security claims actually live.
+
+**No rate limiting or anti-abuse on the merchant API.** The x402 gateway does implement
+proof-of-work and micro-escrow for agent negotiation, but the merchant surface has neither.
+
+**Single-tenant assumptions.** There is no tenant isolation in Redis keyspaces or Qdrant
+collections beyond naming conventions.
+
+**Razorpay integration runs in mock mode by default.** `RazorpayRouteClient(isMockMode=True)`
+simulates capture, transfer and reversal. The live HTTP path exists and is exercised by tests,
+but the demo does not move real money.
+
+### Known limitations of what *is* implemented
+
+**TCS rates are not effective-dated.** Section 52 rates are a single set of constants reflecting
+the rate currently in force (0.5% per Notification 15/2024-Central Tax). Reissuing an invoice
+for a supply made before 10 July 2024 would apply today's rate rather than the rate in force on
+the supply date. See [docs/STATUTORY_RATES.md](docs/STATUTORY_RATES.md).
+
+**The cumulative budget cap fails open.** If Redis is unavailable, `SettlementLedger` logs a
+warning and allows the settlement rather than blocking it — a deliberate choice so that a
+degraded cache cannot halt a live demo. Production should fail closed.
+
+**Test coverage is mock-backed.** The suite runs against `fakeredis` and in-process doubles for
+Qdrant and Razorpay. It verifies protocol logic thoroughly; it does not verify real
+infrastructure behaviour under failure.
+
+**No CI pipeline.** Tests are run locally via the commands in §3.
+
+**The idempotency header name is provider-specific and unverified.**
+`headerIdempotencyKey` in `razorpayRouteClient.py` must be confirmed against the current
+Razorpay API reference before live use. The mechanism is correct regardless of the header
+string.
+
+### Where the engineering effort actually went
+
+Integer-paise arithmetic with no floating point in any monetary path; RFC 8785 JCS
+canonicalization verified byte-identical across the Python and TypeScript SDKs; statutory GST
+computed so CGST and SGST are equal by construction; AP2 mandate chain verification with
+delegation binding, cumulative budget enforcement and cart replay defence; and a 2PC settlement
+saga with durable Redis-backed compensation.
