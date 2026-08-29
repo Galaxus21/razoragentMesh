@@ -181,15 +181,16 @@ def test_f02_gst_zero_rated_exempt_goods() -> None:
 
 
 def test_f02_gst_section_52_tcs_withholding() -> None:
-    """F02-5: Section 52 TCS withholding calculates exact 1% split (0.5%+0.5% intra, 1.0% inter)."""
+    """F02-5: Section 52 TCS withholding calculates exact 0.5% split (0.25%+0.25% intra,
+    0.5% inter) per Notification 15/2024-Central Tax."""
     tcs_intra = computeTcsWithholding(taxableSubtotalPaise=100000, isIntraState=True)
-    assert tcs_intra["tcsCgstPaise"] == 500
-    assert tcs_intra["tcsSgstPaise"] == 500
-    assert tcs_intra["totalTcsPaise"] == 1000
+    assert tcs_intra["tcsCgstPaise"] == 250
+    assert tcs_intra["tcsSgstPaise"] == 250
+    assert tcs_intra["totalTcsPaise"] == 500
 
     tcs_inter = computeTcsWithholding(taxableSubtotalPaise=100000, isIntraState=False)
-    assert tcs_inter["tcsIgstPaise"] == 1000
-    assert tcs_inter["totalTcsPaise"] == 1000
+    assert tcs_inter["tcsIgstPaise"] == 500
+    assert tcs_inter["totalTcsPaise"] == 500
 
 # =============================================================================
 # FEATURE 03: Conserved Bill Splitting (5 cases)

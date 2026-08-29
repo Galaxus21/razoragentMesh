@@ -369,6 +369,10 @@ class CompensationDlqWorker:
             reversalResp = await self.routeClient.reverseTransfer(
                 transferId=event.transferId,
                 amountPaise=event.amountPaise,
+                # This worker retries with backoff, so a reversal that timed out after the
+                # provider accepted it would otherwise be issued twice. The event carried an
+                # idempotencyKey from the start; it was simply never sent.
+                idempotencyKey=event.idempotencyKey,
             )
             await self.dlq.markCompensated(event.transferId, reversalId=reversalResp.id)
             return event.model_copy(

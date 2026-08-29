@@ -237,7 +237,7 @@ def _buildMultiLineInvoice() -> tuple[GstrInvoicePayload, int]:
         sellerGstin="29AAAAA0000A1ZY", merchantStateCode="29", placeOfSupplyStateCode="29",
         isIntraState=True, lineItems=lineItems, taxableAmountPaise=totalTaxable,
         totalCgstPaise=totalCgst, totalSgstPaise=totalSgst, totalIgstPaise=0,
-        totalTaxPaise=totTax, totalTcsPaise=(totalTaxable * 100) // 10000,
+        totalTaxPaise=totTax, totalTcsPaise=(totalTaxable * 50) // 10000,
         shippingPaise=5000, discountPaise=2500,
         grandTotalPaise=totalTaxable + totTax + 5000 - 2500, cryptographicAuditHash="b" * 64,
     )

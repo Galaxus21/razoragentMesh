@@ -74,11 +74,12 @@ def testTc08ExactZeroDriftIntegerPaiseConservation() -> None:
         == gstBreakdown.totalTaxPaise
     )
 
-    # Section 52 TCS Withholding (1% total = 0.5% CGST + 0.5% SGST = 83,750 + 83,750 paise = 167,500 paise)
+    # Section 52 TCS Withholding, 0.5% total = 0.25% CGST + 0.25% SGST, per
+    # Notification 15/2024-Central Tax: 41,875 + 41,875 = 83,750 paise.
     tcs = computeTcsWithholding(taxableSubtotal, isIntraState=True)
-    assert tcs["tcsCgstPaise"] == 83750  # ₹837.50
-    assert tcs["tcsSgstPaise"] == 83750  # ₹837.50
-    assert tcs["totalTcsPaise"] == 167500  # ₹1,675.00
+    assert tcs["tcsCgstPaise"] == 41875  # ₹418.75
+    assert tcs["tcsSgstPaise"] == 41875  # ₹418.75
+    assert tcs["totalTcsPaise"] == 83750  # ₹837.50
 
     # Gross Settlement Total
     grossTotal = computeCartSettlementTotal(

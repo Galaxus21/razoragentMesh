@@ -169,7 +169,7 @@ def _renderTableFooter(invoice: GstrInvoicePayload) -> str:
 
 def _renderSummaryAndTcs(invoice: GstrInvoicePayload) -> str:
     """Renders Section 52 TCS breakdown and invoice financial summary."""
-    tcsRateText = "0.5% CGST + 0.5% SGST (100 bps)" if invoice.isIntraState else "1.0% IGST (100 bps)"
+    tcsRateText = "0.25% CGST + 0.25% SGST (50 bps)" if invoice.isIntraState else "0.5% IGST (50 bps)"
     tcsPaiseStr = formatPaiseToInr(invoice.totalTcsPaise)
     taxableStr = formatPaiseToInr(invoice.taxableAmountPaise)
     taxStr = formatPaiseToInr(invoice.totalTaxPaise)

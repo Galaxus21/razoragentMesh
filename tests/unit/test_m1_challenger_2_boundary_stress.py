@@ -90,16 +90,16 @@ def test_spending_cap_boundary_transitions():
 
 def test_tcs_and_discount_allocation_enclave():
     tcs_10k = compute_tcs_withholding(10000, is_intra_state=True)
-    assert tcs_10k['tcsCgstPaise'] == 50 and tcs_10k['tcsSgstPaise'] == 50
-    assert tcs_10k['tcsIgstPaise'] == 0 and tcs_10k['totalTcsPaise'] == 100
+    assert tcs_10k['tcsCgstPaise'] == 25 and tcs_10k['tcsSgstPaise'] == 25
+    assert tcs_10k['tcsIgstPaise'] == 0 and tcs_10k['totalTcsPaise'] == 50
 
     tcs_intra = compute_tcs_withholding(100000, is_intra_state=True)
-    assert tcs_intra['tcsCgstPaise'] == 500 and tcs_intra['tcsSgstPaise'] == 500
-    assert tcs_intra['tcsIgstPaise'] == 0 and tcs_intra['totalTcsPaise'] == 1000
+    assert tcs_intra['tcsCgstPaise'] == 250 and tcs_intra['tcsSgstPaise'] == 250
+    assert tcs_intra['tcsIgstPaise'] == 0 and tcs_intra['totalTcsPaise'] == 500
 
     tcs_inter = compute_tcs_withholding(100000, is_intra_state=False)
     assert tcs_inter['tcsCgstPaise'] == 0 and tcs_inter['tcsSgstPaise'] == 0
-    assert tcs_inter['tcsIgstPaise'] == 1000 and tcs_inter['totalTcsPaise'] == 1000
+    assert tcs_inter['tcsIgstPaise'] == 500 and tcs_inter['totalTcsPaise'] == 500
 
     items = [1000, 2000, 3000]
     assert allocate_cart_discount_conserved(items, 6000) == [1000, 2000, 3000]
@@ -177,5 +177,5 @@ def test_function_name_aliasing_and_result_field_access():
     res_gw = gw_calc_route_splits(5000, 100, 20)
     assert res_gw.merchantNetPaise == 4930
     assert gw_eval_spending_cap(1000, 500, 2000).allowed is True
-    assert gw_compute_tcs(50000)['totalTcsPaise'] == 500
+    assert gw_compute_tcs(50000)['totalTcsPaise'] == 250
     assert gw_norm_inr('99.00') == 9900

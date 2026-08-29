@@ -86,6 +86,26 @@ class SettlementLedger:
             )
         return cumulativePaise
 
+    async def releaseCartClaim(self, cartMandateHash: str) -> None:
+        """Releases a cart claim taken for a settlement that then failed.
+
+        The claim is a reservation, not a record of payment: it is taken before capture so two
+        concurrent settlements cannot both proceed. If the settlement does not complete, holding
+        the claim would lock a legitimate buyer out of retrying their own cart.
+        """
+        if self._redis is None:
+            return
+        try:
+            await self._redis.delete(f"{settledCartRedisKeyPrefix}{cartMandateHash}")
+        except Exception as redisError:
+            logger.warning("SettlementLedger: could not release cart claim (%s)", redisError)
+
+    async def releaseCumulativeSpend(self, mandateId: str, amountPaise: int) -> None:
+        """Returns provisionally-booked spend to a mandate after a failed settlement."""
+        if self._redis is None:
+            return
+        await self._rollbackSpend(f"{spendRedisKeyPrefix}{mandateId}", amountPaise)
+
     async def getCumulativeSpend(self, mandateId: str) -> int:
         """Returns paise already settled against this mandate, or 0 when unavailable."""
         if self._redis is None:

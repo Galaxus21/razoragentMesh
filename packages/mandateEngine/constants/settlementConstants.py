@@ -14,11 +14,25 @@ percentDivisor: int = 100
 intraStateHalfBpsDivisor: int = 20000
 millisecondsPerSecond: int = 1000
 
-# TCS Statutory Rates
-tcsRateBasisPoints: int = 100
-tcsCgstBasisPoints: int = 50
-tcsSgstBasisPoints: int = 50
-tcsIgstBasisPoints: int = 100
+# TCS Statutory Rates (Section 52, CGST Act 2017 -- Tax Collected at Source by an
+# electronic commerce operator on the net value of taxable supplies).
+#
+# Source:        Notification No. 15/2024-Central Tax, dated 10 July 2024, which amends
+#                Notification No. 52/2018-Central Tax (20 September 2018) by substituting
+#                "half per cent" with "0.25 per cent". The parallel reduction for
+#                inter-State supplies is Notification No. 02/2024-Integrated Tax.
+#                Recommended by the 53rd GST Council meeting.
+# Effect:        Combined TCS fell from 1.00% to 0.50% with effect from 10 July 2024.
+#                Intra-State: 0.25% CGST + 0.25% SGST. Inter-State: 0.50% IGST.
+# Last verified: 2026-08-29, against the notification reference above. The CBIC PDF portal
+#                (taxinformation.cbic.gov.in) could not be fetched directly at that time, so
+#                re-confirm against the primary PDF before relying on this in production.
+# Re-verify:     Whenever a GST Council meeting changes Section 52 rates. See
+#                docs/STATUTORY_RATES.md for the review procedure.
+tcsRateBasisPoints: int = 50
+tcsCgstBasisPoints: int = 25
+tcsSgstBasisPoints: int = 25
+tcsIgstBasisPoints: int = 50
 
 # Financial Limits & GST Rates
 zeroPaise: int = 0
@@ -35,6 +49,7 @@ purposeMerchantNetSettlement: str = "merchant_net_settlement"
 purposeProtocolFee: str = "protocol_fee"
 purposeLogistics: str = "logistics_fee"
 purposeLogisticsSlaSettlement: str = "logistics_sla_settlement"
+purposeTcsWithholding: str = "tcs_section_52_withholding"
 
 __all__ = [
     "basisPointsDivisor",
@@ -51,6 +66,7 @@ __all__ = [
     "purposeMerchantNetSettlement",
     "purposeMerchantPayout",
     "purposeProtocolFee",
+    "purposeTcsWithholding",
     "tcsCgstBasisPoints",
     "tcsIgstBasisPoints",
     "tcsRateBasisPoints",

@@ -95,7 +95,7 @@ def testRenderGstrInvoiceHtmlIntraStateClassification(sampleIntraStateInvoice: G
     """Verifies intra-state supply label, CGST + SGST tax split, and Section 52 TCS split."""
     htmlDoc = renderGstrInvoiceHtml(sampleIntraStateInvoice)
     assert "INTRA-STATE (CGST + SGST)" in htmlDoc
-    assert "0.5% CGST + 0.5% SGST (100 bps)" in htmlDoc
+    assert "0.25% CGST + 0.25% SGST (50 bps)" in htmlDoc
     assert "₹360.00" in htmlDoc
     assert "₹40.00" in htmlDoc
 
@@ -107,7 +107,7 @@ def testRenderGstrInvoiceHtmlInterStateClassification(
     htmlDoc = renderGstrInvoiceHtml(sampleInterStateMultiSlabInvoice)
     assert "INTER-STATE (IGST)" in htmlDoc
     assert "27 - Maharashtra" in htmlDoc
-    assert "1.0% IGST (100 bps)" in htmlDoc
+    assert "0.5% IGST (50 bps)" in htmlDoc
     assert "₹1760.00" in htmlDoc
     assert "₹95.00" in htmlDoc
 

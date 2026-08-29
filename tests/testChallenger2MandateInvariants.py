@@ -156,8 +156,13 @@ def testBuildSplitManifestSumConservation() -> None:
         protocolFeeAccount="acc_protocol_fees", protocolFeePaise=50,
         logisticsAccount="acc_logistics_delhivery",
     )
-    assert manifest.merchantAmountPaise == total - 50 - shipping
+    assert manifest.merchantAmountPaise == total - 50 - shipping - manifest.tcsWithheldPaise
     assert manifest.protocolFeePaise == 50
     assert manifest.logisticsAmountPaise == shipping
+    # Section 52 TCS is withheld from the merchant and held for remittance, not paid out.
+    assert manifest.tcsWithheldPaise > 0
     assert manifest.totalPaise == total
-    assert manifest.merchantAmountPaise + manifest.protocolFeePaise + manifest.logisticsAmountPaise == total
+    assert (
+        manifest.merchantAmountPaise + manifest.protocolFeePaise
+        + manifest.logisticsAmountPaise + manifest.tcsWithheldPaise
+    ) == total

@@ -17,6 +17,11 @@ httpStatusOkMin: int = 200
 httpStatusOkMax: int = 300
 headerContentTypeJson: str = "application/json"
 headerAcceptJson: str = "application/json"
+# Idempotency header name. VERIFY against the current Razorpay API reference before going
+# live: Razorpay documents "X-Payout-Idempotency" for RazorpayX Payouts, and the header for
+# Route transfers/reversals must be confirmed rather than assumed. The mechanism below is
+# correct regardless; only this string is provider-specific.
+headerIdempotencyKey: str = "X-Razorpay-Idempotency-Key"
 
 
 class RouteTransferRequest(BaseModel):
@@ -95,6 +100,7 @@ class RazorpayRouteClient:
         self._capturedPayments: dict[str, PaymentCaptureResponse] = {}
         self._transfers: dict[str, RouteTransferResponse] = {}
         self._reversals: dict[str, TransferReversalResponse] = {}
+        self._idempotentTransfers: dict[str, RouteTransferResponse] = {}
         self.simulatedFailureAccount: Optional[str] = None
         self.simulatedReverseFailure: bool = False
         self.simulatedReverseFailureTransferId: Optional[str] = None
@@ -143,11 +149,18 @@ class RazorpayRouteClient:
         method: str,
         path: str,
         jsonPayload: Optional[dict[str, Any]] = None,
+        idempotencyKey: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Executes authenticated HTTP request against Razorpay Route API."""
+        """Executes authenticated HTTP request against Razorpay Route API.
+
+        When idempotencyKey is supplied it is sent as a request header so that a retry of a
+        timed-out money movement is collapsed by the provider instead of paying twice.
+        """
         url = f"{self.baseUrl}{path}"
         auth = (self.apiKey, self.apiSecret)
         headers = {"Content-Type": headerContentTypeJson, "Accept": headerAcceptJson}
+        if idempotencyKey:
+            headers[headerIdempotencyKey] = idempotencyKey
         try:
             if self._httpClient is not None:
                 resp = await self._httpClient.request(
@@ -206,9 +219,17 @@ class RazorpayRouteClient:
     async def createTransfer(
         self,
         transferRequest: RouteTransferRequest,
+        idempotencyKey: Optional[str] = None,
     ) -> RouteTransferResponse:
-        """Executes or mocks POST /v1/transfers split transfer."""
+        """Executes or mocks POST /v1/transfers split transfer.
+
+        A repeated idempotencyKey returns the original transfer instead of creating a second
+        one, so retrying a request that timed out after the provider had already accepted it
+        cannot pay the recipient twice.
+        """
         if self.isMockMode:
+            if idempotencyKey and idempotencyKey in self._idempotentTransfers:
+                return self._idempotentTransfers[idempotencyKey]
             if self.simulatedFailureAccount and transferRequest.account == self.simulatedFailureAccount:
                 raise MandateEngineException(f"Simulated Route transfer failure for account {transferRequest.account}")
 
@@ -219,6 +240,8 @@ class RazorpayRouteClient:
                 status="processed", createdAt=int(time.time()),
             )
             self._transfers[transferId] = transferRes
+            if idempotencyKey:
+                self._idempotentTransfers[idempotencyKey] = transferRes
             return transferRes
 
         payload = {
@@ -227,7 +250,9 @@ class RazorpayRouteClient:
             "currency": transferRequest.currency,
             "notes": transferRequest.notes,
         }
-        data = await self._sendHttpRequest(method="POST", path="/transfers", jsonPayload=payload)
+        data = await self._sendHttpRequest(
+            method="POST", path="/transfers", jsonPayload=payload, idempotencyKey=idempotencyKey,
+        )
         transferRes = RouteTransferResponse(
             id=str(data["id"]),
             entity=str(data.get("entity") or "transfer"),
@@ -244,6 +269,7 @@ class RazorpayRouteClient:
         self,
         transferId: str,
         amountPaise: Optional[int] = None,
+        idempotencyKey: Optional[str] = None,
     ) -> TransferReversalResponse:
         """Executes or mocks POST /v1/transfers/{id}/reversals compensation."""
         if self.isMockMode:
@@ -287,7 +313,10 @@ class RazorpayRouteClient:
             return reversalRes
 
         payload = {"amount": amountPaise, "currency": "INR"} if amountPaise is not None else None
-        data = await self._sendHttpRequest(method="POST", path=f"/transfers/{transferId}/reversals", jsonPayload=payload)
+        data = await self._sendHttpRequest(
+            method="POST", path=f"/transfers/{transferId}/reversals",
+            jsonPayload=payload, idempotencyKey=idempotencyKey,
+        )
         reversalRes = TransferReversalResponse(
             id=str(data["id"]),
             entity=str(data.get("entity") or "reversal"),

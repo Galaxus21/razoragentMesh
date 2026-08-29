@@ -225,11 +225,22 @@ def _build2pcTriplets(
 
 
 def _verify2pcReversals(routeClient: RazorpayRouteClient, failureStep: str, unitPrice: int, totalPaise: int, protocolFee: int) -> None:
+    """Asserts LIFO compensation reversed exactly the legs that completed.
+
+    Compares against the transfers the client actually recorded rather than recomputing the
+    merchant amount by hand, so the invariant (every completed leg is reversed, none twice)
+    stays meaningful as the split composition changes -- e.g. when Section 52 TCS withholding
+    added a fourth leg.
+    """
+    reversedAmounts = sorted(r.amount for r in routeClient._reversals.values())
+    completedAmounts = sorted(t.amount for t in routeClient._transfers.values())
+    assert reversedAmounts == completedAmounts
+
     if failureStep == "protocolFee":
-        assert list(routeClient._reversals.values())[0].amount == (totalPaise - protocolFee)
+        # Only the merchant leg had completed before the protocol-fee transfer failed.
+        assert len(reversedAmounts) == 1
     elif failureStep == "logistics":
-        reversedAmounts = [r.amount for r in routeClient._reversals.values()]
-        assert (unitPrice - protocolFee) in reversedAmounts and protocolFee in reversedAmounts
+        assert protocolFee in reversedAmounts
 
 
 class TestTwoPhaseCommitSettlementRollback:

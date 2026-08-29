@@ -10,6 +10,7 @@ from ..constants.settlementConstants import (
     purposeLogisticsSlaSettlement as logisticsPurpose,
     purposeMerchantNetSettlement as merchantPurpose,
     purposeProtocolFee as protocolPurpose,
+    purposeTcsWithholding as tcsPurpose,
 )
 from ..crypto.cryptoKeyUtils import extractPublicKeyFromDid
 from ..crypto.ed25519Verifier import Ed25519Verifier
@@ -31,6 +32,10 @@ from .settlementExceptions import (
     SettlementCompensationTriggeredException,
 )
 from .splitManifestBuilder import SplitTransferManifest
+
+# Must stay in sync with CompensationDlq's key format (compensationDlq.py) -- see
+# _buildReversalIdempotencyKey for why the two paths must agree.
+reversalIdempotencyPrefix: str = "cmp_"
 
 
 class TwoPhaseCommitSaga:
@@ -107,6 +112,11 @@ class TwoPhaseCommitSaga:
                 reversalRes = await self._routeClient.reverseTransfer(
                     transferId=completedTransfer.id,
                     amountPaise=completedTransfer.amount,
+                    # Must match the key CompensationDlq assigns for this transfer. An inline
+                    # reversal that times out is enqueued and retried by the DLQ worker; if the
+                    # two paths used different keys the provider could reverse the same
+                    # transfer twice, refunding more than was taken.
+                    idempotencyKey=_buildReversalIdempotencyKey(completedTransfer.id),
                 )
                 if effectiveDlq is not None:
                     try:
@@ -164,6 +174,14 @@ class TwoPhaseCommitSaga:
                     notes={"purpose": logisticsPurpose, "paymentId": paymentId},
                 )
             )
+        if manifest.tcsWithheldPaise > 0:
+            requests.append(
+                RouteTransferRequest(
+                    account=manifest.tcsHoldingAccount,
+                    amount=manifest.tcsWithheldPaise,
+                    notes={"purpose": tcsPurpose, "paymentId": paymentId},
+                )
+            )
         return requests
 
     async def executeSplitPhase(
@@ -176,7 +194,10 @@ class TwoPhaseCommitSaga:
         completed: list[RouteTransferResponse] = []
         try:
             for transferRequest in transferRequests:
-                transferResponse = await self._routeClient.createTransfer(transferRequest)
+                transferResponse = await self._routeClient.createTransfer(
+                    transferRequest,
+                    idempotencyKey=_buildTransferIdempotencyKey(transferRequest, paymentId),
+                )
                 completed.append(transferResponse)
             return completed
         except Exception as err:
@@ -220,8 +241,30 @@ class TwoPhaseCommitSaga:
         )
         await self._claimSettlementSlot(intentMandate, executionMandate, serverTime)
 
-        await self._routeClient.capturePayment(
-            paymentId=paymentId,
+        try:
+            await self._routeClient.capturePayment(
+                paymentId=paymentId,
+                amountPaise=executionMandate.settlementAmountPaise,
+            )
+        except Exception:
+            # The claim and the spend are reservations taken before capture so that two
+            # concurrent settlements cannot both proceed. No money moved, so releasing them
+            # is required -- otherwise a transient capture failure would permanently bar the
+            # buyer from retrying their own cart and would silently consume their budget.
+            await self.releaseSettlementSlot(intentMandate, executionMandate)
+            raise
+
+    async def releaseSettlementSlot(
+        self,
+        intentMandate: IntentMandate,
+        executionMandate: ExecutionMandate,
+    ) -> None:
+        """Returns the cart claim and provisional spend after a settlement that did not complete."""
+        if self._settlementLedger is None:
+            return
+        await self._settlementLedger.releaseCartClaim(executionMandate.cartMandateHash)
+        await self._settlementLedger.releaseCumulativeSpend(
+            mandateId=intentMandate.mandateId,
             amountPaise=executionMandate.settlementAmountPaise,
         )
 
@@ -259,3 +302,28 @@ def _verifyInventoryLockActive(
             f"Inventory lock {cartMandate.inventoryLockToken} expired at "
             f"{cartMandate.inventoryLockExpiresAt} (now {evaluatedAt}): ₹0 charged"
         )
+
+
+def _buildTransferIdempotencyKey(
+    transferRequest: RouteTransferRequest,
+    paymentId: Optional[str],
+) -> str:
+    """Derives a stable idempotency key for one leg of a split.
+
+    Keyed on (payment, recipient, purpose) so that re-issuing the same leg -- after a timeout
+    where the provider may already have accepted it -- is collapsed rather than paid twice,
+    while genuinely distinct legs of the same payment stay independent.
+    """
+    purpose = (transferRequest.notes or {}).get("purpose", "split")
+    effectivePaymentId = paymentId or (transferRequest.notes or {}).get("paymentId", "unknown")
+    return f"trf_{effectivePaymentId}_{transferRequest.account}_{purpose}"
+
+
+def _buildReversalIdempotencyKey(transferId: str) -> str:
+    """Derives the reversal idempotency key for a transfer.
+
+    Deliberately identical to the key CompensationDlq assigns (`cmp_{transferId}`), so an
+    inline reversal and a later DLQ retry of the same transfer collapse into one reversal
+    at the provider rather than refunding twice.
+    """
+    return f"{reversalIdempotencyPrefix}{transferId}"

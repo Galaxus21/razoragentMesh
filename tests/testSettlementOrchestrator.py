@@ -81,7 +81,8 @@ async def testSettlementSagaHappyPath() -> None:
     assert isinstance(result, SettlementResult)
     assert result.status == "captured"
     assert result.amountPaise == 118000
-    assert len(result.transfers) == 2  # Merchant net + Protocol fee
+    assert len(result.transfers) == 3  # Merchant net + Protocol fee + Section 52 TCS withholding
+    assert sum(t.amount for t in result.transfers) == result.amountPaise
     assert result.invoice.grandTotalPaise == 118000
 
 

@@ -66,21 +66,21 @@ def testComputeGstBreakdownInterState() -> None:
 
 
 def testComputeTcsWithholding() -> None:
-    """Verifies 1% TCS calculation under Section 52."""
-    # 1,00,000 paise (Rs 1,000) at 1% TCS (100 basis points = 1000 paise total)
-    # Intra-state: 0.5% CGST (50 bps) = 500 paise, 0.5% SGST (50 bps) = 500 paise, Total = 1000 paise
+    """Verifies 0.5% TCS calculation under Section 52 (Notification 15/2024)."""
+    # 1,00,000 paise (Rs 1,000) at 0.5% TCS (50 basis points = 500 paise total)
+    # Intra-state: 0.25% CGST (25 bps) = 250 paise, 0.25% SGST (25 bps) = 250 paise
     intraTcs = computeTcsWithholding(100000, isIntraState=True)
-    assert intraTcs["tcsCgstPaise"] == 500
-    assert intraTcs["tcsSgstPaise"] == 500
+    assert intraTcs["tcsCgstPaise"] == 250
+    assert intraTcs["tcsSgstPaise"] == 250
     assert intraTcs["tcsIgstPaise"] == 0
-    assert intraTcs["totalTcsPaise"] == 1000
+    assert intraTcs["totalTcsPaise"] == 500
 
-    # Inter-state: 1.0% IGST (100 bps) = 1000 paise
+    # Inter-state: 0.5% IGST (50 bps) = 500 paise
     interTcs = computeTcsWithholding(100000, isIntraState=False)
     assert interTcs["tcsCgstPaise"] == 0
     assert interTcs["tcsSgstPaise"] == 0
-    assert interTcs["tcsIgstPaise"] == 1000
-    assert interTcs["totalTcsPaise"] == 1000
+    assert interTcs["tcsIgstPaise"] == 500
+    assert interTcs["totalTcsPaise"] == 500
 
 
 def testComputeCartSettlementTotal() -> None:

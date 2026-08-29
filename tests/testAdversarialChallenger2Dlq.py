@@ -236,7 +236,11 @@ class TestSagaReversalPositionPermutations:
         failedAccounts = {"acc_l_multi", "acc_m_multi"}
         originalReverse = routeClient.reverseTransfer
 
-        async def selectiveReverse(transferId: str, amountPaise: Optional[int] = None) -> TransferReversalResponse:
+        async def selectiveReverse(
+            transferId: str,
+            amountPaise: Optional[int] = None,
+            idempotencyKey: Optional[str] = None,
+        ) -> TransferReversalResponse:
             trf = routeClient._transfers.get(transferId)
             if trf and trf.account in failedAccounts:
                 raise MandateEngineException(f"Selective failure for account {trf.account}")
@@ -646,7 +650,11 @@ class TestConcurrencyAndIdempotencyStress:
         # Configure selective failure on protocol accounts
         originalReverse = routeClient.reverseTransfer
 
-        async def selectiveReverse(transferId: str, amountPaise: Optional[int] = None) -> TransferReversalResponse:
+        async def selectiveReverse(
+            transferId: str,
+            amountPaise: Optional[int] = None,
+            idempotencyKey: Optional[str] = None,
+        ) -> TransferReversalResponse:
             trf = routeClient._transfers.get(transferId)
             if trf and "protocol" in trf.account:
                 raise MandateEngineException(f"Simulated network glitch on {trf.account}")

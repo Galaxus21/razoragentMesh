@@ -223,3 +223,64 @@ async def testNonceSurvivesAnUnauthenticatedSettlementAttempt() -> None:
         await saga.verifyAndCapturePhase(intent, cart, tampered, paymentId="pay_forged")
 
     assert await redisClient.get(f"{nonceRedisKeyPrefix}{execution.nonce}") is None
+
+
+# --- reservation release: a failed settlement must not lock the buyer out -----------------------
+
+class _CaptureAlwaysFailsRouteClient(RazorpayRouteClient):
+    """Route client whose primary capture always fails, simulating a transient gateway error."""
+
+    async def capturePayment(self, paymentId: str, amountPaise: int, currency: str = "INR"):  # type: ignore[override]
+        raise RuntimeError("Simulated capture failure")
+
+
+@pytest.mark.asyncio
+async def testFailedCaptureReleasesCartClaimAndSpend() -> None:
+    """A capture that fails moved no money, so the cart and budget must be returned.
+
+    Holding them would permanently bar the buyer from retrying their own cart and would
+    silently consume budget for a payment that never happened.
+    """
+    userSigner, merchantSigner, agent = _signers()
+    intent = _buildIntent(userSigner, agent.getAgentDid())
+    cart = _buildCart(merchantSigner)
+    execution = createSignedExecutionMandate(
+        executionId="M-E-CAPFAIL", buyerAgentSigner=agent, intentMandate=intent,
+        cartMandate=cart, settlementAmountPaise=cart.totalPaise, upiCircleToken="upi_tok_guard",
+    )
+    ledger = SettlementLedger(redisClient=fakeredis.aioredis.FakeRedis(decode_responses=True))
+    saga = TwoPhaseCommitSaga(
+        routeClient=_CaptureAlwaysFailsRouteClient(isMockMode=True),
+        nonceLedger=NonceLedger(fakeredis.aioredis.FakeRedis(decode_responses=True)),
+        settlementLedger=ledger,
+    )
+
+    with pytest.raises(RuntimeError):
+        await saga.verifyAndCapturePhase(intent, cart, execution, paymentId="pay_capfail")
+
+    assert await ledger.getCumulativeSpend(intent.mandateId) == 0
+    await ledger.claimCartSettlement(execution.cartMandateHash)  # must not raise: claim released
+
+
+@pytest.mark.asyncio
+async def testSuccessfulSettlementKeepsCartClaimAndSpend() -> None:
+    """Control: a settlement that completes retains both reservations."""
+    userSigner, merchantSigner, agent = _signers()
+    intent = _buildIntent(userSigner, agent.getAgentDid())
+    cart = _buildCart(merchantSigner)
+    execution = createSignedExecutionMandate(
+        executionId="M-E-OKCAP", buyerAgentSigner=agent, intentMandate=intent,
+        cartMandate=cart, settlementAmountPaise=cart.totalPaise, upiCircleToken="upi_tok_guard",
+    )
+    ledger = SettlementLedger(redisClient=fakeredis.aioredis.FakeRedis(decode_responses=True))
+    saga = TwoPhaseCommitSaga(
+        routeClient=RazorpayRouteClient(isMockMode=True),
+        nonceLedger=NonceLedger(fakeredis.aioredis.FakeRedis(decode_responses=True)),
+        settlementLedger=ledger,
+    )
+
+    await saga.verifyAndCapturePhase(intent, cart, execution, paymentId="pay_okcap")
+
+    assert await ledger.getCumulativeSpend(intent.mandateId) == cart.totalPaise
+    with pytest.raises(CartAlreadySettledException):
+        await ledger.claimCartSettlement(execution.cartMandateHash)

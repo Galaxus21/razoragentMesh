@@ -100,7 +100,7 @@ def testGstrInvoiceGenerationIntraState() -> None:
     assert invoice.totalCgstPaise == 9000
     assert invoice.totalSgstPaise == 9000
     assert invoice.totalIgstPaise == 0
-    assert invoice.totalTcsPaise == 1000
+    assert invoice.totalTcsPaise == 500
     assert invoice.grandTotalPaise == 120000
     assert len(invoice.cryptographicAuditHash) == 64
 
@@ -118,7 +118,7 @@ def testGstrInvoiceGenerationInterState() -> None:
     assert invoice.totalCgstPaise == 0
     assert invoice.totalSgstPaise == 0
     assert invoice.totalIgstPaise == 18000
-    assert invoice.totalTcsPaise == 1000
+    assert invoice.totalTcsPaise == 500
     assert invoice.grandTotalPaise == 118000
     assert len(invoice.cryptographicAuditHash) == 64
 
@@ -168,7 +168,7 @@ def testGstrInvoiceMultiItemLineAggregation() -> None:
     assert invoice.taxableAmountPaise == 300000
     assert invoice.totalCgstPaise == 18000
     assert invoice.totalSgstPaise == 18000
-    assert invoice.totalTcsPaise == 3000
+    assert invoice.totalTcsPaise == 1500
     assert invoice.grandTotalPaise == 340000
 
 

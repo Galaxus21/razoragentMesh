@@ -65,7 +65,7 @@ def _buildSingleSlabInvoice(
         merchantStateCode="29", placeOfSupplyStateCode=placeOfSupply,
         isIntraState=isIntraState, lineItems=[line], taxableAmountPaise=taxable,
         totalCgstPaise=cgst, totalSgstPaise=sgst, totalIgstPaise=igst,
-        totalTaxPaise=totalTax, totalTcsPaise=(taxable * 100) // 10000,
+        totalTaxPaise=totalTax, totalTcsPaise=(taxable * 50) // 10000,
         shippingPaise=shippingPaise, discountPaise=discountPaise,
         grandTotalPaise=taxable + totalTax + shippingPaise - discountPaise,
         cryptographicAuditHash="0" * 64 if isIntraState else "1" * 64,
@@ -89,7 +89,7 @@ class TestMultiSlabAndStateResolutionStress:
         )
         htmlOut = renderGstrInvoiceHtml(inv)
         assert f"SKU-INTER-{rate}" in htmlOut and "07 - Delhi" in htmlOut
-        assert "INTER-STATE (IGST)" in htmlOut and "1.0% IGST (100 bps)" in htmlOut
+        assert "INTER-STATE (IGST)" in htmlOut and "0.5% IGST (50 bps)" in htmlOut
         assert formatPaiseToInr(inv.totalIgstPaise) in htmlOut
         assert "Promotional Discount:</span><span>-₹20.00" in htmlOut
         assert "Shipping &amp; Handling:</span><span>₹50.00" in htmlOut
@@ -161,7 +161,7 @@ class TestArithmeticInvariantsAndOddNumbers:
             sellerGstin="29AAAAA0000A1ZY", merchantStateCode="29", placeOfSupplyStateCode="29",
             isIntraState=True, lineItems=lines, taxableAmountPaise=totTaxable,
             totalCgstPaise=totCgst, totalSgstPaise=totSgst, totalIgstPaise=0,
-            totalTaxPaise=totTax, totalTcsPaise=(totTaxable * 100) // 10000,
+            totalTaxPaise=totTax, totalTcsPaise=(totTaxable * 50) // 10000,
             shippingPaise=0, discountPaise=0, grandTotalPaise=totTaxable + totTax,
             cryptographicAuditHash="3" * 64,
         )

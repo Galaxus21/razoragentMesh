@@ -7,7 +7,7 @@ Verifies:
 4. Conserved bill splitting (Hare-Niemeyer largest remainder) exact penny sum and error bounds.
 5. Conserved cart discount allocation with individual item price caps and overdraft rejection.
 6. Conserved route split payouts (merchant + protocol + logistics == gross) and overdraft defense.
-7. TCS Section 52 withholding split conservation (intra: 50/50 bps, inter: 100 bps).
+7. TCS Section 52 withholding split conservation (intra: 25/25 bps, inter: 50 bps per Notification 15/2024).
 8. Strict float and boolean rejection across all enclave arithmetic interfaces.
 """
 
@@ -31,6 +31,9 @@ try:
     )
     from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
         ArithmeticDriftException,
+    )
+    from razoragentMesh.packages.mandateEngine.constants.settlementConstants import (
+        basisPointsDivisor, tcsCgstBasisPoints, tcsIgstBasisPoints,
     )
 except ModuleNotFoundError:
     from packages.mandateEngine.verification.arithmeticEnclave import (
@@ -230,13 +233,13 @@ class TestPropertyRouteSplitsAndTcs:
         """Property: TCS withholding strictly conserves 50+50 bps (intra) or 100 bps (inter)."""
         tcs_intra = compute_tcs_withholding(subtotal, is_intra_state=True)
         assert tcs_intra["tcsCgstPaise"] + tcs_intra["tcsSgstPaise"] == tcs_intra["totalTcsPaise"]
-        assert tcs_intra["tcsCgstPaise"] == (subtotal * 50) // 10000
-        assert tcs_intra["tcsSgstPaise"] == (subtotal * 50) // 10000
+        assert tcs_intra["tcsCgstPaise"] == (subtotal * tcsCgstBasisPoints) // basisPointsDivisor
+        assert tcs_intra["tcsSgstPaise"] == (subtotal * tcsCgstBasisPoints) // basisPointsDivisor
         assert tcs_intra["tcsIgstPaise"] == 0
 
         tcs_inter = compute_tcs_withholding(subtotal, is_intra_state=False)
         assert tcs_inter["tcsIgstPaise"] == tcs_inter["totalTcsPaise"]
-        assert tcs_inter["tcsIgstPaise"] == (subtotal * 100) // 10000
+        assert tcs_inter["tcsIgstPaise"] == (subtotal * tcsIgstBasisPoints) // basisPointsDivisor
         assert tcs_inter["tcsCgstPaise"] == 0
         assert tcs_inter["tcsSgstPaise"] == 0
 

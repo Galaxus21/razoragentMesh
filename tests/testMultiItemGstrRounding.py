@@ -160,7 +160,7 @@ def testTc11MultiItemInterStateGstr1MixedTaxReconciliation() -> None:
     assert invoice.totalIgstPaise == 176000 and invoice.totalTaxPaise == 176000
 
     tcsResult = computeTcsWithholding(taxableSubtotal, isIntraState=False)
-    assert tcsResult["tcsIgstPaise"] == 10000 and invoice.totalTcsPaise == 10000
+    assert tcsResult["tcsIgstPaise"] == 5000 and invoice.totalTcsPaise == 5000
     assert invoice.grandTotalPaise == 1179000 and len(invoice.cryptographicAuditHash) == expectedAuditHashLength
     for idx, item in enumerate(invoice.lineItems):
         assert item.cgstPaise == 0 and item.sgstPaise == 0 and item.igstPaise == expectedPerLineIgst[idx]

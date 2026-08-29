@@ -27,7 +27,9 @@ from razoragentMesh.packages.mandateEngine.settlement.settlementOrchestrator imp
     SettlementResult,
 )
 from razoragentMesh.packages.mandateEngine.settlement.splitManifestBuilder import (
+    defaultProtocolFeeAccount,
     defaultProtocolFeePaise,
+    defaultTcsHoldingAccount,
 )
 from razoragentMesh.packages.mandateEngine.verification.budgetGate import validateBudgetGate
 from razoragentMesh.tests.integration.testEndToEndFixtures import (
@@ -247,10 +249,14 @@ async def testA2AAutonomousSettlementWithInvoiceHash(
 
     assert result.status == "captured"
     assert result.amountPaise == totalGrossPaise
-    assert len(result.transfers) == 2
+    # Three legs: merchant net, protocol fee, and Section 52 TCS withheld for remittance.
+    assert len(result.transfers) == 3
     merchantTransfer = next(t for t in result.transfers if t.account == defaultMerchantAccount)
-    protocolTransfer = next(t for t in result.transfers if t.account != defaultMerchantAccount)
-    assert merchantTransfer.amount == totalGrossPaise - defaultProtocolFeePaise
+    protocolTransfer = next(t for t in result.transfers if t.account == defaultProtocolFeeAccount)
+    tcsTransfer = next(t for t in result.transfers if t.account == defaultTcsHoldingAccount)
     assert protocolTransfer.amount == defaultProtocolFeePaise
+    assert tcsTransfer.amount > 0
+    assert merchantTransfer.amount == totalGrossPaise - defaultProtocolFeePaise - tcsTransfer.amount
+    assert sum(t.amount for t in result.transfers) == totalGrossPaise
     assert result.invoice.invoiceNumber.startswith("INV-")
     assert len(result.invoice.cryptographicAuditHash) == 64

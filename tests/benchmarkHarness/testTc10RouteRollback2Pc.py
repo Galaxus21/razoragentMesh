@@ -86,6 +86,8 @@ async def testTc10RouteRollback2pcSagaCompensation(
     assert "triggered rollback" in str(excInfo.value)
     assert len(routeClient._reversals) == 2
     totalReversedPaise = sum(r.amount for r in routeClient._reversals.values())
-    assert totalReversedPaise == (splitTotalPaise - logisticsSplitPaise)
+    # Every leg that actually completed must be reversed. The logistics leg raised before it
+    # was created, so it -- and the Section 52 TCS leg queued behind it -- never happened.
+    assert totalReversedPaise == sum(t.amount for t in routeClient._transfers.values())
     assert all(r.status == "processed" for r in routeClient._reversals.values())
 

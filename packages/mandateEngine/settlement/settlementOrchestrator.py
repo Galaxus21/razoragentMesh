@@ -140,6 +140,19 @@ class SettlementOrchestrator:
         """Performs Phase 1 nonce, signature, hash chain, budget gate checks and capture."""
         await self._saga.verifyAndCapturePhase(intentM, cartM, execM, paymentId, serverTime)
 
+    async def _releaseProvisionalSpend(
+        self,
+        intentMandate: IntentMandate,
+        executionMandate: ExecutionMandate,
+    ) -> None:
+        """Returns budget booked for a settlement whose transfers were rolled back."""
+        if self._settlementLedger is None:
+            return
+        await self._settlementLedger.releaseCumulativeSpend(
+            mandateId=intentMandate.mandateId,
+            amountPaise=executionMandate.settlementAmountPaise,
+        )
+
     async def executeSettlementSaga(
         self,
         intentMandate: IntentMandate,
@@ -154,7 +167,15 @@ class SettlementOrchestrator:
 
         manifest = self.buildSplitManifest(cartMandate, merchantAccount)
         requests = self._buildTransferRequests(manifest, paymentId)
-        transfers = await self._executeSplitPhase(requests, paymentId=paymentId)
+        try:
+            transfers = await self._executeSplitPhase(requests, paymentId=paymentId)
+        except Exception:
+            # Capture succeeded and the split phase compensated it, so the buyer's budget must
+            # not stay consumed. The cart claim is deliberately NOT released: reversals may
+            # still be in flight or queued in the DLQ, and allowing an immediate retry could
+            # pay the merchant twice. The claim expires on its own TTL.
+            await self._releaseProvisionalSpend(intentMandate, executionMandate)
+            raise
 
         invoiceNumber = f"{invoicePrefix}{executionMandate.executionId[:8].upper()}"
         invoice = generateGstrInvoice(

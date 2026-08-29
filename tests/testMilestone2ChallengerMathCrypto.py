@@ -12,6 +12,13 @@ import random
 import time
 import pytest
 
+from razoragentMesh.packages.mandateEngine.constants.settlementConstants import (
+    basisPointsDivisor,
+    tcsCgstBasisPoints,
+    tcsIgstBasisPoints,
+    tcsRateBasisPoints,
+    tcsSgstBasisPoints,
+)
 from razoragentMesh.packages.mandateEngine.crypto.cryptoKeyUtils import generateKeyPair
 from razoragentMesh.packages.mandateEngine.crypto.ed25519Signer import Ed25519Signer
 from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import (
@@ -96,15 +103,18 @@ class TestTaxEngineAndIntegerMath:
             assert gst.cgstPaise == expectedCgst
             assert gst.sgstPaise == expectedCgst
             assert gst.igstPaise == 0 and gst.totalTaxPaise == expectedTotal
-            assert tcs["tcsCgstPaise"] == (taxable * 50) // 10000
-            assert tcs["tcsSgstPaise"] == (taxable * 50) // 10000
-            assert tcs["totalTcsPaise"] == (taxable * 100) // 10000
+            assert tcs["tcsCgstPaise"] == (taxable * tcsCgstBasisPoints) // basisPointsDivisor
+            assert tcs["tcsSgstPaise"] == (taxable * tcsSgstBasisPoints) // basisPointsDivisor
+            assert tcs["totalTcsPaise"] == tcs["tcsCgstPaise"] + tcs["tcsSgstPaise"]
+            # Section 52 splits the combined rate equally between CGST and SGST.
+            assert tcsCgstBasisPoints == tcsSgstBasisPoints
+            assert tcsCgstBasisPoints + tcsSgstBasisPoints == tcsRateBasisPoints
         else:
             assert gst.cgstPaise == 0 and gst.sgstPaise == 0
             assert gst.igstPaise == (taxable * rate) // 100
             assert gst.totalTaxPaise == (taxable * rate) // 100
-            assert tcs["tcsIgstPaise"] == (taxable * 100) // 10000
-            assert tcs["totalTcsPaise"] == (taxable * 100) // 10000
+            assert tcs["tcsIgstPaise"] == (taxable * tcsIgstBasisPoints) // basisPointsDivisor
+            assert tcs["totalTcsPaise"] == tcs["tcsIgstPaise"]
 
     def testRandomizedTaxFuzzing1000Items(self) -> None:
         random.seed(1337)
