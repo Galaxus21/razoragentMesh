@@ -16,8 +16,18 @@ export const currencyInr = "INR";
 export const defaultMerchantId = "mer_razoragent_mesh_01";
 export const defaultMerchantState = "KA";
 export const defaultOriginPincode = "560001";
-export const defaultMerchantSecretKey = "mesh_hmac_secret_key_prod_v2_98f4a2";
-export const defaultMerchantPrivateKeyHex = "4c3b2a1009080706050403020100ffeeddccbbaa99887766554433221100ffee";
+// docker-compose passes HMAC_SECRET_KEY and MERCHANT_PRIVATE_KEY_HEX into this container, but
+// nothing read them: the signing keys resolved to the hardcoded fallbacks below regardless of
+// what the operator configured, and .env.example shipped a *different* HMAC value than the
+// fallback -- so a configured mesh would sign with one key while peers verified with another.
+// These now prefer the environment and fall back only for the bundled demo.
+const developmentMerchantSecretKey = "mesh_hmac_secret_key_prod_v2_98f4a2";
+const developmentMerchantPrivateKeyHex = "4c3b2a1009080706050403020100ffeeddccbbaa99887766554433221100ffee";
+
+export const defaultMerchantSecretKey =
+  process.env.HMAC_SECRET_KEY || developmentMerchantSecretKey;
+export const defaultMerchantPrivateKeyHex =
+  process.env.MERCHANT_PRIVATE_KEY_HEX || developmentMerchantPrivateKeyHex;
 
 export const defaultLockTtlSeconds = 60;
 export const minLockTtlSeconds = 10;

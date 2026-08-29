@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  python:
+    name: Python suite (backend + buyer SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        # Pinned to match the service Dockerfiles; see docs/STATUTORY_RATES.md and the
+        # Dockerfile comments for why these are pinned rather than floating.
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi==0.141.1 uvicorn==0.52.4 pydantic==2.13.5 \
+                      pynacl==1.6.2 redis==8.1.0 httpx==0.28.1 \
+                      qdrant-client==1.19.0 python-multipart==0.0.32
+          pip install pytest pytest-asyncio hypothesis fakeredis
+      - name: Run tests
+        working-directory: ${{ github.workspace }}
+        run: python -m pytest tests/ packages/buyerSdkPy/tests/ -q --tb=short
+
+  typescript:
+    name: TypeScript suites
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [mcpServer, buyerSdkTs, telemetryDashboard]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        working-directory: packages/${{ matrix.package }}
+        run: npm install --no-audit --no-fund
+      - name: Type check
+        working-directory: packages/${{ matrix.package }}
+        run: npx tsc --noEmit
+      - name: Test
+        working-directory: packages/${{ matrix.package }}
+        run: npm test
+
+  claims:
+    name: Documented claims match reality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No stale cross-language GST formula in docs
+        # The GSTR-1 spec is a live application asset served at /docs/gstr1-invoice, so a
+        # formula drift there ships to users. Rule V-01 in .agents/rules/verification-standards.md.
+        run: |
+          if grep -rn "TotalTax - CGST\|Rate/2) / 100" --include=*.md . ; then
+            echo "::error::Documentation describes the superseded asymmetric GST split"
+            exit 1
+          fi
+          echo "OK: no stale GST formula in documentation"
+      - name: Statutory constants carry a citation
+        run: |
+          if ! grep -q "Notification No. 15/2024-Central Tax" packages/mandateEngine/constants/settlementConstants.py; then
+            echo "::error::TCS constants lost their statutory citation (rule V-05)"
+            exit 1
+          fi
+          echo "OK: TCS constants cite their notification"
