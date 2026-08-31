@@ -13,18 +13,6 @@ class X402GatewaySettings(BaseModel):
         default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         description="Redis connection URL for gateway policies and sessions",
     )
-    port: int = Field(
-        default_factory=lambda: int(os.getenv("X402_GATEWAY_PORT", "4003")),
-        description="Port for x402Gateway service",
-    )
-    gatewaySecret: str = Field(
-        default_factory=lambda: os.getenv("GATEWAY_SECRET", "test_gateway_secret_key_32bytes!"),
-        description="HMAC secret for micro-escrow receipts and alerts",
-    )
-    environment: str = Field(
-        default_factory=lambda: os.getenv("ENVIRONMENT", "development"),
-        description="Runtime environment name",
-    )
 
 
 def getGatewaySettings() -> X402GatewaySettings:

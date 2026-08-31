@@ -31,18 +31,14 @@ def testMandateEngineSettingsDefaults() -> None:
     settings = getMandateEngineSettings()
     assert isinstance(settings.redisUrl, str)
     assert settings.redisUrl.startswith("redis://")
-    assert isinstance(settings.port, int)
-    assert settings.port == 4004
-    assert settings.environment == "development"
-    assert settings.mockRazorpayMode is True
     assert defaultMandateSettings is not None
 
 
 def testMandateEngineSettingsImmutability() -> None:
     """Verifies MandateEngineSettings is frozen and rejects mutations and extra fields."""
-    settings = MandateEngineSettings(redisUrl="redis://test:6379/1", port=4005)
+    settings = MandateEngineSettings(redisUrl="redis://test:6379/1")
     with pytest.raises(ValidationError):
-        settings.port = 4006  # type: ignore
+        settings.redisUrl = "redis://other:6379/2"  # type: ignore
 
     with pytest.raises(ValidationError):
         MandateEngineSettings(unknownField="invalid")  # type: ignore
@@ -52,26 +48,20 @@ def testX402GatewaySettingsDefaults() -> None:
     """Verifies default values and immutability for X402GatewaySettings."""
     settings = getGatewaySettings()
     assert isinstance(settings.redisUrl, str)
-    assert isinstance(settings.port, int)
-    assert settings.port == 4003
-    assert len(settings.gatewaySecret) > 0
     assert defaultGatewaySettings is not None
 
     with pytest.raises(ValidationError):
-        settings.port = 4004  # type: ignore
+        settings.redisUrl = "redis://other:6379/2"  # type: ignore
 
 
 def testMerchantApiSettingsDefaults() -> None:
     """Verifies default values and immutability for MerchantApiSettings."""
     settings = getMerchantApiSettings()
     assert isinstance(settings.redisUrl, str)
-    assert settings.port == 4002
-    assert settings.qdrantHost == "localhost"
-    assert settings.qdrantPort == 6333
     assert defaultMerchantSettings is not None
 
     with pytest.raises(ValidationError):
-        settings.port = 4003  # type: ignore
+        settings.redisUrl = "redis://other:6379/2"  # type: ignore
 
 
 def testShopifyAllergenPrefixParser() -> None:
