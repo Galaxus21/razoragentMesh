@@ -31,6 +31,7 @@
   "author": "RazorAgent Mesh Team",
   "license": "Apache-2.0",
   "dependencies": {
+    "@noble/hashes": "^1.8.0",
     "tweetnacl": "^1.0.3",
     "uuid": "^10.0.0"
   },

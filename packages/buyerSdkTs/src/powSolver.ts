@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./isomorphicCrypto.js";
 import {
   defaultPowChunkSize,
   defaultPowDifficultyZeros,
@@ -6,8 +6,6 @@ import {
   headerEscrowToken,
   headerPowChallenge,
   headerPowSolution,
-  sha256Algorithm,
-  utf8Encoding
 } from "./sdkConstants.js";
 import {
   PoWVerificationError,
@@ -26,9 +24,7 @@ export function solvePowChallenge(
 
   while (true) {
     const candidateString = `${challengeToken}:${nonce}`;
-    const digestHex = createHash(sha256Algorithm)
-      .update(candidateString, utf8Encoding)
-      .digest("hex");
+    const digestHex = sha256Hex(candidateString);
 
     if (digestHex.startsWith(targetPrefix)) {
       return {
@@ -56,9 +52,7 @@ export async function solvePowChallengeAsync(
       const endNonce = nonce + chunkSize;
       while (nonce < endNonce) {
         const candidateString = `${challengeToken}:${nonce}`;
-        const digestHex = createHash(sha256Algorithm)
-          .update(candidateString, utf8Encoding)
-          .digest("hex");
+        const digestHex = sha256Hex(candidateString);
 
         if (digestHex.startsWith(targetPrefix)) {
           resolve({
@@ -85,9 +79,7 @@ export function verifyPowSolution(
   _validateChallengeToken(challengeToken);
   const targetPrefix = "0".repeat(difficultyZeros);
   const candidateString = `${challengeToken}:${nonce}`;
-  const computedDigest = createHash(sha256Algorithm)
-    .update(candidateString, utf8Encoding)
-    .digest("hex");
+  const computedDigest = sha256Hex(candidateString);
 
   const isValid = computedDigest.startsWith(targetPrefix);
   return {

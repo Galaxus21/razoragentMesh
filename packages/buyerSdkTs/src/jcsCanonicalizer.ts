@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { sha256Algorithm, utf8Encoding } from "./sdkConstants.js";
+import { encodeUtf8, sha256Hex } from "./isomorphicCrypto.js";
 import { ArithmeticDriftException } from "./types.js";
 
 export function canonicalizeJsonString(payload: unknown): string {
@@ -10,17 +9,11 @@ export function canonicalizeJsonString(payload: unknown): string {
 
 export function canonicalizeJson(payload: unknown): Uint8Array {
   const jsonString = canonicalizeJsonString(payload);
-  return new Uint8Array(Buffer.from(jsonString, utf8Encoding));
+  return encodeUtf8(jsonString);
 }
 
 export function computeSha256Digest(canonicalBytes: Uint8Array | string): string {
-  const hasher = createHash(sha256Algorithm);
-  if (typeof canonicalBytes === "string") {
-    hasher.update(canonicalBytes, utf8Encoding);
-  } else {
-    hasher.update(canonicalBytes);
-  }
-  return hasher.digest("hex").toLowerCase();
+  return sha256Hex(canonicalBytes);
 }
 
 export function canonicalizeAndHash(payload: unknown): {

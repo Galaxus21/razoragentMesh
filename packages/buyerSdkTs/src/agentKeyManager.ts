@@ -1,7 +1,7 @@
 import nacl from "tweetnacl";
+import { bytesToHex, hexToBytes } from "./isomorphicCrypto.js";
 import {
   didPrefix,
-  hexEncoding,
   keyHexLength,
   seedByteLength,
   signatureHexLength
@@ -38,14 +38,14 @@ export function generateAgentKeyPair(seedHex?: string): AgentKeyPair {
     if (!hex64Pattern.test(cleanSeedHex)) {
       throw new TypeError("Invalid seed: must be 64 valid hex characters (32 bytes)");
     }
-    const seedBytes = Buffer.from(cleanSeedHex.toLowerCase(), hexEncoding);
+    const seedBytes = hexToBytes(cleanSeedHex.toLowerCase());
     keyPair = nacl.sign.keyPair.fromSeed(new Uint8Array(seedBytes));
   } else {
     keyPair = nacl.sign.keyPair();
   }
 
-  const publicKeyHex = Buffer.from(keyPair.publicKey).toString(hexEncoding).toLowerCase();
-  const secretKeyHex = Buffer.from(keyPair.secretKey).toString(hexEncoding).toLowerCase();
+  const publicKeyHex = bytesToHex(keyPair.publicKey);
+  const secretKeyHex = bytesToHex(keyPair.secretKey);
 
   return {
     publicKeyHex,
@@ -67,13 +67,13 @@ export class AgentKeyManager {
         if (!hex64Pattern.test(cleanHex)) {
           throw new TypeError("Invalid seed: must be 64 valid hex characters (32 bytes)");
         }
-        const seedBytes = Buffer.from(cleanHex.toLowerCase(), hexEncoding);
+        const seedBytes = hexToBytes(cleanHex.toLowerCase());
         this._keyPair = nacl.sign.keyPair.fromSeed(new Uint8Array(seedBytes));
       } else if (cleanHex.length === keyHexLength * 2) {
         if (!hex128Pattern.test(cleanHex)) {
           throw new Error(`Invalid secret key hex string: expected ${keyHexLength * 2} valid hex characters, got non-hex characters`);
         }
-        const secretBytes = Buffer.from(cleanHex.toLowerCase(), hexEncoding);
+        const secretBytes = hexToBytes(cleanHex.toLowerCase());
         this._keyPair = nacl.sign.keyPair.fromSecretKey(new Uint8Array(secretBytes));
       } else {
         throw new Error(`Invalid key hex length: expected 64 or 128 hex characters, got ${cleanHex.length}`);
@@ -82,8 +82,8 @@ export class AgentKeyManager {
       this._keyPair = nacl.sign.keyPair();
     }
 
-    this._publicKeyHex = Buffer.from(this._keyPair.publicKey).toString(hexEncoding).toLowerCase();
-    this._secretKeyHex = Buffer.from(this._keyPair.secretKey).toString(hexEncoding).toLowerCase();
+    this._publicKeyHex = bytesToHex(this._keyPair.publicKey);
+    this._secretKeyHex = bytesToHex(this._keyPair.secretKey);
     this._agentDid = formatAgentDid(this._publicKeyHex);
   }
 
@@ -119,7 +119,7 @@ export class AgentKeyManager {
 
   public signCanonicalBytes(canonicalBytes: Uint8Array): string {
     const signature = nacl.sign.detached(canonicalBytes, this._keyPair.secretKey);
-    return Buffer.from(signature).toString(hexEncoding).toLowerCase();
+    return bytesToHex(signature);
   }
 
   public signPayload(payload: unknown): string {
@@ -139,8 +139,8 @@ export class AgentKeyManager {
         return false;
       }
 
-      const pubKeyBytes = new Uint8Array(Buffer.from(targetPubKeyHex.toLowerCase(), hexEncoding));
-      const sigBytes = new Uint8Array(Buffer.from(cleanSigHex.toLowerCase(), hexEncoding));
+      const pubKeyBytes = new Uint8Array(hexToBytes(targetPubKeyHex.toLowerCase()));
+      const sigBytes = new Uint8Array(hexToBytes(cleanSigHex.toLowerCase()));
 
       if (pubKeyBytes.length !== seedByteLength || sigBytes.length !== signatureHexLength / 2) {
         return false;
