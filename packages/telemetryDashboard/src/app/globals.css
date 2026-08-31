@@ -220,6 +220,42 @@
   text-underline-offset: 2px;
 }
 
+/* rehype-autolink-headings wraps each heading's text in an anchor so it can be linked to.
+   Without this, the rule above paints every heading accent-purple and underlined, which makes
+   the whole page read as a wall of links. The heading keeps its own styling; the anchor only
+   announces itself on hover. */
+.markdown-content h1 > a,
+.markdown-content h2 > a,
+.markdown-content h3 > a,
+.markdown-content h4 > a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.markdown-content h1 > a:hover,
+.markdown-content h2 > a:hover,
+.markdown-content h3 > a:hover,
+.markdown-content h4 > a:hover {
+  color: rgb(var(--accent-primary));
+}
+
+/* Components embedded in prose (<ApiEndpoint>, <RunStep>, <EventCatalog>) carry their own
+   typography. Without this, the `.markdown-content a` rule underlines their action links as if
+   they were inline prose links, and the surrounding paragraph spacing applies to their labels. */
+.markdown-content .doc-widget a {
+  text-decoration: none;
+}
+
+.markdown-content .doc-widget p,
+.markdown-content .doc-widget dd,
+.markdown-content .doc-widget dt {
+  margin-bottom: 0;
+}
+
+.markdown-content .doc-widget table {
+  margin-top: 0;
+}
+
 .markdown-content hr {
   border: 0;
   border-top: 1px solid rgb(var(--border-subtle));

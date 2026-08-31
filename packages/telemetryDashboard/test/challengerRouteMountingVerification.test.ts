@@ -16,6 +16,7 @@ import {
   connectionStatusLabels,
 } from "../src/constants/dashboardConstants.js";
 import { DashboardHeader } from "../src/components/dashboardHeader.js";
+import { resolveStreamMode } from "../src/lib/streamModeResolver.js";
 import OverviewPage from "../src/app/(dashboard)/overview/page.js";
 import AgentObservabilityPage from "../src/app/(dashboard)/agent-observability/page.js";
 import NegotiationHubPage from "../src/app/(dashboard)/negotiation-hub/page.js";
@@ -23,9 +24,7 @@ import SecurityAuditPage from "../src/app/(dashboard)/security-audit/page.js";
 import SelfHealingPage from "../src/app/(dashboard)/self-healing/page.js";
 import InfrastructurePage from "../src/app/(dashboard)/infrastructure/page.js";
 import MerchantStudioPage from "../src/app/(dashboard)/merchant-studio/page.js";
-import SetupDocsPage from "../src/app/(dashboard)/docs/setup/page.js";
-import BuyerSdkDocsPage from "../src/app/(dashboard)/docs/buyer-sdk/page.js";
-import MerchantGuideDocsPage from "../src/app/(dashboard)/docs/merchant-guide/page.js";
+import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 import RootPage from "../src/app/page.js";
 import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 import { TelemetryProvider, useTelemetry } from "../src/context/telemetryContext.js";
@@ -35,11 +34,16 @@ import {
   createTestOosHealingScenarioEvents,
 } from "./fixtures/testTelemetryFixtures.js";
 import { SseConnectionState } from "../src/types/telemetryEventTypes.js";
+import { isRouteMatching } from "../src/constants/sidebarNavigationConfig.js";
 
 const expectedRoutes: ReadonlyArray<string> = [
   "/overview",
+  "/protocol",
   "/self-healing",
   "/infrastructure",
+  "/playground",
+  "/playground/adversarial",
+  "/sdk-console",
   "/agent-observability",
   "/negotiation-hub",
   "/security-audit",
@@ -74,7 +78,7 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
     }
   });
 
-  it("should export functional React components for all 10 route pages", () => {
+  it("should export functional React components for all 7 non-doc route pages", () => {
     const routeComponents = [
       { name: "OverviewPage", component: OverviewPage },
       { name: "AgentObservabilityPage", component: AgentObservabilityPage },
@@ -83,14 +87,19 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
       { name: "SelfHealingPage", component: SelfHealingPage },
       { name: "InfrastructurePage", component: InfrastructurePage },
       { name: "MerchantStudioPage", component: MerchantStudioPage },
-      { name: "SetupDocsPage", component: SetupDocsPage },
-      { name: "BuyerSdkDocsPage", component: BuyerSdkDocsPage },
-      { name: "MerchantGuideDocsPage", component: MerchantGuideDocsPage },
     ];
 
     for (const { name, component } of routeComponents) {
       assert.equal(typeof component, "function", `${name} is not a valid component function`);
       assert.equal(component.name.length > 0, true, `${name} has no function name`);
+    }
+
+    // Documentation is no longer one page component per guide -- a single [...slug] route
+    // serves them all -- so the equivalent check is that every guide still resolves to content.
+    const docPages = loadAllDocPages();
+    assert.ok(docPages.length > 0, "No documentation pages were discovered");
+    for (const page of docPages) {
+      assert.ok(page.body.length > 0, `Documentation page ${page.slug} has an empty body`);
     }
   });
 
@@ -102,8 +111,8 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
 });
 
 describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route Resolution", () => {
-  it("should verify 100% route alignment between navigationItems and expected 13 routes", () => {
-    assert.equal(navigationItems.length, 13);
+  it("should verify 100% route alignment between navigationItems and expected 17 routes", () => {
+    assert.equal(navigationItems.length, 17);
 
     const actualRoutes = navigationItems.map((item) => item.route);
     assert.deepEqual(actualRoutes, expectedRoutes);
@@ -116,9 +125,10 @@ describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route
   });
 
   it("should verify deterministic active route prefix matching across 10,000 randomized permutations", () => {
-    const isActiveRoute = (activeRoute: string, targetRoute: string): boolean => {
-      return activeRoute === targetRoute || activeRoute.startsWith(`${targetRoute}/`);
-    };
+    // The real implementation, not a local copy. This test previously redefined the matcher
+    // inline, so it asserted the behaviour of its own two lines and would have stayed green
+    // even if src/constants/sidebarNavigationConfig.ts changed underneath it.
+    const isActiveRoute = isRouteMatching;
 
     for (const target of expectedRoutes) {
       // Exact match must be true
@@ -128,9 +138,11 @@ describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route
       assert.equal(isActiveRoute(`${target}/nested-view`, target), true);
       assert.equal(isActiveRoute(`${target}/item/12345`, target), true);
 
-      // Non-matching routes must be false
+      // Non-matching routes must be false. A route nested UNDER another registered route
+      // (/playground/adversarial under /playground) is exempt: the most specific registered
+      // route owns it, so the parent must NOT also report active or two rows would highlight.
       for (const other of expectedRoutes) {
-        if (other !== target) {
+        if (other !== target && !other.startsWith(`${target}/`)) {
           assert.equal(isActiveRoute(other, target), false);
         }
       }
@@ -179,7 +191,8 @@ describe("Challenger 2 Empirical Verification: AppSidebar & DashboardHeader UI C
       for (const theme of themes) {
         const headerElement = React.createElement(DashboardHeader, {
           connectionState,
-          isConnected: connectionState === "CONNECTED",
+          streamMode: resolveStreamMode(connectionState, []),
+          provenanceCounts: { liveCount: 0, syntheticCount: 0, unknownCount: 0 },
           totalEventsCount: 42,
           onClearEvents: () => {},
           theme,

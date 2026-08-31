@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   navigationItems,
   AppSidebar,
+  isRouteMatching,
 } from "../src/components/appSidebar.js";
 import {
   defaultSidebarCollapsed,
@@ -23,8 +24,12 @@ import { SseConnectionState, TelemetryEvent } from "../src/types/telemetryEventT
 
 const expectedRouteList: ReadonlyArray<string> = [
   "/overview",
+  "/protocol",
   "/self-healing",
   "/infrastructure",
+  "/playground",
+  "/playground/adversarial",
+  "/sdk-console",
   "/agent-observability",
   "/negotiation-hub",
   "/security-audit",
@@ -39,7 +44,7 @@ const expectedRouteList: ReadonlyArray<string> = [
 
 const mockSessionPrefix = "session-challenger-m2-";
 const stressToggleIterations = 10000;
-const expectedTotalNavItems = 13;
+const expectedTotalNavItems = 17;
 
 function simulateLocalStorageReader(rawValue: string | null): boolean {
   if (rawValue === null) {
@@ -56,9 +61,10 @@ function simulateToggleLoop(initialState: boolean, count: number): boolean {
   return currentState;
 }
 
-function checkActiveRouteMatch(activePath: string, routePath: string): boolean {
-  return activePath === routePath || activePath.startsWith(`${routePath}/`);
-}
+// Imported from source rather than redefined locally. These tests previously carried their own
+// copy of the prefix-matching logic, which meant they passed regardless of what the real
+// implementation did -- they would still have gone green if isRouteMatching were deleted.
+const checkActiveRouteMatch = isRouteMatching;
 
 describe("Milestone 2 Challenger 1: Sidebar State Machine & Storage Edge Cases", () => {
   it("should maintain default collapsed invariant when storage is empty or null", () => {
@@ -116,7 +122,7 @@ describe("Milestone 2 Challenger 1: Sidebar State Machine & Storage Edge Cases",
 });
 
 describe("Milestone 2 Challenger 1: App Shell Navigation & Route Resolution", () => {
-  it("should contain exactly 13 valid navigation items matching the Stitch specification", () => {
+  it("should contain exactly 17 valid navigation items matching the Stitch specification", () => {
     assert.equal(navigationItems.length, expectedTotalNavItems);
 
     const routes = navigationItems.map((item) => item.route);
@@ -136,7 +142,10 @@ describe("Milestone 2 Challenger 1: App Shell Navigation & Route Resolution", ()
       assert.equal(checkActiveRouteMatch(`${route}/12345/details`, route), true, `Deep nested match failed for ${route}`);
 
       for (const otherRoute of expectedRouteList) {
-        if (otherRoute !== route) {
+        // A route nested UNDER another registered route (e.g. /playground/adversarial under
+        // /playground) legitimately belongs to itself, not to its parent -- the most specific
+        // registered route wins, so exactly one sidebar row highlights.
+        if (otherRoute !== route && !otherRoute.startsWith(`${route}/`)) {
           assert.equal(checkActiveRouteMatch(otherRoute, route), false, `False positive match between ${otherRoute} and ${route}`);
         }
       }

@@ -10,7 +10,7 @@ export interface FormHeaderProps {
 export function FormHeader({
   title = "Merchant SKU Studio",
   subtitle = "Interactive SKU Authoring: Configure volume tiers, spot-linked bullion formulas, and vertical domain facets for agent discovery.",
-  layerBadge = "Layer 4 Merchant API",
+  layerBadge = "Layer 1 Merchant API",
 }: FormHeaderProps): React.JSX.Element {
   return (
     <div className="rounded-lg border border-borderSubtle bg-bgSurface p-5">

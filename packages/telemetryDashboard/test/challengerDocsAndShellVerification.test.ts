@@ -9,9 +9,7 @@ import {
   NavCategoryConfig,
   NavChildItemConfig,
 } from "../src/components/appSidebar.js";
-import SetupDocsPage from "../src/app/(dashboard)/docs/setup/page.js";
-import BuyerSdkDocsPage from "../src/app/(dashboard)/docs/buyer-sdk/page.js";
-import MerchantGuideDocsPage from "../src/app/(dashboard)/docs/merchant-guide/page.js";
+import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 import OverviewPage from "../src/app/(dashboard)/overview/page.js";
 import AgentObservabilityPage from "../src/app/(dashboard)/agent-observability/page.js";
 import NegotiationHubPage from "../src/app/(dashboard)/negotiation-hub/page.js";
@@ -22,9 +20,9 @@ import MerchantStudioPage from "../src/app/(dashboard)/merchant-studio/page.js";
 import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 
 const expectedCategoryCount = 5;
-const expectedTotalRoutesCount = 13;
+const expectedTotalRoutesCount = 17;
 const expectedDocsRoutesCount = 6;
-const expectedTelemetryRoutesCount = 7;
+const expectedTelemetryRoutesCount = 11;
 
 const requiredDocsRouteUrls: ReadonlyArray<string> = [
   "/docs/setup",
@@ -37,8 +35,12 @@ const requiredDocsRouteUrls: ReadonlyArray<string> = [
 
 const requiredTelemetryRouteUrls: ReadonlyArray<string> = [
   "/overview",
+  "/protocol",
   "/self-healing",
   "/infrastructure",
+  "/playground",
+  "/playground/adversarial",
+  "/sdk-console",
   "/agent-observability",
   "/negotiation-hub",
   "/security-audit",
@@ -46,41 +48,33 @@ const requiredTelemetryRouteUrls: ReadonlyArray<string> = [
 ];
 
 describe("Empirical Challenger 2 — Documentation Routes Mounting & Component Trees", () => {
-  it("should mount SetupDocsPage and verify valid React element tree", () => {
-    assert.equal(typeof SetupDocsPage, "function");
-    const element = React.createElement(SetupDocsPage);
-    assert.ok(React.isValidElement(element));
-    assert.equal(typeof element.type, "function");
+  // Six per-guide page components have collapsed into one [...slug] route, so "does this page
+  // component exist" is no longer a meaningful check. What must hold instead is that every
+  // route the sidebar advertises resolves to a real document with usable frontmatter -- the
+  // failure the old maps produced was a route that rendered "Page Not Found" with HTTP 200.
+  it("should resolve every documentation route to a loadable page", () => {
+    const docPages = loadAllDocPages();
+    assert.equal(docPages.length, expectedDocsRoutesCount);
 
-    // Execute component render function directly to inspect JSX output
-    const rendered = SetupDocsPage();
-    assert.ok(React.isValidElement(rendered));
-    assert.equal(typeof rendered.props, "object");
-    assert.ok((rendered.props as { className: string }).className.includes("max-w-5xl"));
+    for (const page of docPages) {
+      assert.ok(page.body.trim().length > 0, `${page.slug} has an empty body`);
+      assert.ok(page.frontmatter.title.length > 0, `${page.slug} has no title`);
+      assert.ok(page.sourcePath.endsWith(".mdx"), `${page.slug} is not an .mdx source`);
+    }
   });
 
-  it("should mount BuyerSdkDocsPage and verify valid React element tree", () => {
-    assert.equal(typeof BuyerSdkDocsPage, "function");
-    const element = React.createElement(BuyerSdkDocsPage);
-    assert.ok(React.isValidElement(element));
-    assert.equal(typeof element.type, "function");
-
-    const rendered = BuyerSdkDocsPage();
-    assert.ok(React.isValidElement(rendered));
-    assert.equal(typeof rendered.props, "object");
-    assert.ok((rendered.props as { className: string }).className.includes("max-w-5xl"));
+  it("should back each sidebar documentation route with a real document", () => {
+    for (const routeUrl of requiredDocsRouteUrls) {
+      const slug = routeUrl.replace("/docs/", "");
+      const page = loadDocPage([slug]);
+      assert.ok(page, `Sidebar advertises ${routeUrl} but no document backs it`);
+    }
   });
 
-  it("should mount MerchantGuideDocsPage and verify valid React element tree", () => {
-    assert.equal(typeof MerchantGuideDocsPage, "function");
-    const element = React.createElement(MerchantGuideDocsPage);
-    assert.ok(React.isValidElement(element));
-    assert.equal(typeof element.type, "function");
-
-    const rendered = MerchantGuideDocsPage();
-    assert.ok(React.isValidElement(rendered));
-    assert.equal(typeof rendered.props, "object");
-    assert.ok((rendered.props as { className: string }).className.includes("max-w-5xl"));
+  it("should order documentation by frontmatter rather than by directory listing", () => {
+    const orders = loadAllDocPages().map((page) => page.frontmatter.order);
+    const sorted = [...orders].sort((left, right) => left - right);
+    assert.deepEqual(orders, sorted);
   });
 });
 
@@ -100,7 +94,7 @@ describe("Empirical Challenger 2 — Link Integrity & Route Configuration Invari
     }
   });
 
-  it("should verify all 13 navigation items have valid URI paths and non-empty metadata", () => {
+  it("should verify all 17 navigation items have valid URI paths and non-empty metadata", () => {
     assert.equal(navigationItems.length, expectedTotalRoutesCount);
 
     const seenRoutes = new Set<string>();

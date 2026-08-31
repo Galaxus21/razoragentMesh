@@ -8,12 +8,10 @@ import {
   AppSidebar,
   NavCategoryConfig,
 } from "../src/components/appSidebar.js";
-import SetupDocsPage from "../src/app/(dashboard)/docs/setup/page.js";
-import BuyerSdkDocsPage from "../src/app/(dashboard)/docs/buyer-sdk/page.js";
-import MerchantGuideDocsPage from "../src/app/(dashboard)/docs/merchant-guide/page.js";
+import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 
 describe("Sidebar Accordion & 5-Category Taxonomy", () => {
-  it("should categorize all 13 routes into exactly 5 specific domain groupings", () => {
+  it("should categorize all 17 routes into exactly 5 specific domain groupings", () => {
     assert.equal(navigationCategories.length, 5);
 
     const categoryMap = new Map<string, ReadonlyArray<string>>();
@@ -23,11 +21,15 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
 
     assert.deepEqual(categoryMap.get("platformOps"), [
       "/overview",
+      "/protocol",
       "/self-healing",
       "/infrastructure",
     ]);
 
     assert.deepEqual(categoryMap.get("aiBuyerAgents"), [
+      "/playground",
+      "/playground/adversarial",
+      "/sdk-console",
       "/agent-observability",
       "/negotiation-hub",
     ]);
@@ -50,8 +52,8 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
     ]);
   });
 
-  it("should preserve flat navigationItems array containing all 13 routes", () => {
-    assert.equal(navigationItems.length, 13);
+  it("should preserve flat navigationItems array containing all 17 routes", () => {
+    assert.equal(navigationItems.length, 17);
     const flattenedRoutes = navigationCategories.flatMap((c) => c.children.map((ch) => ch.route));
     assert.deepEqual(navigationItems.map((i) => i.route), flattenedRoutes);
   });
@@ -108,21 +110,17 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
 });
 
 describe("Documentation Route Components Rendering", () => {
-  it("should render SetupDocsPage JSX without runtime error", () => {
-    const element = React.createElement(SetupDocsPage);
-    assert.ok(React.isValidElement(element));
-    assert.equal(typeof SetupDocsPage, "function");
+  it("should load every guide through the single documentation route", () => {
+    // Previously three near-identical tests, one per hand-written doc page component. Those
+    // components no longer exist; what matters now is that the loader finds each guide.
+    const discovered = loadAllDocPages().map((page) => page.slug);
+    for (const slug of ["setup", "buyer-sdk", "merchant-guide"]) {
+      assert.ok(discovered.includes(slug), `Documentation page ${slug} was not discovered`);
+      assert.ok(loadDocPage([slug]), `Documentation page ${slug} did not load`);
+    }
   });
 
-  it("should render BuyerSdkDocsPage JSX without runtime error", () => {
-    const element = React.createElement(BuyerSdkDocsPage);
-    assert.ok(React.isValidElement(element));
-    assert.equal(typeof BuyerSdkDocsPage, "function");
-  });
-
-  it("should render MerchantGuideDocsPage JSX without runtime error", () => {
-    const element = React.createElement(MerchantGuideDocsPage);
-    assert.ok(React.isValidElement(element));
-    assert.equal(typeof MerchantGuideDocsPage, "function");
+  it("should return null for a slug with no backing document", () => {
+    assert.equal(loadDocPage(["no-such-guide"]), null);
   });
 });

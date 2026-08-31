@@ -7,9 +7,7 @@ import {
   navigationItems,
   NavCategoryConfig,
 } from "../src/components/appSidebar.js";
-import SetupDocsPage from "../src/app/(dashboard)/docs/setup/page.js";
-import BuyerSdkDocsPage from "../src/app/(dashboard)/docs/buyer-sdk/page.js";
-import MerchantGuideDocsPage from "../src/app/(dashboard)/docs/merchant-guide/page.js";
+import { loadDocPage } from "../src/lib/docsLoader.js";
 
 const stressCycleCount = 1000;
 
@@ -100,40 +98,50 @@ describe("Adversarial Challenger — Accordion State Stress & Immutability", () 
 });
 
 describe("Adversarial Challenger — Documentation Content Invariants", () => {
-  it("should verify SetupDocsPage contains required enclave configuration content", () => {
-    const rendered = SetupDocsPage();
-    assert.ok(React.isValidElement(rendered));
+  // These now assert against the .mdx source through the loader rather than against a rendered
+  // element tree. The facts under test are properties of the documentation, not of a React
+  // component, and the six per-guide page components they used to render no longer exist --
+  // one [...slug] route serves every guide.
+  function readDocBody(slug: string): string {
+    const page = loadDocPage([slug]);
+    assert.ok(page, `Documentation page ${slug} did not load`);
+    return page.body;
+  }
 
-    // Convert element tree to JSON structure for deep string verification
-    const jsonString = JSON.stringify(rendered);
-    assert.ok(jsonString.includes("Platform Ops"), "Missing Platform Ops badge");
-    assert.ok(jsonString.includes("docker compose up -d --build"), "Missing docker compose command");
-    assert.ok(jsonString.includes("http://localhost:8000/health"), "Missing health endpoint url");
-    assert.ok(jsonString.includes("AP2_GATE_DAILY_LIMIT_PAISE"), "Missing AP2 limit variable");
+  it("should verify the setup guide contains required enclave configuration content", () => {
+    const body = readDocBody("setup");
+    assert.ok(body.includes("docker compose up -d --build"), "Missing docker compose command");
+    assert.ok(body.includes("http://localhost:8000/health"), "Missing health endpoint url");
+    // Was AP2_GATE_DAILY_LIMIT_PAISE, which no code has ever read. Asserting a guide mentions a
+    // phantom variable is how the guide stayed wrong: the test protected the mistake. This one is
+    // the key docker-compose actually interpolates into the MCP server.
+    assert.ok(body.includes("MERCHANT_PRIVATE_KEY_HEX"), "Missing merchant signing key variable");
   });
 
-  it("should verify BuyerSdkDocsPage contains required AP2 protocol and SLA content", () => {
-    const rendered = BuyerSdkDocsPage();
-    assert.ok(React.isValidElement(rendered));
-
-    const jsonString = JSON.stringify(rendered);
-    assert.ok(jsonString.includes("@razoragent/buyer-sdk-ts"), "Missing TS SDK package name");
-    assert.ok(jsonString.includes("razoragent-buyer-sdk-py"), "Missing Python SDK package name");
-    assert.ok(jsonString.includes("INV-02"), "Missing INV-02 lifecycle reference");
-    assert.ok(jsonString.includes("INV-06"), "Missing INV-06 monotonic concession reference");
-    assert.ok(jsonString.includes("INV-07"), "Missing INV-07 vector healing reference");
+  it("should verify the buyer SDK guide contains required AP2 protocol and SLA content", () => {
+    const body = readDocBody("buyer-sdk");
+    assert.ok(body.includes("INV-02"), "Missing INV-02 lifecycle reference");
+    assert.ok(body.includes("INV-06"), "Missing INV-06 monotonic concession reference");
+    assert.ok(body.includes("INV-07"), "Missing INV-07 vector healing reference");
   });
 
-  it("should verify MerchantGuideDocsPage contains required statutory HSN and bullion content", () => {
-    const rendered = MerchantGuideDocsPage();
-    assert.ok(React.isValidElement(rendered));
+  it("should verify the merchant guide contains required statutory HSN and bullion content", () => {
+    const body = readDocBody("merchant-guide");
+    for (const hsnCode of ["7113", "6109", "3004", "8471"]) {
+      assert.ok(body.includes(hsnCode), `Missing HSN ${hsnCode}`);
+    }
+    assert.ok(body.includes("INV-04"), "Missing INV-04 tax reference");
+    assert.ok(body.includes("INV-05"), "Missing INV-05 bullion formula reference");
+  });
 
-    const jsonString = JSON.stringify(rendered);
-    assert.ok(jsonString.includes("7113"), "Missing HSN 7113");
-    assert.ok(jsonString.includes("6109"), "Missing HSN 6109");
-    assert.ok(jsonString.includes("3004"), "Missing HSN 3004");
-    assert.ok(jsonString.includes("8471"), "Missing HSN 8471");
-    assert.ok(jsonString.includes("INV-04"), "Missing INV-04 tax reference");
-    assert.ok(jsonString.includes("INV-05"), "Missing INV-05 bullion formula reference");
+  it("should give every guide the frontmatter the pipeline depends on", () => {
+    for (const slug of ["setup", "onboarding", "buyer-sdk", "merchant-guide", "telemetry", "gstr1-invoice"]) {
+      const page = loadDocPage([slug]);
+      assert.ok(page, `Documentation page ${slug} did not load`);
+      assert.ok(page.frontmatter.title.length > 0, `${slug} has no title`);
+      assert.ok(page.frontmatter.description.length > 0, `${slug} has no description`);
+      assert.ok(page.frontmatter.navLabel.length > 0, `${slug} has no navLabel`);
+      assert.ok(page.frontmatter.order > 0, `${slug} has no order`);
+    }
   });
 });

@@ -6,6 +6,7 @@ import {
   Server,
   Store,
 } from "lucide-react";
+import { docsManifest } from "@/generated/docsManifest";
 
 export interface NavChildItemConfig {
   readonly route: string;
@@ -21,6 +22,12 @@ export interface NavCategoryConfig {
   readonly children: ReadonlyArray<NavChildItemConfig>;
 }
 
+const documentationNavChildren: ReadonlyArray<NavChildItemConfig> = docsManifest.map((entry) => ({
+  route: entry.route,
+  label: entry.navLabel,
+  description: entry.navDescription,
+}));
+
 export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
   {
     id: "platformOps",
@@ -28,6 +35,7 @@ export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
     icon: Server,
     children: [
       { route: "/overview", label: "Overview", description: "Mesh Command Center" },
+      { route: "/protocol", label: "Protocol Map", description: "Six Layers, Probed Live" },
       { route: "/self-healing", label: "Self-Healing", description: "Vector Healer & SLA Watch" },
       { route: "/infrastructure", label: "Infrastructure", description: "2PC Splits & Webhooks" },
     ],
@@ -37,6 +45,9 @@ export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
     label: "AI Buyer Agents",
     icon: Bot,
     children: [
+      { route: "/playground", label: "Protocol Playground", description: "Run the Protocol Live" },
+      { route: "/playground/adversarial", label: "Adversarial Playground", description: "Break It On Purpose" },
+      { route: "/sdk-console", label: "SDK Console", description: "Call The SDK Yourself" },
       { route: "/agent-observability", label: "Agent Observability", description: "MCP Reasoning Traces" },
       { route: "/negotiation-hub", label: "Negotiation Hub", description: "B2B Dynamic Concessions" },
     ],
@@ -61,14 +72,10 @@ export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
     id: "documentation",
     label: "Documentation",
     icon: BookOpen,
-    children: [
-      { route: "/docs/setup", label: "System Setup", description: "Environment & Architecture Setup" },
-      { route: "/docs/onboarding", label: "Developer Onboarding", description: "End-to-End Integration Guide" },
-      { route: "/docs/buyer-sdk", label: "Buyer SDK", description: "TypeScript & Python SDK Guide" },
-      { route: "/docs/merchant-guide", label: "Merchant Guide", description: "Catalog Ingestion & Pricing" },
-      { route: "/docs/telemetry", label: "Telemetry & SSE", description: "Observability Event Streams" },
-      { route: "/docs/gstr1-invoice", label: "GSTR-1 Invoicing", description: "Statutory Tax Specification" },
-    ],
+    // Derived from the frontmatter of docs/**/*.mdx via src/generated/docsManifest.ts, so a new
+    // guide appears in the sidebar by existing. This list used to be maintained by hand next to
+    // two more hand-maintained maps in docsLoader, giving three places to forget.
+    children: documentationNavChildren,
   },
 ];
 
@@ -88,7 +95,24 @@ export const defaultExpandedCategories: Record<string, boolean> = {
   documentation: true,
 };
 
+// Prefix matching alone is ambiguous once routes nest: "/playground/adversarial" is a prefix
+// match for BOTH "/playground" and itself, which would light up two sidebar rows at once. An
+// item is active only when it is the LONGEST registered route that matches, so the most
+// specific page wins and exactly one row highlights.
 export function isRouteMatching(activeRoute: string, targetRoute: string): boolean {
+  if (!isRoutePrefixOf(activeRoute, targetRoute)) {
+    return false;
+  }
+  const longestMatch = navigationItems.reduce<string>((longest, item) => {
+    if (isRoutePrefixOf(activeRoute, item.route) && item.route.length > longest.length) {
+      return item.route;
+    }
+    return longest;
+  }, "");
+  return targetRoute === longestMatch;
+}
+
+function isRoutePrefixOf(activeRoute: string, targetRoute: string): boolean {
   return activeRoute === targetRoute || activeRoute.startsWith(`${targetRoute}/`);
 }
 

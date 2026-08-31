@@ -2,6 +2,7 @@ import {
   MandateKind,
   SseConnectionState,
   TelemetryEventType,
+  TelemetryStreamMode,
 } from "@/types/telemetryEventTypes";
 
 export interface EventMetaStyle {
@@ -25,11 +26,17 @@ export const reconnectBaseDelayMs = 1000;
 export const reconnectMaxDelayMs = 10000;
 export const reconnectBackoffFactor = 1.5;
 export const maxReconnectAttempts = 10;
-export const defaultSseUrl = "http://localhost:8000/api/v1/telemetry/stream";
+// NEXT_PUBLIC_ prefix makes Next.js statically inline this at `next build` time --
+// it is baked into the client bundle, not read at container runtime. The Dockerfile's
+// builder stage must therefore receive it as a build ARG (see packages/telemetryDashboard/
+// Dockerfile and the telemetry-dashboard service's `build.args` in docker-compose.yml).
+export const defaultSseUrl = process.env.NEXT_PUBLIC_TELEMETRY_SSE_URL || "http://localhost:8000/api/v1/telemetry/stream";
 
-// Connection Status Badge Labels and Styles
+// Transport-level status only: whether the EventSource socket is open. This deliberately no
+// longer says "LIVE" -- an open socket proves nothing about whether the events crossing it are
+// real. That claim is made by the stream mode below, and only it may say LIVE.
 export const connectionStatusLabels: Record<SseConnectionState, string> = {
-  CONNECTED: "LIVE MESH SSE",
+  CONNECTED: "SSE CONNECTED",
   CONNECTING: "CONNECTING...",
   DISCONNECTED: "DISCONNECTED",
   ERROR: "FALLBACK / OFFLINE",
@@ -40,6 +47,64 @@ export const connectionStatusColors: Record<SseConnectionState, string> = {
   CONNECTING: "bg-statusWarning/10 text-statusWarning border-statusWarning/30",
   DISCONNECTED: "bg-bgSurface text-textMuted border-borderSubtle",
   ERROR: "bg-statusError/10 text-statusError border-statusError/30",
+};
+
+// Stream Mode Badge -- what the header is allowed to claim about the events themselves.
+export interface StreamModePresentation {
+  readonly label: string;
+  readonly badgeClass: string;
+  readonly dotClass: string;
+  readonly isPulsing: boolean;
+  readonly description: string;
+}
+
+export const streamModePresentation: Record<TelemetryStreamMode, StreamModePresentation> = {
+  LIVE: {
+    label: "LIVE RUN",
+    badgeClass: "bg-statusSuccess/10 text-statusSuccess border-statusSuccess/30",
+    dotClass: "bg-statusSuccess",
+    isPulsing: true,
+    description: "Every event here was produced by a real protocol run against the mesh.",
+  },
+  REPLAY: {
+    label: "REPLAY",
+    badgeClass: "bg-statusWarning/10 text-statusWarning border-statusWarning/30",
+    dotClass: "bg-statusWarning",
+    isPulsing: false,
+    description:
+      "These events are scripted fixtures, or carry no provenance stamp. Nothing shown came from a verified live run.",
+  },
+  MIXED: {
+    label: "MIXED",
+    badgeClass: "bg-statusWarning/10 text-statusWarning border-statusWarning/30",
+    dotClass: "bg-statusWarning",
+    isPulsing: false,
+    description:
+      "This buffer holds both real run events and scripted fixtures. Clear the stream to see a run on its own.",
+  },
+  IDLE: {
+    label: "IDLE",
+    badgeClass: "bg-bgSurface text-textMuted border-borderSubtle",
+    dotClass: "bg-textMuted",
+    isPulsing: false,
+    description:
+      "Connected to the telemetry stream, but no protocol events have arrived. Run a scenario from the Protocol Playground.",
+  },
+  CONNECTING: {
+    label: "CONNECTING...",
+    badgeClass: "bg-statusWarning/10 text-statusWarning border-statusWarning/30",
+    dotClass: "bg-statusWarning",
+    isPulsing: true,
+    description: "Opening the telemetry stream.",
+  },
+  OFFLINE: {
+    label: "OFFLINE",
+    badgeClass: "bg-statusError/10 text-statusError border-statusError/30",
+    dotClass: "bg-statusError",
+    isPulsing: false,
+    description:
+      "Not receiving telemetry. The mesh services may not be running: docker compose up.",
+  },
 };
 
 // Agent Trace Panel Constants

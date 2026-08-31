@@ -28,7 +28,8 @@ function DashboardShell({ children }: DashboardShellProps): React.JSX.Element {
       <div className="flex flex-1 flex-col min-w-0 h-full overflow-hidden">
         <DashboardHeader
           connectionState={telemetry.connectionState}
-          isConnected={telemetry.isConnected}
+          streamMode={telemetry.streamMode}
+          provenanceCounts={telemetry.provenanceCounts}
           totalEventsCount={telemetry.events.length}
           onClearEvents={telemetry.clearEvents}
           theme={theme}

@@ -1,16 +1,18 @@
 "use client";
 
 import React from "react";
-import { Activity, Moon, Play, Sun, Trash2 } from "lucide-react";
+import { Activity, Moon, Sun, Trash2 } from "lucide-react";
 import {
-  connectionStatusColors,
   connectionStatusLabels,
+  streamModePresentation,
 } from "@/constants/dashboardConstants";
-import { SseConnectionState } from "@/types/telemetryEventTypes";
+import type { StreamProvenanceCounts } from "@/lib/streamModeResolver";
+import { SseConnectionState, TelemetryStreamMode } from "@/types/telemetryEventTypes";
 
 export interface DashboardHeaderProps {
   readonly connectionState: SseConnectionState;
-  readonly isConnected: boolean;
+  readonly streamMode: TelemetryStreamMode;
+  readonly provenanceCounts: StreamProvenanceCounts;
   readonly totalEventsCount: number;
   readonly onClearEvents: () => void;
   readonly theme?: "light" | "dark";
@@ -25,14 +27,33 @@ const clearTitle = "Clear Event Stream";
 const lightModeTitle = "Switch to dark mode";
 const darkModeTitle = "Switch to light mode";
 
+// The badge is deliberately terse, so the hover text carries the full claim: what the mode
+// means, the transport state underneath it, and the counts the mode was derived from. A reader
+// who doubts the label can check the arithmetic.
+function buildStreamModeTitle(
+  streamMode: TelemetryStreamMode,
+  connectionState: SseConnectionState,
+  counts: StreamProvenanceCounts,
+): string {
+  const { description } = streamModePresentation[streamMode];
+  const transport = connectionStatusLabels[connectionState];
+  const tally =
+    `${counts.liveCount} live / ${counts.syntheticCount} fixture / ` +
+    `${counts.unknownCount} unstamped`;
+  return `${description}\nTransport: ${transport}\nBuffered events: ${tally}`;
+}
+
 export function DashboardHeader({
   connectionState,
-  isConnected,
+  streamMode,
+  provenanceCounts,
   totalEventsCount,
   onClearEvents,
   theme = "dark",
   onToggleTheme,
 }: DashboardHeaderProps): React.JSX.Element {
+  const streamPresentation = streamModePresentation[streamMode];
+
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-borderSubtle bg-bgSurface px-6">
       <div className="flex items-center gap-3">
@@ -46,16 +67,15 @@ export function DashboardHeader({
 
       <div className="flex items-center gap-2.5">
         <div
-          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${
-            connectionStatusColors[connectionState]
-          }`}
+          title={buildStreamModeTitle(streamMode, connectionState, provenanceCounts)}
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${streamPresentation.badgeClass}`}
         >
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              isConnected ? "bg-statusSuccess animate-pulseFast" : "bg-statusError"
+            className={`h-1.5 w-1.5 rounded-full ${streamPresentation.dotClass} ${
+              streamPresentation.isPulsing ? "animate-pulseFast" : ""
             }`}
           />
-          <span>{connectionStatusLabels[connectionState]}</span>
+          <span>{streamPresentation.label}</span>
         </div>
 
         <div className="flex items-center gap-1 rounded-md border border-borderSubtle bg-bgBase px-2.5 py-1 text-xs text-textSecondary font-mono">

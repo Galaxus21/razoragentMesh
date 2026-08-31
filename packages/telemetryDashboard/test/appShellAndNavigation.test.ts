@@ -9,11 +9,16 @@ import {
   defaultSidebarCollapsed,
   sidebarStorageKey,
 } from "../src/hooks/useSidebarState.js";
+import { isRouteMatching } from "../src/constants/sidebarNavigationConfig.js";
 
 const expectedRouteList: ReadonlyArray<string> = [
   "/overview",
+  "/protocol",
   "/self-healing",
   "/infrastructure",
+  "/playground",
+  "/playground/adversarial",
+  "/sdk-console",
   "/agent-observability",
   "/negotiation-hub",
   "/security-audit",
@@ -28,8 +33,12 @@ const expectedRouteList: ReadonlyArray<string> = [
 
 const expectedLabelList: ReadonlyArray<string> = [
   "Overview",
+  "Protocol Map",
   "Self-Healing",
   "Infrastructure",
+  "Protocol Playground",
+  "Adversarial Playground",
+  "SDK Console",
   "Agent Observability",
   "Negotiation Hub",
   "Security & Audit",
@@ -107,19 +116,19 @@ describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
     }
   });
 
-  it("should register exactly 13 unique navigation routes across all categories", () => {
-    assert.equal(navigationItems.length, 13);
+  it("should register exactly 17 unique navigation routes across all categories", () => {
+    assert.equal(navigationItems.length, 17);
 
     const routes = navigationItems.map((item) => item.route);
     const uniqueRoutes = new Set(routes);
-    assert.equal(uniqueRoutes.size, 13);
+    assert.equal(uniqueRoutes.size, 17);
 
     for (const expectedRoute of expectedRouteList) {
       assert.ok(uniqueRoutes.has(expectedRoute), `Missing route: ${expectedRoute}`);
     }
   });
 
-  it("should map descriptive labels and valid properties for all 13 child items", () => {
+  it("should map descriptive labels and valid properties for all 17 child items", () => {
     const labels = navigationItems.map((item) => item.label);
     for (let index = 0; index < expectedLabelList.length; index += 1) {
       assert.equal(labels[index], expectedLabelList[index]);
@@ -128,9 +137,9 @@ describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
   });
 
   it("should correctly identify active routes with prefix matching", () => {
-    const isActiveRoute = (activeRoute: string, targetRoute: string): boolean => {
-      return activeRoute === targetRoute || activeRoute.startsWith(`${targetRoute}/`);
-    };
+    // The shipped matcher, not a local copy. A private reimplementation here would keep
+    // passing even if src/constants/sidebarNavigationConfig.ts were deleted outright.
+    const isActiveRoute = isRouteMatching;
 
     assert.equal(isActiveRoute("/overview", "/overview"), true);
     assert.equal(isActiveRoute("/overview/details", "/overview"), true);
@@ -140,5 +149,10 @@ describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
     assert.equal(isActiveRoute("/docs/setup", "/docs/setup"), true);
     assert.equal(isActiveRoute("/docs/buyer-sdk", "/docs/buyer-sdk"), true);
     assert.equal(isActiveRoute("/docs/merchant-guide", "/docs/merchant-guide"), true);
+
+    // A registered nested route belongs to itself alone, so exactly one sidebar row lights up.
+    assert.equal(isActiveRoute("/playground/adversarial", "/playground/adversarial"), true);
+    assert.equal(isActiveRoute("/playground/adversarial", "/playground"), false);
+    assert.equal(isActiveRoute("/playground", "/playground"), true);
   });
 });

@@ -7,15 +7,15 @@ import {
   navigationItems,
   NavCategoryConfig,
   AppSidebar,
+  isCategoryActive,
+  isRouteMatching,
 } from "../src/components/appSidebar.js";
 import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
-import SetupDocsPage from "../src/app/(dashboard)/docs/setup/page.js";
-import BuyerSdkDocsPage from "../src/app/(dashboard)/docs/buyer-sdk/page.js";
-import MerchantGuideDocsPage from "../src/app/(dashboard)/docs/merchant-guide/page.js";
+import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 
 const stressLoopIterations = 5000;
 const expectedCategoryCount = 5;
-const expectedTotalRouteCount = 13;
+const expectedTotalRouteCount = 17;
 
 const defaultCategoryIds: ReadonlyArray<string> = [
   "platformOps",
@@ -25,13 +25,10 @@ const defaultCategoryIds: ReadonlyArray<string> = [
   "documentation",
 ];
 
-function isRouteMatching(activeRoute: string, targetRoute: string): boolean {
-  return activeRoute === targetRoute || activeRoute.startsWith(`${targetRoute}/`);
-}
-
-function isCategoryActive(category: NavCategoryConfig, activeRoute: string): boolean {
-  return category.children.some((child) => isRouteMatching(activeRoute, child.route));
-}
+// Imported from source rather than redefined locally. These tests previously carried their own
+// copy of the prefix-matching logic, which meant they passed regardless of what the real
+// implementation did -- they would still have gone green if isRouteMatching were deleted.
+// isRouteMatching and isCategoryActive are imported from the source module below.
 
 function simulateCategoryToggle(
   previousState: Record<string, boolean>,
@@ -180,14 +177,11 @@ describe("Challenger 1 Empirical Stress: Layout Container Constraints & JSX Vali
     });
     assert.ok(React.isValidElement(layoutElement));
 
-    const setupElement = React.createElement(SetupDocsPage);
-    assert.ok(React.isValidElement(setupElement));
-
-    const buyerSdkElement = React.createElement(BuyerSdkDocsPage);
-    assert.ok(React.isValidElement(buyerSdkElement));
-
-    const merchantGuideElement = React.createElement(MerchantGuideDocsPage);
-    assert.ok(React.isValidElement(merchantGuideElement));
+    // The three doc page components this used to instantiate are gone: one [...slug] route
+    // serves every guide. The equivalent guarantee is that each guide still loads.
+    for (const slug of ["setup", "buyer-sdk", "merchant-guide"]) {
+      assert.ok(loadDocPage([slug]), `Documentation page ${slug} did not load`);
+    }
   });
 
   it("should instantiate AppSidebar in both collapsed and expanded states", () => {
