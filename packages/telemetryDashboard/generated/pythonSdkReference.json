@@ -188,6 +188,7 @@
     },
     {
       "constructorParameters": [
+        "code",
         "discountBps",
         "discountPaise",
         "label",
@@ -198,6 +199,10 @@
       ],
       "kind": "class",
       "members": [
+        {
+          "name": "code",
+          "signature": "str | None"
+        },
         {
           "name": "discountBps",
           "signature": "int | None"
@@ -216,7 +221,7 @@
         }
       ],
       "name": "AppliedDiscountItem",
-      "signature": "AppliedDiscountItem(*, type: Annotated[str, MinLen(min_length=1)], label: Annotated[str, MinLen(min_length=1)], discountBps: Annotated[int | None, Ge(ge=0)] = None, discountPaise: Annotated[int | None, Ge(ge=0)] = None) -> None"
+      "signature": "AppliedDiscountItem(*, type: Annotated[str, MinLen(min_length=1)], name: Annotated[str, MinLen(min_length=1)], code: str | None = None, discountBps: Annotated[int | None, Ge(ge=0)] = None, discountPaise: Annotated[int | None, Ge(ge=0)] = None) -> None"
     },
     {
       "constructorParameters": [
@@ -1040,7 +1045,7 @@
         }
       ],
       "name": "InventoryLockResponse",
-      "signature": "InventoryLockResponse(*, lock_token: Annotated[str, MinLen(min_length=1)], fencing_token: Annotated[int, Gt(gt=0)], sku_id: Annotated[str, MinLen(min_length=1)], quantity_locked: Annotated[int, Gt(gt=0)], expires_at_unix_ms: Annotated[int, Gt(gt=0)], signature: Annotated[str, MinLen(min_length=1)]) -> None"
+      "signature": "InventoryLockResponse(*, lockToken: Annotated[str, MinLen(min_length=1)], fencingToken: Annotated[int, Gt(gt=0)], skuId: Annotated[str, MinLen(min_length=1)], quantityLocked: Annotated[int, Gt(gt=0)], expiresAtUnixMs: Annotated[int, Gt(gt=0)], lockSignature: Annotated[str, MinLen(min_length=1)]) -> None"
     },
     {
       "constructorParameters": [
@@ -1479,7 +1484,7 @@
         }
       ],
       "name": "QuoteTaxBreakdown",
-      "signature": "QuoteTaxBreakdown(*, cgst_paise: Annotated[int, Ge(ge=0)] = 0, sgst_paise: Annotated[int, Ge(ge=0)] = 0, igst_paise: Annotated[int, Ge(ge=0)] = 0, total_tax_paise: Annotated[int, Ge(ge=0)] = 0) -> None"
+      "signature": "QuoteTaxBreakdown(*, cgstPaise: Annotated[int, Ge(ge=0)] = 0, sgstPaise: Annotated[int, Ge(ge=0)] = 0, igstPaise: Annotated[int, Ge(ge=0)] = 0, totalTaxPaise: Annotated[int, Ge(ge=0)] = 0) -> None"
     },
     {
       "constructorParameters": [
@@ -1512,7 +1517,7 @@
         },
         {
           "name": "getLiveSkuQuote",
-          "signature": "getLiveSkuQuote(self, skuId: str, quantity: int = 1, deliveryPincode: str = '560001', promoCode: str | None = None, buyerAgentDid: str | None = None) -> razoragent_buyer_sdk.transportModels.SkuQuote"
+          "signature": "getLiveSkuQuote(self, skuId: str, deliveryPincode: str, quantity: int = 1, promoCode: str | None = None, buyerAgentDid: str | None = None) -> razoragent_buyer_sdk.transportModels.SkuQuote"
         },
         {
           "name": "getPowChallenge",
@@ -1532,7 +1537,7 @@
         },
         {
           "name": "reserveInventoryLock",
-          "signature": "reserveInventoryLock(self, skuId: str, quantity: int = 1, lockTtlSeconds: int = 60, quoteHash: str | None = None, buyerAgentDid: str | None = None, autoSolvePow: bool | None = None) -> razoragent_buyer_sdk.transportModels.InventoryLockResponse"
+          "signature": "reserveInventoryLock(self, skuId: str, quoteHash: str, quantity: int = 1, lockTtlSeconds: int = 60, buyerAgentDid: str | None = None, autoSolvePow: bool | None = None) -> razoragent_buyer_sdk.transportModels.InventoryLockResponse"
         }
       ],
       "name": "RazorAgentClient",
@@ -1772,13 +1777,16 @@
         "available_stock",
         "base_unit_price_paise",
         "currency",
+        "final_unit_price_paise",
         "gst_rate_percent",
         "hsn_code",
         "offered_unit_price_paise",
+        "quantity",
         "quote_expiry_timestamp",
         "quote_hash",
         "sku_id",
         "tax_breakdown",
+        "taxable_subtotal_paise",
         "total_savings_paise",
         "upcoming_promotions"
       ],
@@ -1804,6 +1812,10 @@
           "signature": "<class 'str'>"
         },
         {
+          "name": "final_unit_price_paise",
+          "signature": "int | None"
+        },
+        {
           "name": "gst_rate_percent",
           "signature": "<class 'int'>"
         },
@@ -1814,6 +1826,10 @@
         {
           "name": "offered_unit_price_paise",
           "signature": "<class 'int'>"
+        },
+        {
+          "name": "quantity",
+          "signature": "int | None"
         },
         {
           "name": "quote_expiry_timestamp",
@@ -1832,6 +1848,10 @@
           "signature": "<class 'razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown'>"
         },
         {
+          "name": "taxable_subtotal_paise",
+          "signature": "int | None"
+        },
+        {
           "name": "total_savings_paise",
           "signature": "<class 'int'>"
         },
@@ -1841,7 +1861,7 @@
         }
       ],
       "name": "SkuQuote",
-      "signature": "SkuQuote(*, sku_id: Annotated[str, MinLen(min_length=1)], available_stock: Annotated[int, Ge(ge=0)], base_unit_price_paise: Annotated[int, Ge(ge=0)], offered_unit_price_paise: Annotated[int, Ge(ge=0)], currency: str = 'INR', hsn_code: Annotated[str, MinLen(min_length=1)], gst_rate_percent: Annotated[int, Ge(ge=0), Le(le=28)], tax_breakdown: razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown, quote_expiry_timestamp: Annotated[int, Gt(gt=0)], quote_hash: Annotated[str, MinLen(min_length=1)], applied_discounts: list[razoragent_buyer_sdk.transportModels.AppliedDiscountItem] = <factory>, total_savings_paise: Annotated[int, Ge(ge=0)] = 0, upcoming_promotions: list[razoragent_buyer_sdk.transportModels.UpcomingPromotion] = <factory>) -> None"
+      "signature": "SkuQuote(*, skuId: Annotated[str, MinLen(min_length=1)], availableStock: Annotated[int, Ge(ge=0)], baseUnitPricePaise: Annotated[int, Ge(ge=0)], offeredUnitPricePaise: Annotated[int, Ge(ge=0)], currency: str = 'INR', hsnCode: Annotated[str, MinLen(min_length=1)], gstRatePercent: Annotated[int, Ge(ge=0), Le(le=28)], taxBreakdown: razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown, quoteExpiryTimestamp: Annotated[int, Gt(gt=0)], quoteHash: Annotated[str, MinLen(min_length=1)], appliedDiscounts: list[razoragent_buyer_sdk.transportModels.AppliedDiscountItem] = <factory>, totalSavingsPaise: Annotated[int, Ge(ge=0)] = 0, upcomingPromotions: list[razoragent_buyer_sdk.transportModels.UpcomingPromotion] = <factory>, finalUnitPricePaise: Annotated[int | None, Ge(ge=0)] = None, quantity: Annotated[int | None, Gt(gt=0)] = None, taxableSubtotalPaise: Annotated[int | None, Ge(ge=0)] = None) -> None"
     },
     {
       "constructorParameters": [
@@ -1886,13 +1906,16 @@
         "available_stock",
         "base_unit_price_paise",
         "currency",
+        "final_unit_price_paise",
         "gst_rate_percent",
         "hsn_code",
         "offered_unit_price_paise",
+        "quantity",
         "quote_expiry_timestamp",
         "quote_hash",
         "sku_id",
         "tax_breakdown",
+        "taxable_subtotal_paise",
         "total_savings_paise",
         "upcoming_promotions"
       ],
@@ -1918,6 +1941,10 @@
           "signature": "<class 'str'>"
         },
         {
+          "name": "final_unit_price_paise",
+          "signature": "int | None"
+        },
+        {
           "name": "gst_rate_percent",
           "signature": "<class 'int'>"
         },
@@ -1928,6 +1955,10 @@
         {
           "name": "offered_unit_price_paise",
           "signature": "<class 'int'>"
+        },
+        {
+          "name": "quantity",
+          "signature": "int | None"
         },
         {
           "name": "quote_expiry_timestamp",
@@ -1946,6 +1977,10 @@
           "signature": "<class 'razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown'>"
         },
         {
+          "name": "taxable_subtotal_paise",
+          "signature": "int | None"
+        },
+        {
           "name": "total_savings_paise",
           "signature": "<class 'int'>"
         },
@@ -1955,7 +1990,7 @@
         }
       ],
       "name": "SkuQuoteResponse",
-      "signature": "SkuQuote(*, sku_id: Annotated[str, MinLen(min_length=1)], available_stock: Annotated[int, Ge(ge=0)], base_unit_price_paise: Annotated[int, Ge(ge=0)], offered_unit_price_paise: Annotated[int, Ge(ge=0)], currency: str = 'INR', hsn_code: Annotated[str, MinLen(min_length=1)], gst_rate_percent: Annotated[int, Ge(ge=0), Le(le=28)], tax_breakdown: razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown, quote_expiry_timestamp: Annotated[int, Gt(gt=0)], quote_hash: Annotated[str, MinLen(min_length=1)], applied_discounts: list[razoragent_buyer_sdk.transportModels.AppliedDiscountItem] = <factory>, total_savings_paise: Annotated[int, Ge(ge=0)] = 0, upcoming_promotions: list[razoragent_buyer_sdk.transportModels.UpcomingPromotion] = <factory>) -> None"
+      "signature": "SkuQuote(*, skuId: Annotated[str, MinLen(min_length=1)], availableStock: Annotated[int, Ge(ge=0)], baseUnitPricePaise: Annotated[int, Ge(ge=0)], offeredUnitPricePaise: Annotated[int, Ge(ge=0)], currency: str = 'INR', hsnCode: Annotated[str, MinLen(min_length=1)], gstRatePercent: Annotated[int, Ge(ge=0), Le(le=28)], taxBreakdown: razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown, quoteExpiryTimestamp: Annotated[int, Gt(gt=0)], quoteHash: Annotated[str, MinLen(min_length=1)], appliedDiscounts: list[razoragent_buyer_sdk.transportModels.AppliedDiscountItem] = <factory>, totalSavingsPaise: Annotated[int, Ge(ge=0)] = 0, upcomingPromotions: list[razoragent_buyer_sdk.transportModels.UpcomingPromotion] = <factory>, finalUnitPricePaise: Annotated[int | None, Ge(ge=0)] = None, quantity: Annotated[int | None, Gt(gt=0)] = None, taxableSubtotalPaise: Annotated[int | None, Ge(ge=0)] = None) -> None"
     },
     {
       "constructorParameters": [
@@ -2081,7 +2116,7 @@
         }
       ],
       "name": "UpcomingPromotion",
-      "signature": "UpcomingPromotion(*, campaign_id: Annotated[str, MinLen(min_length=1)], name: Annotated[str, MinLen(min_length=1)], starts_at_unix: Annotated[int, Gt(gt=0)], ends_at_unix: Annotated[int, Gt(gt=0)], expected_unit_price_paise: Annotated[int, Ge(ge=0)], expected_savings_paise: Annotated[int, Ge(ge=0)], limited_stock_allocated: Annotated[int | None, Ge(ge=0)] = None) -> None"
+      "signature": "UpcomingPromotion(*, campaignId: Annotated[str, MinLen(min_length=1)], name: Annotated[str, MinLen(min_length=1)], startsAtUnix: Annotated[int, Gt(gt=0)], endsAtUnix: Annotated[int, Gt(gt=0)], expectedUnitPricePaise: Annotated[int, Ge(ge=0)], expectedSavingsPaise: Annotated[int, Ge(ge=0)], limitedStockAllocated: Annotated[int | None, Ge(ge=0)] = None) -> None"
     },
     {
       "constructorParameters": [],
