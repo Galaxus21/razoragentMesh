@@ -159,6 +159,9 @@ export const defaultFallbackState = "KA";
  export const corporatePromoBps = 500;
  
  export const meshCatalogUpdatesChannel = "mesh:catalog:updates";
+// Every merchant SKU is stored at `mesh:catalog:{skuId}`. The updates channel above shares
+// this prefix but is a channel, not a key.
+export const meshCatalogKeyPrefix = "mesh:catalog:";
  export const catalogEventAdded = "CATALOG_ITEM_ADDED";
  export const catalogEventUpdated = "CATALOG_ITEM_UPDATED";
  export const catalogEventRemoved = "CATALOG_ITEM_REMOVED";

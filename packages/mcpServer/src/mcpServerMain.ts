@@ -17,6 +17,7 @@ import type {
 import { executeSkuQuote } from "./tools/skuQuoter.js";
 import { reserveInventoryLock } from "./tools/inventoryLocker.js";
 import { verifyShippingSla } from "./tools/slaVerifier.js";
+import { hydrateCatalogFromRedis } from "./catalog/catalogHydrator.js";
 import { defaultCatalogStore } from "./catalog/catalogStore.js";
 import { startMcpHttpServer } from "./http/httpAdapter.js";
 
@@ -204,6 +205,21 @@ export function initializeCatalogSubscriber(redisUrl?: string): void {
         }
       });
       defaultCatalogStore.subscribeToCatalogChannel(subscriber);
+
+      // A connection in subscriber mode cannot issue SCAN/MGET, so hydration gets its own client.
+      // It runs after the subscription is established, so a change published mid-hydration is
+      // applied by the subscriber rather than lost between the two.
+      const reader = new RedisClass(targetUrl, { maxRetriesPerRequest: null, lazyConnect: false });
+      hydrateCatalogFromRedis(defaultCatalogStore, reader)
+        .then((loadedCount: number) => {
+          if (loadedCount > 0) {
+            process.stderr.write(`Catalog hydrated from Redis: ${loadedCount} SKU(s)\n`);
+          }
+        })
+        .catch((error: unknown) => {
+          // The compiled fixtures remain serviceable, so this is reported and not fatal.
+          process.stderr.write("Catalog hydration skipped: " + String(error) + "\n");
+        });
     })
     .catch((error: unknown) => {
       process.stderr.write("Redis pub/sub subscriber error: " + String(error) + "\n");
