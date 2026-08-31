@@ -1,7 +1,73 @@
+# This file governs the build contexts of merchant-api, x402-gateway and telemetry-dashboard,
+# all three of which build from the repository root (see docker-compose.yml).
+#
+# Docker reads the .dockerignore at the CONTEXT ROOT only. A .dockerignore sitting next to a
+# Dockerfile is silently ignored unless it is named <Dockerfile>.dockerignore. Package-level
+# copies of this file previously existed for those three services and did nothing at all --
+# they were removed. Add exclusions HERE, not beside a Dockerfile.
+#
+# Every pattern is anchored at the context root, so nested matches need a leading **/ .
+# A bare "__pycache__" excludes exactly one directory; "**/__pycache__" excludes all of them.
+
+# --- VCS & CI ---
+**/.git
+**/.gitignore
+.github
+
+# --- Docker's own files (the -f Dockerfile is loaded outside the context, so this is safe) ---
+**/Dockerfile
+**/.dockerignore
+docker-compose.yml
+
+# --- Secrets: never bake an env file into an image layer. .env.example is excluded too,
+# because it carries real-shaped Ed25519 seeds and HMAC secrets and no build step reads it.
+**/.env
+**/.env.*
+
+# --- Node / Next.js ---
 **/node_modules
 **/.next
-**/.git
+**/.turbo
+**/.npm
+**/.yarn
+**/.pnpm-store
+**/tsconfig.tsbuildinfo
+# buyerSdkTs/dist is rebuilt from src inside the sdk stage, so the host copy is dead weight.
+**/dist
+**/out
+
+# --- Python ---
 **/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+**/.eggs
+
+# --- Tests & coverage. No build stage compiles these, and nothing under any src/ imports
+# them, so excluding them cannot affect build output.
+tests
+**/test
+**/tests
 **/.pytest_cache
+**/.hypothesis
+**/.coverage
+**/htmlcov
+**/coverage.xml
+
+# NOTE: do NOT exclude packages/telemetryDashboard/docs -- the /docs/* pages prerender by
+# reading it from disk at build time (src/lib/docsLoader.ts) and the build breaks without it.
+# Do NOT exclude next-env.d.ts or .eslintrc.json either; next build consumes both.
+
+# --- Logs, OS & editor noise ---
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+**/Desktop.ini
+**/.vscode
+**/.idea
+**/*.swp
 **/.agents
-*.log
+**/.gemini

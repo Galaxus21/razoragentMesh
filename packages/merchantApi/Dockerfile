@@ -8,5 +8,13 @@ COPY packages/merchantApi/src ./src
 COPY packages/mandateEngine ./packages/mandateEngine
 RUN touch ./packages/__init__.py
 ENV PYTHONPATH=/app
+
+# Drop root. Unlike the other two Python services this one needs a writable HOME: fastembed
+# downloads its embedding model on first use (src/catalog/autoVectorizer.py) and caches it
+# under $HOME, so --create-home and an explicit HOME are both load-bearing here.
+RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+ENV HOME=/home/appuser
+USER appuser
+
 EXPOSE 4002
 CMD ["uvicorn", "src.merchantApp:merchantApp", "--host", "0.0.0.0", "--port", "4002"]

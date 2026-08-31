@@ -8,5 +8,10 @@ COPY packages/x402Gateway/src ./src
 COPY packages/mandateEngine ./packages/mandateEngine
 RUN touch ./packages/__init__.py
 ENV PYTHONPATH=/app
+
+# Drop root. The gateway only reads its own code and reaches Redis over the network.
+RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 4003
 CMD ["uvicorn", "src.gatewayApp:app", "--host", "0.0.0.0", "--port", "4003"]

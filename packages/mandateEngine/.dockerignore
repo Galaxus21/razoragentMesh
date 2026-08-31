@@ -1,9 +1,40 @@
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache
-.coverage
-htmlcov
-.git
-*.log
+# The build context for mandate-engine IS this package directory (docker-compose.yml sets
+# context: ./packages/mandateEngine), so this file is live -- unlike the package-level
+# .dockerignore files of the services that build from the repository root.
+#
+# Patterns anchor at the context root: nested matches need a leading **/ . The previous bare
+# "__pycache__" matched only the top-level directory and shipped 36 .pyc files across seven
+# nested __pycache__ directories into the image.
+
+# Secrets: the Dockerfile does COPY . into the image, so an env file here would be baked in.
+**/.env
+**/.env.*
+
+# Python bytecode & tool caches
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+**/.eggs
+
+# Tests & coverage
+**/test
+**/tests
+**/.pytest_cache
+**/.hypothesis
+**/.coverage
+**/htmlcov
+**/coverage.xml
+
+# Docker, VCS, logs and OS noise
+Dockerfile
+.dockerignore
+**/.git
+**/.gitignore
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+**/Desktop.ini

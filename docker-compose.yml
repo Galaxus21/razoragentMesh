@@ -38,8 +38,9 @@ services:
       dockerfile: Dockerfile
     image: razoragent_mcp_server:latest
     container_name: razoragent_mcp_server
-    # NOTE: mcpServer speaks MCP over stdio, not HTTP -- nothing binds this port. The mapping
-    # is retained only so the reserved port is visible in the topology; see README section 3.
+    # mcpServer runs two transports: MCP JSON-RPC over stdio for MCP clients, and the REST
+    # adapter (packages/mcpServer/src/http/httpAdapter.ts) on this port for the buyer SDKs,
+    # whose getLiveSkuQuote/reserveInventoryLock/verifyShippingSla calls are plain HTTP.
     ports:
       - "4001:4001"
     environment:
@@ -114,16 +115,30 @@ services:
 
   telemetry-dashboard:
     build:
-      context: ./packages/telemetryDashboard
-      dockerfile: Dockerfile
+      # Root context so the dashboard can link the real buyer SDK (file:../buyerSdkTs) and
+      # drive live protocol runs, matching merchant-api and x402-gateway above.
+      context: .
+      dockerfile: packages/telemetryDashboard/Dockerfile
+      # NEXT_PUBLIC_* vars are inlined into the client bundle at `next build` time, so this
+      # must be a build arg, not a container `environment:` entry -- a runtime env var on
+      # the runner stage has no effect on an already-built Next.js standalone bundle.
+      args:
+        - NEXT_PUBLIC_TELEMETRY_SSE_URL=${NEXT_PUBLIC_TELEMETRY_SSE_URL:-http://localhost:8000/api/v1/telemetry/stream}
     image: razoragent_telemetry_dashboard:latest
     container_name: razoragent_telemetry_dashboard
     ports:
       - "3000:3000"
+    # Read at request time by the protocol driver (src/server/protocolDriver/driverConfig.ts).
+    # Unlike NEXT_PUBLIC_* these are NOT build args: the driver runs server-side in the
+    # container, where services resolve by compose service name rather than localhost.
     environment:
-      - NEXT_PUBLIC_TELEMETRY_SSE_URL=http://localhost:8000/api/v1/telemetry/stream
+      - MCP_SERVER_URL=http://mcp-server:4001
+      - MANDATE_ENGINE_URL=http://mandate-engine:8000
+      - X402_GATEWAY_URL=http://x402-gateway:4003
+      - MERCHANT_API_URL=http://merchant-api:4002
     depends_on:
       - mandate-engine
+      - mcp-server
     networks:
       - meshNetwork
 
