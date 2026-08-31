@@ -1,0 +1,46 @@
+[
+  {
+    "path": "examples/python/mandateChain.py",
+    "language": "python",
+    "regions": [
+      {
+        "name": "intent",
+        "code": "def buildIntentMandate(userSigner: AgentKeyManager, delegatedAgentDid: str) -> IntentMandate:\n    \"\"\"Signed by the human principal, not by the agent.\n\n    The budget ceiling lives here so the limit travels with the authorization -- an agent that\n    could edit its own ceiling has none.\n    \"\"\"\n    return createSignedIntentMandate(\n        mandateId=\"mandate_intent_7f21c4\",\n        userKeyManager=userSigner,\n        delegatedAgentDid=delegatedAgentDid,\n        maxBudgetPaise=maxBudgetPaise,\n        upiCircleDelegationToken=upiCircleDelegationToken,\n        singleTransactionLimitPaise=singleTransactionLimitPaise,\n        authorizedCategories=[\"apparel\"],\n    )"
+      },
+      {
+        "name": "cart",
+        "code": "def buildCartMandate(merchantSigner: AgentKeyManager) -> CartMandate:\n    \"\"\"Signed by the merchant enclave.\n\n    The buyer agent receives this over the wire and verifies it; it never produces one. The lock\n    token and its expiry are what bind the cart to reserved stock.\n    \"\"\"\n    return createSignedCartMandate(\n        cartId=\"cart_7f21c4\",\n        merchantKeyManager=merchantSigner,\n        merchantGstin=merchantGstin,\n        merchantStateCode=merchantStateCode,\n        buyerDeliveryPincode=buyerDeliveryPincode,\n        buyerDeliveryStateCode=buyerDeliveryStateCode,\n        items=[\n            CartItemSchema(\n                skuId=skuId,\n                hsnCode=hsnCodeApparel,\n                quantity=quantity,\n                unitPricePaise=unitPricePaise,\n                lineTotalPaise=lineTotalPaise,\n                gstRatePercent=gstRatePercent,\n            )\n        ],\n        taxableSubtotalPaise=taxableSubtotalPaise,\n        taxBreakdown=TaxBreakdownSchema(\n            cgstPaise=cgstPaise,\n            sgstPaise=sgstPaise,\n            igstPaise=igstPaise,\n            totalTaxPaise=totalTaxPaise,\n        ),\n        shippingPaise=shippingPaise,\n        discountPaise=discountPaise,\n        totalPaise=totalPaise,\n        inventoryLockToken=inventoryLockToken,\n        inventoryLockExpiresAt=int(time.time()) + lockTtlSeconds,\n    )"
+      },
+      {
+        "name": "execution",
+        "code": "def buildExecutionMandate(\n    intentMandate: IntentMandate,\n    cartMandate: CartMandate,\n    buyerSigner: AgentKeyManager,\n) -> ExecutionMandate:\n    \"\"\"The only link the buyer agent signs.\n\n    It records the SHA-256 of each preceding mandate, so the chain is verifiable by\n    recomputation rather than by trusting whoever hands it over.\n    \"\"\"\n    return createSignedExecutionMandate(\n        executionId=\"exec_7f21c4\",\n        buyerKeyManager=buyerSigner,\n        intentMandate=intentMandate,\n        cartMandate=cartMandate,\n        settlementAmountPaise=cartMandate.totalPaise,\n        upiCircleToken=intentMandate.upiCircleDelegationToken,\n    )"
+      },
+      {
+        "name": "verify",
+        "code": "intact = verifyMandateHashChain(intentMandate, cartMandate, executionMandate)\n\n# The same chain with the cart discounted after the fact. Nothing else changes -- the\n# merchant signature, the execution mandate and both hashes are the originals -- and that is\n# the point: the recorded cartMandateHash no longer matches what the cart now hashes to.\n#\n# raiseOnMismatch=False is where the two runtimes genuinely differ. Python lets you ask for\n# a boolean; TypeScript's verifyMandateChain is declared `=> boolean` but only ever returns\n# true or throws, so the equivalent line there has to be a try/except.\ntamperedCart = cartMandate.model_copy(\n    update={\"totalPaise\": cartMandate.totalPaise - tamperReductionPaise}\n)\ntampered = verifyMandateHashChain(\n    intentMandate, tamperedCart, executionMandate, raiseOnMismatch=False\n)"
+      }
+    ]
+  },
+  {
+    "path": "examples/typescript/mandateChain.ts",
+    "language": "typescript",
+    "regions": [
+      {
+        "name": "intent",
+        "code": "function buildIntentMandate(\n  userSigner: AgentKeyManager,\n  delegatedAgentDid: string\n): IntentMandate {\n  // Signed by the human principal, not by the agent. The budget ceiling lives here so that the\n  // limit travels with the authorization -- an agent that could edit its own ceiling has none.\n  return createSignedIntentMandate(\n    {\n      mandateId: \"mandate_intent_7f21c4\",\n      delegatedAgentDid,\n      maxBudgetPaise,\n      singleTransactionLimitPaise,\n      upiCircleDelegationToken,\n      authorizedCategories: [\"apparel\"],\n    },\n    userSigner\n  );\n}"
+      },
+      {
+        "name": "cart",
+        "code": "function buildCartMandate(merchantSigner: AgentKeyManager): CartMandate {\n  // Signed by the merchant enclave. The buyer agent receives this over the wire and verifies it;\n  // it never produces one. The lock token and its expiry are what bind the cart to reserved stock.\n  return createSignedCartMandate(\n    {\n      cartId: \"cart_7f21c4\",\n      merchantGstin,\n      merchantStateCode,\n      buyerDeliveryPincode,\n      buyerDeliveryStateCode,\n      items: [\n        { skuId, hsnCode: hsnCodeApparel, quantity, unitPricePaise, lineTotalPaise, gstRatePercent },\n      ],\n      taxableSubtotalPaise,\n      taxBreakdown: { cgstPaise, sgstPaise, igstPaise, totalTaxPaise },\n      shippingPaise,\n      discountPaise,\n      totalPaise,\n      inventoryLockToken,\n      inventoryLockExpiresAt: Date.now() + lockTtlMilliseconds,\n    },\n    merchantSigner\n  );\n}"
+      },
+      {
+        "name": "execution",
+        "code": "function buildExecutionMandate(\n  intentMandate: IntentMandate,\n  cartMandate: CartMandate,\n  buyerSigner: AgentKeyManager\n): ExecutionMandate {\n  // The only link the buyer agent signs. It records the SHA-256 of each preceding mandate, so the\n  // chain is verifiable by recomputation rather than by trusting whoever hands it over.\n  return createSignedExecutionMandate(\n    {\n      executionId: \"exec_7f21c4\",\n      intentMandate,\n      cartMandate,\n      settlementAmountPaise: cartMandate.totalPaise,\n      upiCircleToken: intentMandate.upiCircleDelegationToken,\n    },\n    buyerSigner\n  );\n}"
+      },
+      {
+        "name": "verify",
+        "code": "const intact = verifyMandateChain(intentMandate, cartMandate, executionMandate);\n\n// The same chain with the cart discounted after the fact. Nothing else changes -- the merchant\n// signature, the execution mandate and both hashes are the originals -- and that is the point:\n// the recorded cartMandateHash no longer matches what the cart now hashes to.\n//\n// Note the try/catch. verifyMandateChain is declared `=> boolean`, but it returns true or\n// throws MandateVerificationError; it never returns false. Writing `if (!verifyMandateChain(..))`\n// compiles and then never runs its else branch. Catch the error -- do not test the result.\nconst tamperedCart = { ...cartMandate, totalPaise: cartMandate.totalPaise - tamperReductionPaise };\nlet tampered = true;\ntry {\n  verifyMandateChain(intentMandate, tamperedCart, executionMandate);\n} catch {\n  tampered = false;\n}"
+      }
+    ]
+  }
+]
