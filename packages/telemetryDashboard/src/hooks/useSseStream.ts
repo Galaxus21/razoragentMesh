@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import {
+  resolveStreamMode,
+  summarizeStreamProvenance,
+  type StreamProvenanceCounts,
+} from "@/lib/streamModeResolver";
 import {
   defaultSseUrl,
   maxEventBufferSize,
@@ -13,6 +18,7 @@ import {
   SseConnectionState,
   TelemetryEvent,
   TelemetryEventType,
+  TelemetryStreamMode,
 } from "@/types/telemetryEventTypes";
 
 export interface UseSseStreamOptions {
@@ -26,7 +32,8 @@ export interface UseSseStreamResult {
   readonly latestEvent: TelemetryEvent | null;
   readonly connectionState: SseConnectionState;
   readonly reconnectCount: number;
-  readonly isConnected: boolean;
+  readonly streamMode: TelemetryStreamMode;
+  readonly provenanceCounts: StreamProvenanceCounts;
   readonly clearEvents: () => void;
 }
 
@@ -139,12 +146,19 @@ export function useSseStream(options: UseSseStreamOptions = {}): UseSseStreamRes
     };
   }, [autoConnect, connectToStream]);
 
+  const streamMode = useMemo(
+    () => resolveStreamMode(connectionState, events),
+    [connectionState, events]
+  );
+  const provenanceCounts = useMemo(() => summarizeStreamProvenance(events), [events]);
+
   return {
     events,
     latestEvent,
     connectionState,
     reconnectCount,
-    isConnected: connectionState === "CONNECTED",
+    streamMode,
+    provenanceCounts,
     clearEvents,
   };
 }

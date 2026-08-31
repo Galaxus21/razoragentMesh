@@ -12,6 +12,15 @@ sseDataPrefix: str = "data: "
 sseDataSuffix: str = "\n\n"
 sseHeartbeatFrame: str = ": heartbeat\n\n"
 
+# Provenance marks whether an event was produced by a real protocol execution or by a scripted
+# fixture replay. Without it the dashboard can only observe that the SSE socket opened, which
+# says nothing about whether the events flowing through it describe real work -- so a seeded
+# demo used to render identically to a live settlement.
+provenanceLive: str = "LIVE"
+provenanceSynthetic: str = "SYNTHETIC"
+provenanceUnknown: str = "UNKNOWN"
+provenancePattern: str = "^(LIVE|SYNTHETIC|UNKNOWN)$"
+
 
 class TelemetryEventModel(BaseModel):
     """Immutable telemetry event payload frame."""
@@ -23,6 +32,10 @@ class TelemetryEventModel(BaseModel):
     timestampMs: int = Field(gt=0)
     sessionId: str = Field(min_length=1)
     payload: Dict[str, Any] = Field(default_factory=dict)
+    # Defaults to UNKNOWN, never to LIVE: a publisher that does not declare its provenance has
+    # not proven the event is real, and an undeclared event must not be able to light up a
+    # "live" indicator by omission.
+    provenance: str = Field(default=provenanceUnknown, pattern=provenancePattern)
 
 
 class TelemetryEventEmitter:

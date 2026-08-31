@@ -14,6 +14,22 @@ export type TelemetryEventType =
 
 export type SseConnectionState = "CONNECTING" | "CONNECTED" | "DISCONNECTED" | "ERROR";
 
+// Whether an event describes work that actually happened. Stamped by the publisher; see
+// packages/mandateEngine/telemetryEmitter.py. Absent on events from a publisher that predates
+// the field, which is why the resolver treats undefined as UNKNOWN rather than as LIVE.
+export type TelemetryProvenance = "LIVE" | "SYNTHETIC" | "UNKNOWN";
+
+// What the connection badge is allowed to claim. SseConnectionState describes the socket;
+// this describes the events travelling over it. An open socket carrying scripted fixtures is
+// CONNECTED but it is not LIVE, and the badge used to conflate the two.
+export type TelemetryStreamMode =
+  | "LIVE"
+  | "REPLAY"
+  | "MIXED"
+  | "IDLE"
+  | "CONNECTING"
+  | "OFFLINE";
+
 export type MandateKind = "INTENT" | "CART" | "EXECUTION" | "AMENDMENT";
 
 export interface BaseTelemetryEvent<TType extends TelemetryEventType, TPayload> {
@@ -22,6 +38,7 @@ export interface BaseTelemetryEvent<TType extends TelemetryEventType, TPayload> 
   readonly timestampMs: number;
   readonly sessionId: string;
   readonly payload: TPayload;
+  readonly provenance?: TelemetryProvenance;
 }
 
 export interface McpToolCallPayload {

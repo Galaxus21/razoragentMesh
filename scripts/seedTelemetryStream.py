@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """Standalone Telemetry Stream Seeder for RazorAgent Mesh Dashboard.
 
-Streams authentic sequential telemetry events into the Mandate Engine SSE broadcaster.
+Streams SCRIPTED, PRE-WRITTEN telemetry events into the Mandate Engine SSE broadcaster so the
+dashboard can be demonstrated without Docker or a running mesh. Nothing here is the product of
+an actual protocol execution: the hashes, signatures and prices below are fixtures.
+
+Every event is therefore stamped provenance=SYNTHETIC, which the dashboard reads to label the
+stream REPLAY instead of LIVE. Do not remove that stamp -- a seeded run that renders as live is
+the exact dishonesty this flag exists to prevent. For real events, run a scenario from
+/playground, which stamps provenance=LIVE.
+
 Usage:
     python scripts/seedTelemetryStream.py --scenario all --delay-ms 350
     python scripts/seedTelemetryStream.py --scenario negotiation --delay-ms 200
@@ -11,16 +19,38 @@ Usage:
 
 import argparse
 import json
+import sys
 import time
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List
+
+
+def configureConsoleEncoding() -> None:
+    """Forces UTF-8 output so the banner does not abort the run on a legacy console.
+
+    A default Windows console uses cp1252, which cannot encode the emoji in the progress
+    output: the script died with UnicodeEncodeError before sending a single event. The seeder
+    is meant to be the no-Docker demo path, so it must run on the machine that needs it.
+    """
+    for consoleStream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(consoleStream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
+configureConsoleEncoding()
 
 defaultTelemetryEndpoint: str = "http://localhost:8000/api/v1/telemetry/events"
 defaultDelayMilliseconds: int = 400
 defaultRepeatCount: int = 1
 defaultTimeoutSeconds: float = 5.0
 httpSuccessStatusCode: int = 200
+syntheticProvenanceValue: str = "SYNTHETIC"
+provenanceFieldName: str = "provenance"
+# The previous default asserted liveness in the identifier itself and then showed up verbatim
+# in the dashboard's session column, so a fixture session read as an agent session.
+defaultSessionIdPrefix: str = "session_seeded_fixture"
 
 
 def buildPowEvent(sessionId: str, nowMs: int) -> Dict[str, Any]:
@@ -300,6 +330,11 @@ def assembleScenarioEvents(scenario: str, sessionId: str) -> List[Dict[str, Any]
         events.append(buildInventoryLockEvent(sessionId, nowMs))
         events.append(buildRollbackEvent(sessionId, nowMs + 200))
 
+    # Stamped here rather than inside each builder so a future scenario cannot be added without
+    # it: everything this script emits is a fixture, without exception.
+    for event in events:
+        event[provenanceFieldName] = syntheticProvenanceValue
+
     return events
 
 
@@ -323,6 +358,7 @@ def dispatchTelemetryEvent(endpointUrl: str, event: Dict[str, Any]) -> bool:
 def runSeederLoop(args: argparse.Namespace) -> None:
     """Executes the telemetry seeding loop."""
     print(f"🚀 RazorAgent Mesh Telemetry Seeder")
+    print(f"   Mode:     REPLAY (scripted fixtures, provenance={syntheticProvenanceValue})")
     print(f"   Target:   {args.url}")
     print(f"   Scenario: {args.scenario}")
     print(f"   Delay:    {args.delay_ms} ms")
@@ -374,7 +410,7 @@ def parseCommandLineArguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--session-id",
-        default="session_live_agent",
+        default=defaultSessionIdPrefix,
         dest="session_id",
         help="Session identifier prefix",
     )

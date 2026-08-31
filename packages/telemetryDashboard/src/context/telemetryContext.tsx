@@ -2,13 +2,19 @@
 
 import React, { createContext, useContext, useMemo } from "react";
 import { useSseStream } from "@/hooks/useSseStream";
-import { SseConnectionState, TelemetryEvent } from "@/types/telemetryEventTypes";
+import type { StreamProvenanceCounts } from "@/lib/streamModeResolver";
+import {
+  SseConnectionState,
+  TelemetryEvent,
+  TelemetryStreamMode,
+} from "@/types/telemetryEventTypes";
 
 export interface TelemetryContextValue {
   readonly events: ReadonlyArray<TelemetryEvent>;
   readonly latestEvent: TelemetryEvent | null;
   readonly connectionState: SseConnectionState;
-  readonly isConnected: boolean;
+  readonly streamMode: TelemetryStreamMode;
+  readonly provenanceCounts: StreamProvenanceCounts;
   readonly clearEvents: () => void;
 }
 
@@ -27,13 +33,15 @@ export function TelemetryProvider({ children }: TelemetryProviderProps): React.J
     events: stream.events,
     latestEvent: stream.latestEvent,
     connectionState: stream.connectionState,
-    isConnected: stream.isConnected,
+    streamMode: stream.streamMode,
+    provenanceCounts: stream.provenanceCounts,
     clearEvents: stream.clearEvents,
   }), [
     stream.events,
     stream.latestEvent,
     stream.connectionState,
-    stream.isConnected,
+    stream.streamMode,
+    stream.provenanceCounts,
     stream.clearEvents,
   ]);
 

@@ -41,7 +41,7 @@ from .settlement.splitManifestBuilder import (
     defaultLogisticsAccount, defaultProtocolFeeAccount, defaultProtocolFeePaise,
 )
 from .telemetryEmitter import (
-    TelemetryEventEmitter, TelemetryEventModel, globalTelemetryEmitter,
+    TelemetryEventEmitter, TelemetryEventModel, globalTelemetryEmitter, provenanceLive,
 )
 from .verification.settlementLedger import SettlementLedger
 
@@ -183,6 +183,7 @@ async def emitPaymentCapturedTelemetry(
             "cgstPaise": result.invoice.totalCgstPaise, "sgstPaise": result.invoice.totalSgstPaise,
             "igstPaise": result.invoice.totalIgstPaise,
         },
+        provenance=provenanceLive,
     )
     await emitter.publishEvent(event)
 
@@ -198,6 +199,7 @@ async def emitRollbackTelemetry(
             "transferId": f"{transferIdPrefix}{payload.paymentId[:10]}", "failureReason": reason,
             "compensationAction": "reverse_transfer", "rollbackStatus": "COMPLETED",
         },
+        provenance=provenanceLive,
     )
     await emitter.publishEvent(event)
 
@@ -215,6 +217,7 @@ async def emitBudgetBlockedTelemetry(
             "attemptedAmountPaise": payload.executionMandate.settlementAmountPaise,
             "deltaPaise": delta, "blockedReason": reason, "razorpayCallsCount": 0,
         },
+        provenance=provenanceLive,
     )
     await emitter.publishEvent(event)
 
