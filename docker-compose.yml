@@ -55,6 +55,11 @@ services:
       retries: 5
       start_period: 20s
     depends_on:
+      # Hydration is a boot-time read of mesh:catalog:*, so the seeder must have finished
+      # writing before this starts -- otherwise it reads an empty store and the seeded SKUs
+      # stay unquotable until something restarts the server.
+      catalog-seeder:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     networks:
