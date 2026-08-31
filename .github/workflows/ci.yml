@@ -29,7 +29,7 @@ jobs:
         # Dockerfile comments for why these are pinned rather than floating.
         run: |
           python -m pip install --upgrade pip
-          pip install fastapi==0.141.1 uvicorn==0.52.4 pydantic==2.13.5 \
+          pip install fastapi==0.141.1 uvicorn[standard]==0.52.4 pydantic==2.13.5 \
                       pynacl==1.6.2 redis==8.1.0 httpx==0.28.1 \
                       qdrant-client==1.19.0 python-multipart==0.0.32
           pip install pytest pytest-asyncio hypothesis fakeredis
@@ -167,7 +167,7 @@ jobs:
         # though no service starts. examples/python also needs pynacl to sign.
         run: >
           python -m pip install --upgrade pip &&
-          pip install fastapi==0.141.1 uvicorn==0.52.4 pydantic==2.13.5
+          pip install fastapi==0.141.1 uvicorn[standard]==0.52.4 pydantic==2.13.5
           pynacl==1.6.2 redis==8.1.0 httpx==0.28.1
           qdrant-client==1.19.0 python-multipart==0.0.32
       - name: Install Node dependencies
@@ -237,7 +237,7 @@ jobs:
         # dependencies must be present even though no test executes.
         run: |
           python -m pip install --upgrade pip
-          pip install fastapi==0.141.1 uvicorn==0.52.4 pydantic==2.13.5 \
+          pip install fastapi==0.141.1 uvicorn[standard]==0.52.4 pydantic==2.13.5 \
                       pynacl==1.6.2 redis==8.1.0 httpx==0.28.1 \
                       qdrant-client==1.19.0 python-multipart==0.0.32
           pip install pytest pytest-asyncio hypothesis fakeredis
