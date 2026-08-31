@@ -10,8 +10,17 @@ jobs:
   python:
     name: Python suite (backend + buyer SDK)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: razoragentMesh
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The repository is named razorAgentMesh, but every backend module imports
+          # razoragentMesh.packages.* and the repo root is a package -- so the directory
+          # name IS the package name. On the case-sensitive runner the default checkout
+          # path breaks all 641 of those imports.
+          path: razoragentMesh
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -24,44 +33,75 @@ jobs:
                       pynacl==1.6.2 redis==8.1.0 httpx==0.28.1 \
                       qdrant-client==1.19.0 python-multipart==0.0.32
           pip install pytest pytest-asyncio hypothesis fakeredis
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install the Node packages the cross-language tests execute
+        # testCrossSdkTsPyCompatibility.py runs `node --import tsx` inside these two packages to
+        # prove the TypeScript and Python SDKs canonicalize (RFC 8785) and sign to byte-identical
+        # output. Without node and tsx on hand those six tests fail with
+        # FileNotFoundError: 'node' -- and the cross-language guarantee goes unverified.
+        working-directory: razoragentMesh/packages/buyerSdkTs
+        run: npm install --no-audit --no-fund
+      - name: Install the MCP server package for the same reason
+        working-directory: razoragentMesh/packages/mcpServer
+        run: npm install --no-audit --no-fund
       - name: Run tests
-        working-directory: ${{ github.workspace }}
+        working-directory: ${{ github.workspace }}/razoragentMesh
         run: python -m pytest tests/ packages/buyerSdkPy/tests/ -q --tb=short
 
   typescript:
     name: TypeScript suites
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: razoragentMesh
     strategy:
       fail-fast: false
       matrix:
         package: [mcpServer, buyerSdkTs, telemetryDashboard]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The repository is named razorAgentMesh, but every backend module imports
+          # razoragentMesh.packages.* and the repo root is a package -- so the directory
+          # name IS the package name. On the case-sensitive runner the default checkout
+          # path breaks all 641 of those imports.
+          path: razoragentMesh
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - name: Install
-        working-directory: packages/${{ matrix.package }}
+        working-directory: razoragentMesh/packages/${{ matrix.package }}
         run: npm install --no-audit --no-fund
       - name: Build the linked buyer SDK
         # The dashboard declares @razorpay/agent-buyer-sdk as file:../buyerSdkTs and its `types`
         # point at dist/, which is gitignored. Without this the type check fails with TS2307
         # before it can check anything. Mirrors the sdk stage in telemetryDashboard/Dockerfile.
         if: matrix.package == 'telemetryDashboard'
-        working-directory: packages/buyerSdkTs
+        working-directory: razoragentMesh/packages/buyerSdkTs
         run: npm install --no-audit --no-fund && npm run build
       - name: Type check
-        working-directory: packages/${{ matrix.package }}
+        working-directory: razoragentMesh/packages/${{ matrix.package }}
         run: npx tsc --noEmit
       - name: Test
-        working-directory: packages/${{ matrix.package }}
+        working-directory: razoragentMesh/packages/${{ matrix.package }}
         run: npm test
 
   claims:
     name: Documented claims match reality
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: razoragentMesh
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The repository is named razorAgentMesh, but every backend module imports
+          # razoragentMesh.packages.* and the repo root is a package -- so the directory
+          # name IS the package name. On the case-sensitive runner the default checkout
+          # path breaks all 641 of those imports.
+          path: razoragentMesh
       - name: No stale cross-language GST formula in docs
         # The GSTR-1 spec and the onboarding guide are live application assets served at
         # /docs/gstr1-invoice and /docs/onboarding, so a formula drift there ships to users.
@@ -104,8 +144,17 @@ jobs:
   docs:
     name: Guides resolve against the code they document
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: razoragentMesh
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The repository is named razorAgentMesh, but every backend module imports
+          # razoragentMesh.packages.* and the repo root is a package -- so the directory
+          # name IS the package name. On the case-sensitive runner the default checkout
+          # path breaks all 641 of those imports.
+          path: razoragentMesh
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -160,14 +209,23 @@ jobs:
         # Fails on a documented method, constructor argument, package name, service port or
         # route that the code does not have, and on a <Snippet> naming a region that does not.
         # See src/lib/reference/docSnippetChecks.ts.
-        working-directory: packages/telemetryDashboard
+        working-directory: razoragentMesh/packages/telemetryDashboard
         run: npm run docs:verify
 
   test-counts:
     name: Documented test counts match measurement
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: razoragentMesh
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The repository is named razorAgentMesh, but every backend module imports
+          # razoragentMesh.packages.* and the repo root is a package -- so the directory
+          # name IS the package name. On the case-sensitive runner the default checkout
+          # path breaks all 641 of those imports.
+          path: razoragentMesh
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
