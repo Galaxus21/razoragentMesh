@@ -48,6 +48,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - MERCHANT_PRIVATE_KEY_HEX=${MERCHANT_PRIVATE_KEY_HEX:-}
       - HMAC_SECRET_KEY=${HMAC_SECRET_KEY:-}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       redis:
         condition: service_healthy
@@ -69,6 +75,12 @@ services:
       - QDRANT_PORT=6333
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4002/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       redis:
         condition: service_healthy
@@ -90,6 +102,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       redis:
         condition: service_healthy
@@ -107,6 +125,12 @@ services:
     environment:
       - PORT=4003
       - REDIS_URL=redis://redis:6379/0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4003/api/v1/mesh/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       redis:
         condition: service_healthy
@@ -136,9 +160,21 @@ services:
       - MANDATE_ENGINE_URL=http://mandate-engine:8000
       - X402_GATEWAY_URL=http://x402-gateway:4003
       - MERCHANT_API_URL=http://merchant-api:4002
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/overview"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
-      - mandate-engine
-      - mcp-server
+      mandate-engine:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+      merchant-api:
+        condition: service_healthy
+      x402-gateway:
+        condition: service_healthy
     networks:
       - meshNetwork
 
