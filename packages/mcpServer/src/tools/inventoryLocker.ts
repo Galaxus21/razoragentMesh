@@ -34,7 +34,7 @@ export function normalizeLockRequest(rawInput: unknown): InventoryLockRequest {
     sku_id: inputObj.sku_id ?? inputObj.skuId,
     quantity: inputObj.quantity,
     lock_ttl_seconds: inputObj.lock_ttl_seconds ?? inputObj.lockTtlSeconds ?? defaultLockTtlSeconds,
-    buyer_agent_id: inputObj.buyer_agent_id ?? inputObj.buyerAgentId,
+    buyer_agent_id: inputObj.buyer_agent_id ?? inputObj.buyerAgentId ?? inputObj.buyerAgentDid,
     quote_hash: inputObj.quote_hash ?? inputObj.quoteHash
   };
 

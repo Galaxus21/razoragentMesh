@@ -51,7 +51,7 @@ export function normalizeQuoteRequest(rawInput: unknown): SkuQuoteRequest {
   const normalized = {
     sku_id: inputObj.sku_id ?? inputObj.skuId,
     quantity: inputObj.quantity,
-    buyer_agent_id: inputObj.buyer_agent_id ?? inputObj.buyerAgentId,
+    buyer_agent_id: inputObj.buyer_agent_id ?? inputObj.buyerAgentId ?? inputObj.buyerAgentDid,
     delivery_pincode: inputObj.delivery_pincode ?? inputObj.deliveryPincode,
     promo_code: inputObj.promo_code ?? inputObj.promoCode
   };
