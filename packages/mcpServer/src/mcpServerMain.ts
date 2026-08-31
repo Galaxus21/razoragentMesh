@@ -18,6 +18,7 @@ import { executeSkuQuote } from "./tools/skuQuoter.js";
 import { reserveInventoryLock } from "./tools/inventoryLocker.js";
 import { verifyShippingSla } from "./tools/slaVerifier.js";
 import { defaultCatalogStore } from "./catalog/catalogStore.js";
+import { startMcpHttpServer } from "./http/httpAdapter.js";
 
 export type { JsonRpcRequest, JsonRpcResponse };
 
@@ -232,7 +233,18 @@ export function startMcpServer(): void {
   });
 }
 
-if (process.argv[1] && (process.argv[1].endsWith("mcpServerMain.ts") || process.argv[1].endsWith("mcpServerMain.js"))) {
+// Both transports run together: stdio for MCP clients, HTTP for the buyer SDKs and the
+// telemetry dashboard's protocol driver. They share `dispatchToolCall`, so a quote fetched
+// over REST and one fetched over JSON-RPC execute identical pricing code.
+export function startAllTransports(): void {
   initializeCatalogSubscriber();
   startMcpServer();
+  startMcpHttpServer({
+    jsonRpcHandler: (message: unknown) => handleJsonRpcMessage(message as JsonRpcRequest),
+    toolsManifest: mcpToolsManifest
+  });
+}
+
+if (process.argv[1] && (process.argv[1].endsWith("mcpServerMain.ts") || process.argv[1].endsWith("mcpServerMain.js"))) {
+  startAllTransports();
 }
