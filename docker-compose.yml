@@ -60,6 +60,33 @@ services:
     networks:
       - meshNetwork
 
+  catalog-seeder:
+    # A one-shot init job, not a long-running service: it loads tests/fixtures/catalogFixtures.json
+    # into Redis and Qdrant and exits. Reuses the merchant-api image because that is the one which
+    # already carries redis and qdrant-client; the script and fixtures are mounted read-only so the
+    # service images do not have to grow a scripts/ directory they never call.
+    build:
+      context: .
+      dockerfile: packages/merchantApi/Dockerfile
+    image: razoragent_merchant_api:latest
+    container_name: razoragent_catalog_seeder
+    command: ["python", "/app/scripts/seedCatalog.py"]
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./tests/fixtures:/app/tests/fixtures:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - meshNetwork
+
   merchant-api:
     build:
       context: .
@@ -82,6 +109,8 @@ services:
       retries: 5
       start_period: 20s
     depends_on:
+      catalog-seeder:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       qdrant:
