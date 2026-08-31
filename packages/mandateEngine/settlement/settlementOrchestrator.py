@@ -177,7 +177,11 @@ class SettlementOrchestrator:
             await self._releaseProvisionalSpend(intentMandate, executionMandate)
             raise
 
-        invoiceNumber = f"{invoicePrefix}{executionMandate.executionId[:8].upper()}"
+        # executionId is generated as a fixed "mandate_exec_" prefix followed by a random
+        # suffix (see buyerSdkTs agentMandateBuilder.ts::createSignedExecutionMandate). Slicing
+        # from the front captures only the constant prefix and collides across every
+        # settlement, so the unique suffix must be taken from the tail instead.
+        invoiceNumber = f"{invoicePrefix}{executionMandate.executionId[-8:].upper()}"
         invoice = generateGstrInvoice(
             cartMandate=cartMandate,
             executionMandate=executionMandate,
