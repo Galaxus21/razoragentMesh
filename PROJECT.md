@@ -9,10 +9,16 @@
 
 ## Architecture
 RazorAgent Mesh is a production-grade autonomous agent commerce mesh consisting of:
-- **Layer 1: Merchant Ingestion & Onboarding** (`packages/merchantApi`) — Merchant registrar, catalog indexing, vector search, GSTIN verification.
-- **Layer 2: x402 Gateway & Negotiation** (`packages/x402Gateway`) — Proof-of-work challenge, micro-escrow, and Rubinstein-Ståhl bilateral bargaining FSM.
-- **Layer 3: Vector Self-Healing** (`packages/vectorHealer`) — Out-of-stock autonomous healing and SKU substitution.
-- **Layer 4: Mandate Engine & 2PC Settlement** (`packages/mandateEngine`) — Cryptographic mandate verification (Ed25519 JCS), statutory tax breakdown, and two-phase commit (2PC) distributed settlement saga with Razorpay Route.
+Numbered by protocol concern, L0 through L5. This is the same taxonomy the README diagram draws
+and `packages/telemetryDashboard/src/constants/protocolLayerMap.ts` defines; that file is canonical,
+and a test fails if these drift apart.
+
+- **Layer 0: Ingress Shield** (`packages/catalogSanitizer`, `packages/x402Gateway` PoW middleware) — Untrusted catalog sanitization and proof-of-work Sybil defence at the edge.
+- **Layer 1: Discovery** (`packages/mcpServer`, `packages/merchantApi`) — MCP JSON-RPC tools, merchant registrar, catalog indexing, vector search, GSTIN verification.
+- **Layer 2: Negotiation** (`packages/x402Gateway`) — HTTP 402 micro-escrow and the Rubinstein-Ståhl bilateral bargaining FSM.
+- **Layer 3: Resilience** (`packages/vectorHealer`) — Out-of-stock autonomous healing and SKU substitution under negative constraints.
+- **Layer 4: Settlement** (`packages/mandateEngine`, `packages/buyerSdkTs`) — Ed25519 JCS mandate verification, statutory tax breakdown, and the two-phase commit settlement saga over Razorpay Route.
+- **Layer 5: Telemetry** (`packages/telemetryDashboard`) — Real-time SSE event bus and the live dashboard.
 - **Client SDKs** (`packages/buyerSdkPy`, `packages/buyerSdkTs`) — Standalone buyer agents. Zero-drift integer-paise arithmetic lives in the `mandateEngine` arithmetic enclave, not a separate package.
 
 ## Feature Inventory
