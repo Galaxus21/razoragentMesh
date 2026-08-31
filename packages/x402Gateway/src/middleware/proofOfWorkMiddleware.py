@@ -1,4 +1,4 @@
-"""Proof-of-Work anti-spam shield for Layer 2 ingress protection."""
+"""Proof-of-Work anti-spam shield for Layer 0 ingress protection."""
 
 import hashlib
 import time
