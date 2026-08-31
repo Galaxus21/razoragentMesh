@@ -409,11 +409,11 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
-| Python backend + Python Buyer SDK | 1240 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
-| MCP discovery server | 126 | `cd packages/mcpServer && npm test` |
+| Python backend + Python Buyer SDK | 1252 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
+| MCP discovery server | 133 | `cd packages/mcpServer && npm test` |
 | TypeScript Buyer SDK | 94 | `cd packages/buyerSdkTs && npm test` |
 | Telemetry dashboard + SKU Studio | 258 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **1,718** | `python scripts/countTests.py` |
+| **Total** | **1,737** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 

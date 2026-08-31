@@ -65,8 +65,10 @@ Services exposed:
 - **Mandate Settlement Engine API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Merchant Onboarding & Bullion API Docs:** [http://localhost:4002/docs](http://localhost:4002/docs)
 - **x402 Dynamic Negotiation Gateway Docs:** [http://localhost:4003/docs](http://localhost:4003/docs)
-- **MCP Discovery Server (JSON-RPC 2.0):** stdio transport, **not HTTP**. It is driven by an
-  agent runtime over stdin/stdout, the standard MCP transport. To exercise it directly:
+- **MCP Discovery Server:** two transports. MCP JSON-RPC 2.0 over **stdio** for agent runtimes,
+  and a **REST adapter on [http://localhost:4001](http://localhost:4001)** (`/health`,
+  `/api/v1/tools`, `/api/v1/quote`, `/api/v1/lock`, `/api/v1/sla`) for the buyer SDKs, whose
+  calls are plain HTTP. To exercise the stdio transport directly:
 
   ```bash
   echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | docker run -i --rm razoragent_mcp_server:latest node dist/mcpServerMain.js
@@ -74,9 +76,38 @@ Services exposed:
 - **Qdrant Vector DB Console:** [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
 - **Redis Nonce Ledger:** `localhost:6379`
 
+Nothing else is required. A one-shot `catalog-seeder` service loads
+`tests/fixtures/catalogFixtures.json` into Redis and Qdrant once both report healthy, and
+`merchant-api` waits for it to exit 0 — so the stack never comes up against an empty catalog.
+Every service declares a healthcheck, and the dashboard starts only once all four report healthy.
+
+**Catalog contents.** Two sets of SKUs are live, and both are quotable through the same path:
+
+| Source | Example ids | Where they come from |
+|---|---|---|
+| Compiled fixtures | `SKU-LAPTOP-101`, `SKU-CHAIR-001`, `SKU-OIL-201` | `packages/mcpServer/src/catalog/catalogFixtures.ts`, baked into the image |
+| Seeded catalog | `SKU-001`, `SKU-101`, `SKU-201` | `tests/fixtures/catalogFixtures.json`, loaded by `catalog-seeder` |
+
+The MCP server reads `mesh:catalog:*` out of Redis at startup and merges it over the compiled
+fixtures, then follows the `mesh:catalog:updates` channel for later changes. So a SKU published
+through the Merchant Studio survives a restart, and a seeded SKU is quotable immediately.
+
+A live quote, against the running stack:
+
+```bash
+curl "http://localhost:4001/api/v1/quote?skuId=SKU-LAPTOP-101&quantity=2&deliveryPincode=560001&buyerAgentDid=did:agent:demo.buyer.001"
+```
+
+`buyerAgentDid` must match `^did:agent:[a-z0-9_.:-]+$`; the quote tool returns HTTP 422 otherwise.
+
 To stop all services:
 ```bash
 docker compose down
+```
+
+To stop them and discard the seeded catalog as well:
+```bash
+docker compose down -v
 ```
 
 ### 2. Run Test Suites & Invariant Benchmarks
@@ -110,11 +141,11 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
-| Python backend + Python Buyer SDK | 1240 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
-| MCP discovery server | 126 | `cd packages/mcpServer && npm test` |
+| Python backend + Python Buyer SDK | 1252 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
+| MCP discovery server | 133 | `cd packages/mcpServer && npm test` |
 | TypeScript Buyer SDK | 94 | `cd packages/buyerSdkTs && npm test` |
 | Telemetry dashboard + SKU Studio | 258 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **1,718** | `python scripts/countTests.py` |
+| **Total** | **1,737** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 
