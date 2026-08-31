@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 import logging
 import os
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Dict
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 defaultRedisUrl: str = "redis://localhost:6379/0"
 environmentRedisKey: str = "REDIS_URL"
+endpointHealth: str = "/health"
+merchantServiceName: str = "merchant-api"
 
 
 @asynccontextmanager
@@ -78,8 +80,22 @@ def createMerchantApp() -> FastAPI:
     app.include_router(catalogRouter)
     app.include_router(policyRouter)
     app.include_router(bulkIngestRouter)
+    _registerHealthRoute(app)
 
     return app
+
+
+def _registerHealthRoute(app: FastAPI) -> None:
+    """Registers the liveness probe.
+
+    This service was the only one in the mesh without one, so the protocol map had no way to
+    tell "merchant API is down" from "merchant API has no probe". Shape matches the mandate
+    engine's /health so a single client can read either.
+    """
+
+    @app.get(endpointHealth, summary="Health check")
+    async def healthCheck() -> Dict[str, str]:
+        return {"status": "healthy", "service": merchantServiceName, "version": defaultApiVersion}
 
 
 merchantApp: FastAPI = createMerchantApp()
