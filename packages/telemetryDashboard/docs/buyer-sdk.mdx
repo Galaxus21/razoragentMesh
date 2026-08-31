@@ -1,0 +1,399 @@
+---
+title: "AI Buyer Agent SDK & AP2 Protocol Guide"
+description: "Explains how to use the buyer agent SDK for mandate signing, live SKU quoting, inventory locking, and 2PC settlement execution."
+navLabel: "Buyer SDK"
+navDescription: "TypeScript & Python SDK Guide"
+order: 3
+icon: "Bot"
+audience: "developer"
+---
+
+A developer guide for integrating autonomous AI buyer agents with Ed25519 mandate signing, live
+discount stacking, and fenced inventory reservation.
+
+Every snippet on this page is checked against the SDK's generated symbol table by
+`npm run docs:verify`, which runs in CI. A method, constructor argument or service port named
+here that the SDK does not have fails the build.
+
+---
+
+## 1. SDK Installation
+
+Install the standalone buyer agent SDK for your target runtime:
+
+```typescript
+// TypeScript / Node.js
+npm install @razorpay/agent-buyer-sdk
+```
+
+```python
+# Python 3.11+
+pip install razoragent_buyer_sdk
+```
+
+---
+
+## 2. Client Initialization & Key Management
+
+The client takes a key manager and the addresses of the mesh services it talks to. There is no
+single base URL: quotes and locks come from the MCP Server, settlement from the Mandate Engine,
+and HTTP 402 micro-metering from the x402 Gateway.
+
+```typescript
+import { AgentKeyManager, RazorAgentClient } from "@razorpay/agent-buyer-sdk";
+
+const buyerKeyManager = AgentKeyManager.fromSecretKey(process.env.BUYER_ED25519_SECRET_KEY!);
+
+const buyerAgent = new RazorAgentClient({
+  buyerKeyManager,
+  mcpServerUrl: "http://localhost:4001",
+  mandateEngineUrl: "http://localhost:8000",
+  x402GatewayUrl: "http://localhost:4003",
+  defaultLockTtlSeconds: 60,
+});
+```
+
+The Python client groups the same addresses on a `MeshSlaConfig` rather than on the client itself,
+and its key manager is constructed from a private key hex:
+
+```python
+import os
+from razoragent_buyer_sdk import AgentKeyManager, MeshSlaConfig, RazorAgentClient
+
+keyManager = AgentKeyManager.fromPrivateKeyHex(os.environ["BUYER_ED25519_PRIVATE_KEY"])
+
+buyerAgent = RazorAgentClient(
+    config=MeshSlaConfig(
+        mcpBaseUrl="http://localhost:4001",
+        gatewayBaseUrl="http://localhost:8000",
+        x402GatewayBaseUrl="http://localhost:4003",
+        merchantApiBaseUrl="http://localhost:4002",
+    ),
+    keyManager=keyManager,
+)
+```
+
+The budget ceiling is not a client setting in either runtime. It is a field of the Intent Mandate
+(`maxBudgetPaise`), signed by the human principal — see section 6 — so the limit travels with the
+authorization instead of living in the agent's own configuration, where the agent could change it.
+
+---
+
+## 3. The AP2 Mandate Chain (INV-02)
+
+Every transaction executes across a cryptographic mandate chain:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                       AP2 TRIPLE-MANDATE CHAIN                         │
+├───────────────────┬───────────────────┬────────────────────────────────┤
+│ Mandate Type      │ Signer            │ Invariant Function             │
+├───────────────────┼───────────────────┼────────────────────────────────┤
+│ Intent ($M_I$)    │ User / CFO Agent  │ Max budget & spending limit    │
+│ Cart ($M_C$)      │ Merchant Enclave  │ Stock lock & statutory GST     │
+│ Execution ($M_E$) │ Buyer AI Agent    │ Canonical hash authorization   │
+│ Amend ($M_A$)     │ Dual-Signed (A2A) │ Vector substitution (<300ms)   │
+└───────────────────┴───────────────────┴────────────────────────────────┘
+```
+
+---
+
+## 4. Live SKU Quotes & Discount Stacking
+
+A quote prices one SKU at one quantity for one delivery pincode, with the discount tiers already
+stacked and the GST already split. The `quoteHash` it returns is what the inventory lock in
+section 8 is bound to.
+
+```typescript
+const quote = await buyerAgent.getLiveSkuQuote("sku_cotton_oxford_shirt", 2, {
+  deliveryPincode: "560001",
+  promoCode: "FESTIVE10",
+});
+
+console.log("Unit price:", quote.finalUnitPricePaise, "Saved:", quote.totalSavingsPaise);
+console.log("CGST:", quote.taxBreakdown.cgstPaise, "SGST:", quote.taxBreakdown.sgstPaise);
+
+const sla = await buyerAgent.verifyShippingSla("560001", 900);
+console.log("Delivery in", sla.slaHours, "hours, zone", sla.zone);
+```
+
+```python
+quote = await buyerAgent.getLiveSkuQuote(
+    skuId="sku_cotton_oxford_shirt",
+    quantity=2,
+    deliveryPincode="560001",
+    promoCode="FESTIVE10",
+)
+
+print(f"Unit price: {quote.offered_unit_price_paise}, saved: {quote.total_savings_paise}")
+```
+
+`verifyShippingSla` is TypeScript-only; from Python, call the SLA route on the MCP server directly.
+
+The casing split is not arbitrary. Python transport models are snake_case because they follow the
+MCP tool schema, while mandate models are camelCase in both languages because field names are
+inside the bytes that get signed -- see section 10 before renaming anything.
+
+---
+
+## 5. Bilateral Negotiation Bounds & Amendment Mandates (INV-06)
+
+Negotiation is bounded by construction rather than by convention: the SDK ships the turn ceiling
+and the per-turn micro-fee as constants, so a client cannot quietly bargain forever.
+
+```typescript
+import { maxNegotiationTurns, microFeePerTurnPaise } from "@razorpay/agent-buyer-sdk";
+
+// 5 turns, each metered at 50 paise under HTTP 402.
+console.log(maxNegotiationTurns, microFeePerTurnPaise);
+```
+
+A concession arrives as a price-drop alert. Applying one produces a dual-signed Amendment Mandate
+rather than mutating the cart, which is what keeps concessions monotonic: the amendment records
+the previous cart's hash and a signed `priceDeltaPaise`, so a later round cannot walk the price
+back up without leaving a broken chain behind it.
+
+```typescript
+const amendment = buyerAgent.handlePriceDropAlert(
+  {
+    skuId: "sku_cotton_oxford_shirt",
+    promotionId: "promo_festive_10",
+    activePricePaise: 318000,
+    targetPricePaise: 305000,
+    concessionPaise: 13000,
+  },
+  cartMandate,
+  merchantSigner
+);
+
+console.log("Concession:", amendment.priceDeltaPaise, "reason:", amendment.amendmentReason);
+```
+
+The Python client's `handlePriceDropAlert` is a different method with the same name: it registers
+an alert with the MCP Server and returns the registration, and `registerPriceDropAlert` is an
+alias for it. Amendment mandates are constructed there with `createSignedAmendmentMandate`.
+
+```python
+alert = await buyerAgent.registerPriceDropAlert(
+    skuId="sku_cotton_oxford_shirt",
+    targetPricePaise=305000,
+    callbackUrl="https://agent.example.com/hooks/price-drop",
+    expiresAtUnix=1767225600,
+)
+
+print(f"Alert {alert.alertId} is {alert.status}")
+```
+
+---
+
+## 6. Signing the Mandate Chain
+
+The buyer agent signs exactly one link of the chain: the Execution Mandate. The Intent Mandate is
+signed by the human principal's key and the Cart Mandate by the merchant's, which is why each
+helper takes its signer as a separate argument rather than reading one off the client.
+
+The three snippets below are not written out here. They are regions of
+`examples/typescript/mandateChain.ts` and `examples/python/mandateChain.py`, two standalone
+programs that CI compiles and then *runs* on every push. Neither touches the network — signing and
+hash-chaining are local Ed25519 operations — so the whole of INV-02 is exercised without a single
+service running, and this page cannot drift from code that is proven to work.
+
+<Snippet file="examples/typescript/mandateChain.ts" region="intent">
+The Intent Mandate carries the budget ceiling, signed by the human principal. The limit travels
+with the authorization rather than living in the agent's own configuration, where the agent could
+change it.
+</Snippet>
+
+<Snippet file="examples/python/mandateChain.py" region="intent">
+The Python helper takes the same fields as flat keyword arguments and the signer as
+`userKeyManager`, where TypeScript takes a params object and a positional signer.
+</Snippet>
+
+The Cart Mandate arrives over the wire from the merchant enclave; the buyer agent verifies it
+rather than producing one. It is shown here because the example has to build one to have a chain
+to verify, and because it is where the GST split is fixed — equal `cgstPaise` and `sgstPaise` when
+the merchant and the buyer are in the same state, the whole amount in `igstPaise` when they are not.
+
+<Snippet file="examples/typescript/mandateChain.ts" region="cart" />
+
+Then the one link the buyer agent signs:
+
+<Snippet file="examples/typescript/mandateChain.ts" region="execution" />
+
+<Snippet file="examples/python/mandateChain.py" region="execution" />
+
+`createSignedExecutionMandate` records the SHA-256 of each preceding mandate in `intentMandateHash`
+and `cartMandateHash`. That is what makes the chain verifiable rather than merely signed: a cart
+edited after the user authorized it no longer hashes to the value the execution mandate was signed
+over, and recomputation catches it without needing to have seen the original.
+
+---
+
+## 7. Verifying the Chain
+
+Verification recomputes both hashes and compares them with what the execution mandate recorded.
+The examples do it twice — once on the chain as signed, once on a cart discounted after the fact —
+and exit non-zero if the second one ever passes. This is the part worth reading twice, because the
+two runtimes do not have the same contract here:
+
+<Snippet file="examples/typescript/mandateChain.ts" region="verify" />
+
+<Snippet file="examples/python/mandateChain.py" region="verify" />
+
+TypeScript's `verifyMandateChain` is declared `=> boolean` but only ever returns `true` or throws
+`MandateVerificationError`; it never returns `false`. So `if (!verifyMandateChain(...))` compiles,
+type-checks, and silently never runs its else branch — catch the error instead of testing the
+result. Python's `verifyMandateHashChain` takes `raiseOnMismatch`, which defaults to `True` but can
+be set to `False` for a genuine boolean.
+
+Running either program prints the two hashes, then `verified` and `rejected`, and exits non-zero if
+that ever inverts:
+
+```bash
+npx tsx examples/typescript/mandateChain.ts
+PYTHONPATH=packages/buyerSdkPy python examples/python/mandateChain.py
+```
+
+---
+
+## 8. Atomic Inventory Reservation & Fencing Tokens (INV-07)
+
+Reserve stock against the quote, with a monotonic fencing token so a lock that expired mid-flight
+cannot be used to settle later:
+
+```typescript
+const lock = await buyerAgent.reserveInventoryLock("sku_cotton_oxford_shirt", 2, {
+  lockTtlSeconds: 60,
+  quoteHash: quote.quoteHash,
+});
+
+console.log("Locked:", lock.lockToken, "FencingToken:", lock.fencingToken);
+console.log("Expires at:", new Date(lock.expiresAtUnixMs).toISOString());
+```
+
+```python
+lock = await buyerAgent.reserveInventoryLock(
+    skuId="sku_cotton_oxford_shirt",
+    quantity=2,
+    lockTtlSeconds=60,
+    quoteHash=quote.quote_hash,
+)
+
+print(f"Locked: {lock.lock_token}, FencingToken: {lock.fencing_token}")
+```
+
+The lock route is metered under HTTP 402. Both clients solve the proof-of-work challenge for you —
+the Python client only while `autoSolvePow` is left on in `MeshSlaConfig`.
+
+Both clients solve the challenge transparently; the Python client only while `autoSolvePow` is
+left on in `MeshSlaConfig`.
+
+---
+
+## 9. AP2 Two-Phase Commit Settlement Saga Execution
+
+Submit the whole mandate chain to the Mandate Engine for the 3-way split transfer. This is the
+final step of the `happyPath` scenario, described below by the driver that runs it:
+
+<RunStep scenario="happyPath" step="settle" />
+
+```typescript
+const receipt = await buyerAgent.executeSettlement({
+  intentMandate,
+  cartMandate,
+  executionMandate,
+  merchantAccount: "acc_merchant_9f8e7d6c",
+  paymentId: "pay_R7x2K9mQ4tLd8N",
+});
+
+console.log("Settled:", receipt.paymentId, "status", receipt.status);
+console.log("GSTR invoice:", receipt.invoice.invoiceNumber);
+for (const transfer of receipt.transfers) {
+  console.log(transfer.account, transfer.amount, transfer.status);
+}
+```
+
+```python
+receipt = await buyerAgent.executeSettlement(
+    intentMandate=intentMandate,
+    cartMandate=cartMandate,
+    executionMandate=executionMandate,
+    merchantAccount="acc_merchant_9f8e7d6c",
+    paymentId="pay_R7x2K9mQ4tLd8N",
+)
+
+print(f"Settled: {receipt.paymentId} status {receipt.status}")
+print(f"GSTR invoice: {receipt.invoice.invoiceNumber}")
+```
+
+The TypeScript client also exposes `executeAutonomousPurchase`, which takes the same mandates plus
+a `skuId` and `quantity` and runs quote, lock and settlement as one call. It is the convenience
+path; the sections above are what it does internally, and are what you want when a step needs to
+be inspected or retried on its own.
+
+---
+
+## 10. Where the Two Runtimes Diverge
+
+The two SDKs are not mirror images, and pretending otherwise is how people write code that
+typechecks and then fails in production. The divergences fall into three groups, and only the
+first is deliberate.
+
+### Field casing, and the one rule you must not "clean up"
+
+**Mandate models are camelCase in both languages, and that is load-bearing.** Signing canonicalizes
+the mandate to JCS — keys sorted, then serialized whole — so the field *names* are inside the bytes
+that get hashed and signed (`jcsCanonicalizer.ts`, `agentKeyManager.canonicalizeJson`). Rename
+`maxBudgetPaise` to `max_budget_paise` on the Python side and the canonical JSON changes, the
+SHA-256 changes, and `intentMandateHash` computed in Python stops matching the one computed in
+TypeScript. Cross-language chain verification breaks silently — the code still runs, the signature
+still validates locally, and only a mixed-language settlement fails.
+
+So: `mandateModels.py` is camelCase on purpose. Leave it.
+
+Transport models are the opposite, and they have to face both ways. The MCP *tool* layer speaks
+snake_case; the MCP *HTTP face* the SDKs actually call speaks camelCase, converting in
+`wireMappers.toSdkSkuQuote`. So `transportModels.py` keeps snake_case field names and carries a
+`to_camel` alias generator with `populate_by_name`, which lets it parse the camelCase wire while
+`quote.quote_hash` keeps working. Nothing here is canonicalized or signed, so the dual spelling
+costs nothing but the surprise.
+
+### Names that mean the same thing
+
+Neither spelling is more correct; they are accidents of two codebases growing in parallel. Renaming
+either side is a breaking change for anyone already on it, so they are recorded instead:
+
+| TypeScript | Python | What it is |
+|---|---|---|
+| `getBuyerKeyManager` | `getKeyManager` | the client's own signer |
+| `AgentKeyManager.fromSecretKey` | `AgentKeyManager.fromPrivateKeyHex` | construct from a key |
+| `getSecretKeyHex` | `getPrivateKeyHex` | read the key back |
+| `verifyMandateChain` | `verifyMandateHashChain` | check the chain (see section 7 — the contracts differ too) |
+| `solvePowChallenge` | `solvePoWChallenge` | solve the HTTP 402 challenge |
+| `verifyPowSolution` | `verifyPoWSolution` | check a solution |
+| `formatAgentDid` | `formatDid` | render a `did:agent:` string |
+| `generateAgentKeyPair` | `generateKeyPair` | fresh Ed25519 pair |
+| `AgentKeyPair` | `AgentKeypair` | the pair itself |
+| `CartItem` / `TaxBreakdown` | `CartItemSchema` / `TaxBreakdownSchema` | cart line and tax split |
+| `MandateVerificationError` | `MandateValidationError` | raised on a broken chain |
+
+Python additionally exports an `*Exception` alias beside most `*Error` names; they are the same class.
+
+### Capabilities only one side has
+
+`verifyShippingSla` is TypeScript-only — from Python, call the SLA route on the MCP server directly.
+Python has `AgentMandateBuilder`, `PowSolver` and `validateMandateInvariants` with no TypeScript
+equivalent, and models the x402 escrow flow (`EscrowSession`, `EscrowRefundReceipt`) that TypeScript
+does not expose.
+
+### The routes both clients call
+
+Both SDKs now target the same four MCP routes: `/api/v1/quote`, `/api/v1/lock`, `/api/v1/sla` and
+`/api/v1/settlement/execute`. That is worth stating because it was not true until recently. The
+Python client asked for `/api/v1/quotes/live` and `/api/v1/inventory/lock`, which nothing served, and
+POSTed the quote where the adapter expects a `GET`. Every such call failed against a running mesh
+while the SDK's own suite stayed green, because it mocks the transport, and its test asserted the
+wrong path as though that were the contract.
+
+`test/sdkEndpointParity.test.ts` in the dashboard now compares every endpoint constant in both SDKs
+against the routes the servers declare, reading both sides from source and mocking nothing.

@@ -1,0 +1,64 @@
+{
+  "entryPoint": "C:\\Users\\verma\\Projects\\RazorpayBuildathon\\razoragentMesh\\packages\\mcpServer\\src\\schemas\\index.ts",
+  "schemas": [
+    {
+      "schemaName": "InventoryLock",
+      "requestFields": [
+        "buyer_agent_id",
+        "lock_ttl_seconds",
+        "quantity",
+        "quote_hash",
+        "sku_id"
+      ],
+      "responseFields": [
+        "expires_at_unix_ms",
+        "fencing_token",
+        "lock_token",
+        "quantity_locked",
+        "signature",
+        "sku_id"
+      ]
+    },
+    {
+      "schemaName": "ShippingSla",
+      "requestFields": [
+        "delivery_pincode",
+        "origin_pincode",
+        "package_weight_grams",
+        "required_delivery_tier"
+      ],
+      "responseFields": [
+        "courier_partner",
+        "guaranteed_sla_hours",
+        "serviceable",
+        "shipping_cost_paise",
+        "zone_code"
+      ]
+    },
+    {
+      "schemaName": "SkuQuote",
+      "requestFields": [
+        "buyer_agent_id",
+        "delivery_pincode",
+        "promo_code",
+        "quantity",
+        "sku_id"
+      ],
+      "responseFields": [
+        "applied_discounts",
+        "available_stock",
+        "base_unit_price_paise",
+        "currency",
+        "gst_rate_percent",
+        "hsn_code",
+        "offered_unit_price_paise",
+        "quote_expiry_timestamp",
+        "quote_hash",
+        "sku_id",
+        "tax_breakdown",
+        "total_savings_paise",
+        "upcoming_promotions"
+      ]
+    }
+  ]
+}

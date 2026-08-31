@@ -1,0 +1,122 @@
+{
+  "services": [
+    {
+      "operations": [
+        {
+          "method": "POST",
+          "path": "/api/v1/settlement/execute"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/telemetry/events"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/telemetry/stream"
+        },
+        {
+          "method": "GET",
+          "path": "/health"
+        }
+      ],
+      "serviceId": "mandateEngine",
+      "title": "RazorAgent Mandate Engine"
+    },
+    {
+      "operations": [
+        {
+          "method": "POST",
+          "path": "/api/v1/merchant/register"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/merchant/{merchantDid}/bulk-csv"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/merchant/{merchantDid}/catalog"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/v1/merchant/{merchantDid}/catalog/{skuId}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/merchant/{merchantDid}/catalog/{skuId}"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/merchant/{merchantDid}/catalog/{skuId}"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/merchant/{merchantDid}/erp-sync"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/merchant/{merchantDid}/policy"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/merchant/{merchantDid}/policy"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/merchant/{merchantDid}/shopify-sync"
+        },
+        {
+          "method": "GET",
+          "path": "/health"
+        }
+      ],
+      "serviceId": "merchantApi",
+      "title": "RazorAgent Merchant API"
+    },
+    {
+      "operations": [
+        {
+          "method": "POST",
+          "path": "/api/v1/alerts/price-drop"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/v1/alerts/price-drop/{alertId}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/mesh/challenge"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/mesh/escrow"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/mesh/escrow/release"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/mesh/health"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/mesh/negotiate"
+        }
+      ],
+      "serviceId": "x402Gateway",
+      "title": "RazorAgent x402 Gateway"
+    }
+  ],
+  "telemetryEventTypes": [
+    "BID_TURN_COMPLETED",
+    "INVENTORY_LOCKED",
+    "MANDATE_SIGNED",
+    "MCP_TOOL_CALL",
+    "MCP_TOOL_RESULT",
+    "NEGOTIATION_CONVERGED",
+    "OOS_HEALED",
+    "PAYMENT_CAPTURED",
+    "POW_CHALLENGE_SOLVED",
+    "ROUTE_ROLLBACK_TRIGGERED"
+  ]
+}

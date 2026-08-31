@@ -1,4 +1,12 @@
-# 📡 RazorAgent Mesh v2.0 — Real-Time Telemetry & Event Streaming Specification
+---
+title: "RazorAgent Mesh v2.0 — Real-Time Telemetry & Event Streaming Specification"
+description: "Defines the real-time SSE telemetry architecture, event streaming endpoints, canonical event schemas, metric algorithms, and testing procedures."
+navLabel: "Telemetry & SSE"
+navDescription: "Observability Event Streams"
+order: 5
+icon: "Activity"
+audience: "operator"
+---
 
 ---
 
@@ -16,7 +24,7 @@ The telemetry pipeline operates on an asynchronous **Server-Sent Events (SSE)** 
 │                                                                                                  │
 │   ┌─────────────────────┐    ┌─────────────────────┐    ┌────────────────────────────────────┐   │
 │   │   MCP Tool Server   │    │     x402 Gateway    │    │      Mandate Settlement Engine     │   │
-│   │   (Port 8001 / RPC) │    │  (Bargaining/Escrow)│    │      (AP2 2PC Enclave & Tax)       │   │
+│   │   (Port 4001 / RPC) │    │  (Bargaining/Escrow)│    │      (AP2 2PC Enclave & Tax)       │   │
 │   └──────────┬──────────┘    └──────────┬──────────┘    └─────────────────┬──────────────────┘   │
 │              │                          │                                 │                      │
 │              │ emit(MCP_TOOL_CALL)      │ emit(BID_TURN_COMPLETED)        │ emit(MANDATE_SIGNED) │
@@ -190,9 +198,14 @@ async def monitorTelemetryStream():
 
 ---
 
-## 3. The 12 Canonical Event Schema Specifications
+## 3. Canonical Event Schema Specifications
 
 All telemetry events extend the base immutable envelope `BaseTelemetryEvent<TType, TPayload>` and map directly to Pydantic models on the backend and TypeScript interfaces on the client.
+
+The table below is not written here -- it is read from the `TelemetryEventType` union and the
+badge map at build time, so it cannot fall behind the code the way a hand-counted list does.
+
+<EventCatalog />
 
 ```typescript
 export interface BaseTelemetryEvent<TType extends TelemetryEventType, TPayload> {
@@ -729,3 +742,4 @@ python -m pytest razoragentMesh/tests/testTelemetryEmitter.py -v
 # 2. Run full mandate engine test suite (including tax and telemetry)
 python -m pytest razoragentMesh/tests/unit/testMandatePatcherCore.py razoragentMesh/tests/unit/testMandatePatcherTax.py -v
 ```
+

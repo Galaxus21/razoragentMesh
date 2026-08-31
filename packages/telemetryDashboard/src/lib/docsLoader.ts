@@ -1,40 +1,37 @@
+// Loads documentation by scanning the docs directory, not by consulting a registry.
+//
+// The previous loader kept two hand-maintained maps keyed by slug -- one for the filename, one
+// for a fallback title -- so a new guide silently rendered "Documentation Page Not Found" until
+// both were edited too. Everything now comes from the file itself: the slug is its name, the
+// title and navigation labels are its frontmatter. Adding a guide means adding one file.
+
 import fs from "node:fs";
 import path from "node:path";
+import matter from "gray-matter";
+import GithubSlugger from "github-slugger";
+import type {
+  DocFrontmatter,
+  DocHeading,
+  DocNavEntry,
+  DocPage,
+  DocSection,
+} from "@/types/docsTypes";
 
-export interface DocContent {
-  readonly slug: string;
-  readonly filename: string;
-  readonly markdown: string;
-  readonly title: string;
-}
+export const docsFileExtension = ".mdx";
+export const docsRoutePrefix = "/docs";
 
-const docFilenameMap: Readonly<Record<string, string>> = {
-  setup: "SETUP_GUIDE.md",
-  onboarding: "DEVELOPER_ONBOARDING_GUIDE.md",
-  "buyer-sdk": "BUYER_AGENT_SDK_GUIDE.md",
-  "merchant-guide": "MERCHANT_ONBOARDING_GUIDE.md",
-  telemetry: "TELEMETRY_OBSERVABILITY_GUIDE.md",
-  "gstr1-invoice": "GSTR1_INVOICE_SPECIFICATION.md",
-};
-
-const defaultTitleMap: Readonly<Record<string, string>> = {
-  setup: "System Setup & Environment Architecture",
-  onboarding: "Developer Onboarding & Integration Guide",
-  "buyer-sdk": "AI Buyer Agent SDK & AP2 Protocol Guide",
-  "merchant-guide": "Merchant Onboarding & Universal SKU Studio",
-  telemetry: "Telemetry & SSE Observability Guide",
-  "gstr1-invoice": "GSTR-1 Statutory Tax Invoicing Specification",
-};
+const minimumHeadingDepth = 2;
+const maximumHeadingDepth = 3;
+const fencedBlockMarker = "```";
 
 // Package-local only: documentation rendered by this service must live inside the service
 // directory. Parent-traversal lookups (`../docs`) break Docker build-context isolation.
-function resolveDocsDirectory(): string {
+export function resolveDocsDirectory(): string {
   const currentWorkingDir = process.cwd();
   const candidatePaths = [
     path.resolve(currentWorkingDir, "docs"),
     path.resolve(currentWorkingDir, "src/docs"),
   ];
-
   for (const candidate of candidatePaths) {
     if (fs.existsSync(candidate)) {
       return candidate;
@@ -43,50 +40,147 @@ function resolveDocsDirectory(): string {
   return path.resolve(currentWorkingDir, "docs");
 }
 
-function extractMarkdownTitle(markdown: string, fallbackTitle: string): string {
-  const headingMatch = markdown.match(/^#\s+(.+)$/m);
-  if (headingMatch && headingMatch[1]) {
-    return headingMatch[1].trim();
+function listMdxFilesRecursively(directory: string, relativePrefix = ""): readonly string[] {
+  if (!fs.existsSync(directory)) {
+    return [];
   }
-  return fallbackTitle;
+  const collected: string[] = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const relativePath = relativePrefix ? `${relativePrefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      collected.push(...listMdxFilesRecursively(path.join(directory, entry.name), relativePath));
+    } else if (entry.name.endsWith(docsFileExtension)) {
+      collected.push(relativePath);
+    }
+  }
+  return collected;
 }
 
-export function loadDocContentSync(slug: string): DocContent {
-  const filename = docFilenameMap[slug];
-  const fallbackTitle = defaultTitleMap[slug] || "Documentation";
-
-  if (!filename) {
-    return {
-      slug,
-      filename: "not-found.md",
-      markdown: "# Documentation Page Not Found\n\nThe requested documentation section does not exist.",
-      title: fallbackTitle,
-    };
-  }
-
-  const docsDir = resolveDocsDirectory();
-  const targetPath = path.join(docsDir, filename);
-
-  try {
-    const rawMarkdown = fs.readFileSync(targetPath, "utf-8");
-    const parsedTitle = extractMarkdownTitle(rawMarkdown, fallbackTitle);
-    return {
-      slug,
-      filename,
-      markdown: rawMarkdown,
-      title: parsedTitle,
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return {
-      slug,
-      filename,
-      markdown: `# Documentation Unavailable\n\nCould not load \`${filename}\`.\n\nError: ${errorMessage}`,
-      title: fallbackTitle,
-    };
-  }
+function readFrontmatterField(
+  data: Record<string, unknown>,
+  key: string,
+  fallback: string
+): string {
+  const value = data[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : fallback;
 }
 
-export async function loadDocContent(slug: string): Promise<DocContent> {
-  return loadDocContentSync(slug);
+function toFrontmatter(data: Record<string, unknown>, slug: string): DocFrontmatter {
+  const orderValue = data.order;
+  return {
+    title: readFrontmatterField(data, "title", slug),
+    description: readFrontmatterField(data, "description", ""),
+    navLabel: readFrontmatterField(data, "navLabel", slug),
+    navDescription: readFrontmatterField(data, "navDescription", ""),
+    // Unordered documents sort last rather than silently jumping to the top of the sidebar.
+    order: typeof orderValue === "number" ? orderValue : Number.MAX_SAFE_INTEGER,
+    icon: readFrontmatterField(data, "icon", "FileText"),
+    audience: readFrontmatterField(data, "audience", "developer"),
+  };
+}
+
+// Walks the document once, splitting it at every h2/h3 into the section that heading
+// introduces. Headings and search sections are both derived from this single walk: if they
+// were collected by two separate passes, the anchor ids the table of contents links to and the
+// ids the search results link to could disagree, and nothing would notice.
+//
+// The ids must match what rehype-slug produces at render time, so the same github-slugger
+// implementation generates them -- including its de-duplication counter, which is why one
+// slugger instance is reused across the whole document.
+export function splitIntoSections(body: string): readonly DocSection[] {
+  const slugger = new GithubSlugger();
+  const sections: DocSection[] = [];
+  let currentHeading: DocHeading | null = null;
+  let currentLines: string[] = [];
+  let isInsideFence = false;
+
+  const flush = (): void => {
+    if (currentHeading !== null || currentLines.some((line) => line.trim().length > 0)) {
+      sections.push({ heading: currentHeading, body: currentLines.join("\n") });
+    }
+  };
+
+  for (const line of body.split("\n")) {
+    if (line.trimStart().startsWith(fencedBlockMarker)) {
+      isInsideFence = !isInsideFence;
+      currentLines.push(line);
+      continue;
+    }
+
+    const match = isInsideFence ? null : /^(#{2,3})\s+(.+?)\s*$/.exec(line);
+    if (!match) {
+      currentLines.push(line);
+      continue;
+    }
+
+    const depth = match[1].length;
+    if (depth < minimumHeadingDepth || depth > maximumHeadingDepth) {
+      currentLines.push(line);
+      continue;
+    }
+
+    flush();
+    const text = match[2].replace(/`/g, "").trim();
+    currentHeading = { id: slugger.slug(text), text, depth };
+    currentLines = [];
+  }
+  flush();
+
+  return sections;
+}
+
+export function extractHeadings(body: string): readonly DocHeading[] {
+  return splitIntoSections(body)
+    .map((section) => section.heading)
+    .filter((heading): heading is DocHeading => heading !== null);
+}
+
+function readDocPage(docsDirectory: string, relativePath: string): DocPage {
+  const absolutePath = path.join(docsDirectory, relativePath);
+  const rawFile = fs.readFileSync(absolutePath, "utf-8");
+  const parsed = matter(rawFile);
+  const slug = relativePath.slice(0, -docsFileExtension.length);
+
+  return {
+    slug,
+    slugSegments: slug.split("/"),
+    sourcePath: `packages/telemetryDashboard/docs/${relativePath}`,
+    frontmatter: toFrontmatter(parsed.data as Record<string, unknown>, slug),
+    body: parsed.content,
+    headings: extractHeadings(parsed.content),
+  };
+}
+
+export function loadAllDocPages(): readonly DocPage[] {
+  const docsDirectory = resolveDocsDirectory();
+  return listMdxFilesRecursively(docsDirectory)
+    .map((relativePath) => readDocPage(docsDirectory, relativePath))
+    .sort((left, right) => {
+      if (left.frontmatter.order !== right.frontmatter.order) {
+        return left.frontmatter.order - right.frontmatter.order;
+      }
+      return left.slug.localeCompare(right.slug);
+    });
+}
+
+export function loadDocPage(slugSegments: readonly string[]): DocPage | null {
+  const requestedSlug = slugSegments.join("/");
+  return loadAllDocPages().find((page) => page.slug === requestedSlug) ?? null;
+}
+
+export function toNavEntry(page: DocPage): DocNavEntry {
+  return {
+    slug: page.slug,
+    route: `${docsRoutePrefix}/${page.slug}`,
+    navLabel: page.frontmatter.navLabel,
+    navDescription: page.frontmatter.navDescription,
+    title: page.frontmatter.title,
+    description: page.frontmatter.description,
+    order: page.frontmatter.order,
+    icon: page.frontmatter.icon,
+  };
+}
+
+export function loadDocNavEntries(): readonly DocNavEntry[] {
+  return loadAllDocPages().map(toNavEntry);
 }

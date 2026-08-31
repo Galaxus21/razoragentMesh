@@ -1,0 +1,1953 @@
+{
+  "packageName": "@razorpay/agent-buyer-sdk",
+  "entryPoint": "C:\\Users\\verma\\Projects\\RazorpayBuildathon\\razoragentMesh\\packages\\buyerSdkTs\\src\\index.ts",
+  "exports": [
+    {
+      "name": "AgentKeyManager",
+      "kind": "class",
+      "signature": "AgentKeyManager",
+      "members": [
+        {
+          "name": "fromSecretKey",
+          "signature": "(secretKeyHex: string) => AgentKeyManager"
+        },
+        {
+          "name": "fromSeed",
+          "signature": "(seedHex: string) => AgentKeyManager"
+        },
+        {
+          "name": "generate",
+          "signature": "() => AgentKeyManager"
+        },
+        {
+          "name": "getAgentDid",
+          "signature": "() => string"
+        },
+        {
+          "name": "getPublicKeyHex",
+          "signature": "() => string"
+        },
+        {
+          "name": "getSecretKeyHex",
+          "signature": "() => string"
+        },
+        {
+          "name": "signCanonicalBytes",
+          "signature": "(canonicalBytes: Uint8Array<ArrayBufferLike>) => string"
+        },
+        {
+          "name": "signPayload",
+          "signature": "(payload: unknown) => string"
+        },
+        {
+          "name": "verifyPayloadSignature",
+          "signature": "(payload: unknown, signatureHex: string, publicKeyHex?: string | undefined) => boolean"
+        },
+        {
+          "name": "verifySignature",
+          "signature": "(canonicalBytes: Uint8Array<ArrayBufferLike>, signatureHex: string, publicKeyHex?: string | undefined) => boolean"
+        }
+      ],
+      "constructorParameters": [
+        "seedOrSecretKeyHex"
+      ]
+    },
+    {
+      "name": "AgentKeyPair",
+      "kind": "interface",
+      "signature": "AgentKeyPair",
+      "members": [
+        {
+          "name": "agentDid",
+          "signature": "string"
+        },
+        {
+          "name": "publicKeyHex",
+          "signature": "string"
+        },
+        {
+          "name": "secretKeyHex",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "AmendmentMandate",
+      "kind": "interface",
+      "signature": "AmendmentMandate",
+      "members": [
+        {
+          "name": "agentSignature",
+          "signature": "string"
+        },
+        {
+          "name": "amendmentId",
+          "signature": "string"
+        },
+        {
+          "name": "amendmentReason",
+          "signature": "string"
+        },
+        {
+          "name": "merchantSignature",
+          "signature": "string"
+        },
+        {
+          "name": "newCartMandateHash",
+          "signature": "string"
+        },
+        {
+          "name": "nonce",
+          "signature": "string"
+        },
+        {
+          "name": "previousCartMandateHash",
+          "signature": "string"
+        },
+        {
+          "name": "priceDeltaPaise",
+          "signature": "number"
+        },
+        {
+          "name": "substitutedSkuMapping",
+          "signature": "Readonly<Record<string, string>>"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "AppliedDiscount",
+      "kind": "interface",
+      "signature": "AppliedDiscount",
+      "members": [
+        {
+          "name": "code",
+          "signature": "string"
+        },
+        {
+          "name": "discountPaise",
+          "signature": "number"
+        },
+        {
+          "name": "name",
+          "signature": "string"
+        },
+        {
+          "name": "type",
+          "signature": "string | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "ArithmeticDriftException",
+      "kind": "class",
+      "signature": "ArithmeticDriftException",
+      "members": [
+        {
+          "name": "captureStackTrace",
+          "signature": "(targetObject: object, constructorOpt?: Function | undefined) => void"
+        },
+        {
+          "name": "cause",
+          "signature": "unknown"
+        },
+        {
+          "name": "message",
+          "signature": "string"
+        },
+        {
+          "name": "name",
+          "signature": "string"
+        },
+        {
+          "name": "prepareStackTrace",
+          "signature": "(err: Error, stackTraces: CallSite[]) => any"
+        },
+        {
+          "name": "stack",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "stackTraceLimit",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": [
+        "message"
+      ]
+    },
+    {
+      "name": "AutonomousPurchaseParams",
+      "kind": "interface",
+      "signature": "AutonomousPurchaseParams",
+      "members": [
+        {
+          "name": "cartMandate",
+          "signature": "CartMandate"
+        },
+        {
+          "name": "intentMandate",
+          "signature": "IntentMandate"
+        },
+        {
+          "name": "merchantAccount",
+          "signature": "string"
+        },
+        {
+          "name": "paymentId",
+          "signature": "string"
+        },
+        {
+          "name": "quantity",
+          "signature": "number"
+        },
+        {
+          "name": "serverTime",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "skuId",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "canonicalizeAndHash",
+      "kind": "function",
+      "signature": "(payload: unknown) => { readonly canonicalBytes: Uint8Array<ArrayBufferLike>; readonly digest: string; }",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "canonicalizeJson",
+      "kind": "function",
+      "signature": "(payload: unknown) => Uint8Array<ArrayBufferLike>",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "canonicalizeJsonString",
+      "kind": "function",
+      "signature": "(payload: unknown) => string",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "CartItem",
+      "kind": "interface",
+      "signature": "CartItem",
+      "members": [
+        {
+          "name": "gstRatePercent",
+          "signature": "number"
+        },
+        {
+          "name": "hsnCode",
+          "signature": "string"
+        },
+        {
+          "name": "lineTotalPaise",
+          "signature": "number"
+        },
+        {
+          "name": "quantity",
+          "signature": "number"
+        },
+        {
+          "name": "skuId",
+          "signature": "string"
+        },
+        {
+          "name": "unitPricePaise",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "CartMandate",
+      "kind": "interface",
+      "signature": "CartMandate",
+      "members": [
+        {
+          "name": "buyerDeliveryPincode",
+          "signature": "string"
+        },
+        {
+          "name": "buyerDeliveryStateCode",
+          "signature": "string"
+        },
+        {
+          "name": "cartId",
+          "signature": "string"
+        },
+        {
+          "name": "discountPaise",
+          "signature": "number"
+        },
+        {
+          "name": "inventoryLockExpiresAt",
+          "signature": "number"
+        },
+        {
+          "name": "inventoryLockToken",
+          "signature": "string"
+        },
+        {
+          "name": "items",
+          "signature": "readonly CartItem[]"
+        },
+        {
+          "name": "merchantDid",
+          "signature": "string"
+        },
+        {
+          "name": "merchantGstin",
+          "signature": "string"
+        },
+        {
+          "name": "merchantSignature",
+          "signature": "string"
+        },
+        {
+          "name": "merchantStateCode",
+          "signature": "string"
+        },
+        {
+          "name": "nonce",
+          "signature": "string"
+        },
+        {
+          "name": "shippingPaise",
+          "signature": "number"
+        },
+        {
+          "name": "taxableSubtotalPaise",
+          "signature": "number"
+        },
+        {
+          "name": "taxBreakdown",
+          "signature": "TaxBreakdown"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number"
+        },
+        {
+          "name": "totalPaise",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "ClientRequestError",
+      "kind": "class",
+      "signature": "ClientRequestError",
+      "members": [
+        {
+          "name": "captureStackTrace",
+          "signature": "(targetObject: object, constructorOpt?: Function | undefined) => void"
+        },
+        {
+          "name": "cause",
+          "signature": "unknown"
+        },
+        {
+          "name": "message",
+          "signature": "string"
+        },
+        {
+          "name": "name",
+          "signature": "string"
+        },
+        {
+          "name": "prepareStackTrace",
+          "signature": "(err: Error, stackTraces: CallSite[]) => any"
+        },
+        {
+          "name": "stack",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "stackTraceLimit",
+          "signature": "number"
+        },
+        {
+          "name": "statusCode",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": [
+        "message",
+        "statusCode"
+      ]
+    },
+    {
+      "name": "computeMandateHash",
+      "kind": "function",
+      "signature": "(mandate: Record<string, unknown>) => string",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "computeSha256Digest",
+      "kind": "function",
+      "signature": "(canonicalBytes: string | Uint8Array<ArrayBufferLike>) => string",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "createAmendmentMandate",
+      "kind": "variable",
+      "signature": "(params: CreateAmendmentMandateParams, buyerAgentSigner: AgentKeyManager, merchantSigner: AgentKeyManager) => AmendmentMandate",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "CreateAmendmentMandateParams",
+      "kind": "interface",
+      "signature": "CreateAmendmentMandateParams",
+      "members": [
+        {
+          "name": "amendmentId",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "amendmentReason",
+          "signature": "string"
+        },
+        {
+          "name": "newCartMandate",
+          "signature": "CartMandate"
+        },
+        {
+          "name": "nonce",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "previousCartMandate",
+          "signature": "CartMandate"
+        },
+        {
+          "name": "priceDeltaPaise",
+          "signature": "number"
+        },
+        {
+          "name": "substitutedSkuMapping",
+          "signature": "Readonly<Record<string, string>>"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "createCartMandate",
+      "kind": "variable",
+      "signature": "(params: CreateCartMandateParams, merchantSigner: AgentKeyManager) => CartMandate",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "CreateCartMandateParams",
+      "kind": "interface",
+      "signature": "CreateCartMandateParams",
+      "members": [
+        {
+          "name": "buyerDeliveryPincode",
+          "signature": "string"
+        },
+        {
+          "name": "buyerDeliveryStateCode",
+          "signature": "string"
+        },
+        {
+          "name": "cartId",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "discountPaise",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "inventoryLockExpiresAt",
+          "signature": "number"
+        },
+        {
+          "name": "inventoryLockToken",
+          "signature": "string"
+        },
+        {
+          "name": "items",
+          "signature": "readonly CartItem[]"
+        },
+        {
+          "name": "merchantGstin",
+          "signature": "string"
+        },
+        {
+          "name": "merchantStateCode",
+          "signature": "string"
+        },
+        {
+          "name": "nonce",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "shippingPaise",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "taxableSubtotalPaise",
+          "signature": "number"
+        },
+        {
+          "name": "taxBreakdown",
+          "signature": "TaxBreakdown"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "totalPaise",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "createExecutionMandate",
+      "kind": "variable",
+      "signature": "(params: CreateExecutionMandateParams, buyerAgentSigner: AgentKeyManager) => ExecutionMandate",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "CreateExecutionMandateParams",
+      "kind": "interface",
+      "signature": "CreateExecutionMandateParams",
+      "members": [
+        {
+          "name": "cartMandate",
+          "signature": "CartMandate"
+        },
+        {
+          "name": "executionId",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "intentMandate",
+          "signature": "IntentMandate"
+        },
+        {
+          "name": "nonce",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "settlementAmountPaise",
+          "signature": "number"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "upiCircleToken",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "createIntentMandate",
+      "kind": "variable",
+      "signature": "(params: CreateIntentMandateParams, userSigner: AgentKeyManager) => IntentMandate",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "CreateIntentMandateParams",
+      "kind": "interface",
+      "signature": "CreateIntentMandateParams",
+      "members": [
+        {
+          "name": "authorizedCategories",
+          "signature": "readonly string[] | undefined"
+        },
+        {
+          "name": "delegatedAgentDid",
+          "signature": "string"
+        },
+        {
+          "name": "mandateId",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "maxBudgetPaise",
+          "signature": "number"
+        },
+        {
+          "name": "nonce",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "singleTransactionLimitPaise",
+          "signature": "number"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "upiCircleDelegationToken",
+          "signature": "string"
+        },
+        {
+          "name": "validUntilTimestamp",
+          "signature": "number | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "createSignedAmendmentMandate",
+      "kind": "function",
+      "signature": "(params: CreateAmendmentMandateParams, buyerAgentSigner: AgentKeyManager, merchantSigner: AgentKeyManager) => AmendmentMandate",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "createSignedCartMandate",
+      "kind": "function",
+      "signature": "(params: CreateCartMandateParams, merchantSigner: AgentKeyManager) => CartMandate",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "createSignedExecutionMandate",
+      "kind": "function",
+      "signature": "(params: CreateExecutionMandateParams, buyerAgentSigner: AgentKeyManager) => ExecutionMandate",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "createSignedIntentMandate",
+      "kind": "function",
+      "signature": "(params: CreateIntentMandateParams, userSigner: AgentKeyManager) => IntentMandate",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultCurrency",
+      "kind": "variable",
+      "signature": "\"INR\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultIntentValiditySeconds",
+      "kind": "variable",
+      "signature": "86400",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultLockTtlSeconds",
+      "kind": "variable",
+      "signature": "120",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultLogisticsAccount",
+      "kind": "variable",
+      "signature": "\"acc_logistics_delivery\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultMandateEngineUrl",
+      "kind": "variable",
+      "signature": "\"http://localhost:8000\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultMcpServerUrl",
+      "kind": "variable",
+      "signature": "\"http://localhost:4001\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultPowChunkSize",
+      "kind": "variable",
+      "signature": "10000",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultPowDifficultyZeros",
+      "kind": "variable",
+      "signature": "4",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultProtocolFeeAccount",
+      "kind": "variable",
+      "signature": "\"acc_protocol_fees\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultProtocolFeePaise",
+      "kind": "variable",
+      "signature": "50",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultPurchaseQuantity",
+      "kind": "variable",
+      "signature": "1",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultSlaWeightGrams",
+      "kind": "variable",
+      "signature": "500",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "defaultX402GatewayUrl",
+      "kind": "variable",
+      "signature": "\"http://localhost:4003\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "didPrefix",
+      "kind": "variable",
+      "signature": "\"did:agent:\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "endpointLock",
+      "kind": "variable",
+      "signature": "\"/api/v1/lock\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "endpointQuote",
+      "kind": "variable",
+      "signature": "\"/api/v1/quote\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "endpointSettlementExecute",
+      "kind": "variable",
+      "signature": "\"/api/v1/settlement/execute\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "endpointSla",
+      "kind": "variable",
+      "signature": "\"/api/v1/sla\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "escalatedPowDifficultyZeros",
+      "kind": "variable",
+      "signature": "5",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "ExecuteSettlementRequest",
+      "kind": "type",
+      "signature": "SettlementRequest",
+      "members": [
+        {
+          "name": "cartMandate",
+          "signature": "CartMandate"
+        },
+        {
+          "name": "executionMandate",
+          "signature": "ExecutionMandate"
+        },
+        {
+          "name": "intentMandate",
+          "signature": "IntentMandate"
+        },
+        {
+          "name": "merchantAccount",
+          "signature": "string"
+        },
+        {
+          "name": "metadata",
+          "signature": "Readonly<Record<string, unknown>> | undefined"
+        },
+        {
+          "name": "paymentId",
+          "signature": "string"
+        },
+        {
+          "name": "serverTime",
+          "signature": "number | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "ExecutionMandate",
+      "kind": "interface",
+      "signature": "ExecutionMandate",
+      "members": [
+        {
+          "name": "agentSignature",
+          "signature": "string"
+        },
+        {
+          "name": "buyerAgentDid",
+          "signature": "string"
+        },
+        {
+          "name": "cartMandateHash",
+          "signature": "string"
+        },
+        {
+          "name": "currency",
+          "signature": "\"INR\""
+        },
+        {
+          "name": "executionId",
+          "signature": "string"
+        },
+        {
+          "name": "intentMandateHash",
+          "signature": "string"
+        },
+        {
+          "name": "nonce",
+          "signature": "string"
+        },
+        {
+          "name": "settlementAmountPaise",
+          "signature": "number"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number"
+        },
+        {
+          "name": "upiCircleToken",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "extractPublicKeyFromDid",
+      "kind": "function",
+      "signature": "(did: string) => string",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "formatAgentDid",
+      "kind": "function",
+      "signature": "(publicKeyHex: string) => string",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "generateAgentKeyPair",
+      "kind": "function",
+      "signature": "(seedHex?: string | undefined) => AgentKeyPair",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "generatePowHeaders",
+      "kind": "function",
+      "signature": "(challengeToken: string, solutionNonce: number, buyerAgentDid: string, escrowToken?: string | undefined) => Record<string, string>",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "GstrInvoice",
+      "kind": "interface",
+      "signature": "GstrInvoice",
+      "members": [
+        {
+          "name": "buyerDeliveryStateCode",
+          "signature": "string"
+        },
+        {
+          "name": "cryptographicAuditHash",
+          "signature": "string"
+        },
+        {
+          "name": "grandTotalPaise",
+          "signature": "number"
+        },
+        {
+          "name": "invoiceNumber",
+          "signature": "string"
+        },
+        {
+          "name": "merchantGstin",
+          "signature": "string"
+        },
+        {
+          "name": "taxableAmountPaise",
+          "signature": "number"
+        },
+        {
+          "name": "totalCgstPaise",
+          "signature": "number"
+        },
+        {
+          "name": "totalIgstPaise",
+          "signature": "number"
+        },
+        {
+          "name": "totalSgstPaise",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "headerAuthenticate",
+      "kind": "variable",
+      "signature": "\"WWW-Authenticate\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "headerBuyerAgentDid",
+      "kind": "variable",
+      "signature": "\"X-Buyer-Agent-Did\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "headerEscrowToken",
+      "kind": "variable",
+      "signature": "\"X-Mesh-Escrow-Token\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "headerPowChallenge",
+      "kind": "variable",
+      "signature": "\"X-Mesh-Pow-Challenge\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "headerPowSolution",
+      "kind": "variable",
+      "signature": "\"X-Mesh-Pow-Solution\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "hexEncoding",
+      "kind": "variable",
+      "signature": "\"hex\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "Http402ChallengeResponse",
+      "kind": "type",
+      "signature": "PoWChallenge",
+      "members": [
+        {
+          "name": "challengeToken",
+          "signature": "string"
+        },
+        {
+          "name": "powDifficultyZeros",
+          "signature": "number"
+        },
+        {
+          "name": "statusCode",
+          "signature": "number"
+        },
+        {
+          "name": "tokenCostPaise",
+          "signature": "number"
+        },
+        {
+          "name": "wwwAuthenticate",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "httpMethodGet",
+      "kind": "variable",
+      "signature": "\"GET\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "httpMethodPost",
+      "kind": "variable",
+      "signature": "\"POST\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "IntentMandate",
+      "kind": "interface",
+      "signature": "IntentMandate",
+      "members": [
+        {
+          "name": "authorizedCategories",
+          "signature": "readonly string[]"
+        },
+        {
+          "name": "currency",
+          "signature": "\"INR\""
+        },
+        {
+          "name": "delegatedAgentDid",
+          "signature": "string"
+        },
+        {
+          "name": "mandateId",
+          "signature": "string"
+        },
+        {
+          "name": "maxBudgetPaise",
+          "signature": "number"
+        },
+        {
+          "name": "nonce",
+          "signature": "string"
+        },
+        {
+          "name": "singleTransactionLimitPaise",
+          "signature": "number"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number"
+        },
+        {
+          "name": "upiCircleDelegationToken",
+          "signature": "string"
+        },
+        {
+          "name": "userDid",
+          "signature": "string"
+        },
+        {
+          "name": "userSignature",
+          "signature": "string"
+        },
+        {
+          "name": "validUntilTimestamp",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "InventoryLockRequest",
+      "kind": "interface",
+      "signature": "InventoryLockRequest",
+      "members": [
+        {
+          "name": "buyerAgentDid",
+          "signature": "string"
+        },
+        {
+          "name": "lockTtlSeconds",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "quantity",
+          "signature": "number"
+        },
+        {
+          "name": "quoteHash",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "skuId",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "InventoryLockResponse",
+      "kind": "interface",
+      "signature": "InventoryLockResponse",
+      "members": [
+        {
+          "name": "expiresAtUnixMs",
+          "signature": "number"
+        },
+        {
+          "name": "fencingToken",
+          "signature": "number"
+        },
+        {
+          "name": "lockSignature",
+          "signature": "string"
+        },
+        {
+          "name": "lockToken",
+          "signature": "string"
+        },
+        {
+          "name": "quantityLocked",
+          "signature": "number"
+        },
+        {
+          "name": "skuId",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "keyHexLength",
+      "kind": "variable",
+      "signature": "64",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "LockOptions",
+      "kind": "interface",
+      "signature": "LockOptions",
+      "members": [
+        {
+          "name": "escrowToken",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "lockTtlSeconds",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "maxRetries",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "quoteHash",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "mandateAmendPrefix",
+      "kind": "variable",
+      "signature": "\"mandate_amend_\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "mandateCartAmendedPrefix",
+      "kind": "variable",
+      "signature": "\"cart_amended_\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "mandateCartPrefix",
+      "kind": "variable",
+      "signature": "\"cart_\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "mandateExecPrefix",
+      "kind": "variable",
+      "signature": "\"mandate_exec_\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "mandateIntentPrefix",
+      "kind": "variable",
+      "signature": "\"mandate_intent_\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "MandateVerificationError",
+      "kind": "class",
+      "signature": "MandateVerificationError",
+      "members": [
+        {
+          "name": "captureStackTrace",
+          "signature": "(targetObject: object, constructorOpt?: Function | undefined) => void"
+        },
+        {
+          "name": "cause",
+          "signature": "unknown"
+        },
+        {
+          "name": "message",
+          "signature": "string"
+        },
+        {
+          "name": "name",
+          "signature": "string"
+        },
+        {
+          "name": "prepareStackTrace",
+          "signature": "(err: Error, stackTraces: CallSite[]) => any"
+        },
+        {
+          "name": "stack",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "stackTraceLimit",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": [
+        "message"
+      ]
+    },
+    {
+      "name": "maxNegotiationTurns",
+      "kind": "variable",
+      "signature": "5",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "mediaTypeApplicationJson",
+      "kind": "variable",
+      "signature": "\"application/json\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "microFeePerTurnPaise",
+      "kind": "variable",
+      "signature": "50",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "millisPerSecond",
+      "kind": "variable",
+      "signature": "1000",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "PoWChallenge",
+      "kind": "interface",
+      "signature": "PoWChallenge",
+      "members": [
+        {
+          "name": "challengeToken",
+          "signature": "string"
+        },
+        {
+          "name": "powDifficultyZeros",
+          "signature": "number"
+        },
+        {
+          "name": "statusCode",
+          "signature": "number"
+        },
+        {
+          "name": "tokenCostPaise",
+          "signature": "number"
+        },
+        {
+          "name": "wwwAuthenticate",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "PoWSolution",
+      "kind": "interface",
+      "signature": "PoWSolution",
+      "members": [
+        {
+          "name": "computedDigest",
+          "signature": "string"
+        },
+        {
+          "name": "elapsedMs",
+          "signature": "number"
+        },
+        {
+          "name": "nonce",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "PowSolveResult",
+      "kind": "type",
+      "signature": "PoWSolution",
+      "members": [
+        {
+          "name": "computedDigest",
+          "signature": "string"
+        },
+        {
+          "name": "elapsedMs",
+          "signature": "number"
+        },
+        {
+          "name": "nonce",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "PoWVerificationError",
+      "kind": "class",
+      "signature": "PoWVerificationError",
+      "members": [
+        {
+          "name": "captureStackTrace",
+          "signature": "(targetObject: object, constructorOpt?: Function | undefined) => void"
+        },
+        {
+          "name": "cause",
+          "signature": "unknown"
+        },
+        {
+          "name": "message",
+          "signature": "string"
+        },
+        {
+          "name": "name",
+          "signature": "string"
+        },
+        {
+          "name": "prepareStackTrace",
+          "signature": "(err: Error, stackTraces: CallSite[]) => any"
+        },
+        {
+          "name": "stack",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "stackTraceLimit",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": [
+        "message"
+      ]
+    },
+    {
+      "name": "PowVerificationResult",
+      "kind": "interface",
+      "signature": "PowVerificationResult",
+      "members": [
+        {
+          "name": "challengeToken",
+          "signature": "string"
+        },
+        {
+          "name": "computedDigest",
+          "signature": "string"
+        },
+        {
+          "name": "errorMessage",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "isValid",
+          "signature": "boolean"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "PriceDropAlert",
+      "kind": "interface",
+      "signature": "PriceDropAlert",
+      "members": [
+        {
+          "name": "activePricePaise",
+          "signature": "number"
+        },
+        {
+          "name": "concessionPaise",
+          "signature": "number"
+        },
+        {
+          "name": "promotionId",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "skuId",
+          "signature": "string"
+        },
+        {
+          "name": "targetPricePaise",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "QuoteOptions",
+      "kind": "interface",
+      "signature": "QuoteOptions",
+      "members": [
+        {
+          "name": "deliveryPincode",
+          "signature": "string"
+        },
+        {
+          "name": "merchantDid",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "promoCode",
+          "signature": "string | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "RazorAgentClient",
+      "kind": "class",
+      "signature": "RazorAgentClient",
+      "members": [
+        {
+          "name": "executeAutonomousPurchase",
+          "signature": "(params: AutonomousPurchaseParams) => Promise<SettlementResult>"
+        },
+        {
+          "name": "executeSettlement",
+          "signature": "(request: SettlementRequest) => Promise<SettlementResult>"
+        },
+        {
+          "name": "getAgentDid",
+          "signature": "() => string"
+        },
+        {
+          "name": "getBuyerKeyManager",
+          "signature": "() => AgentKeyManager"
+        },
+        {
+          "name": "getLiveSkuQuote",
+          "signature": "(skuId: string, quantity: number | undefined, options: QuoteOptions) => Promise<SkuQuote>"
+        },
+        {
+          "name": "handlePriceDropAlert",
+          "signature": "(alert: PriceDropAlert, previousCartMandate: CartMandate, merchantSigner: AgentKeyManager) => AmendmentMandate"
+        },
+        {
+          "name": "reserveInventoryLock",
+          "signature": "(skuId: string, quantity: number | undefined, options: LockOptions) => Promise<InventoryLockResponse>"
+        },
+        {
+          "name": "verifyShippingSla",
+          "signature": "(pincode: string, weightGrams?: number) => Promise<SlaVerificationResponse>"
+        }
+      ],
+      "constructorParameters": [
+        "buyerKeyManager",
+        "customFetch",
+        "defaultLockTtlSeconds",
+        "mandateEngineUrl",
+        "mcpServerUrl",
+        "x402GatewayUrl"
+      ]
+    },
+    {
+      "name": "RazorAgentClientConfig",
+      "kind": "interface",
+      "signature": "RazorAgentClientConfig",
+      "members": [
+        {
+          "name": "buyerKeyManager",
+          "signature": "AgentKeyManager | undefined"
+        },
+        {
+          "name": "customFetch",
+          "signature": "{ (input: RequestInfo | URL, init?: RequestInit | undefined): Promise<Response>; (input: string | Request | URL, init?: RequestInit | undefined): Promise<...>; } | undefined"
+        },
+        {
+          "name": "defaultLockTtlSeconds",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "mandateEngineUrl",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "mcpServerUrl",
+          "signature": "string | undefined"
+        },
+        {
+          "name": "x402GatewayUrl",
+          "signature": "string | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "seedByteLength",
+      "kind": "variable",
+      "signature": "32",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "SettlementRequest",
+      "kind": "interface",
+      "signature": "SettlementRequest",
+      "members": [
+        {
+          "name": "cartMandate",
+          "signature": "CartMandate"
+        },
+        {
+          "name": "executionMandate",
+          "signature": "ExecutionMandate"
+        },
+        {
+          "name": "intentMandate",
+          "signature": "IntentMandate"
+        },
+        {
+          "name": "merchantAccount",
+          "signature": "string"
+        },
+        {
+          "name": "metadata",
+          "signature": "Readonly<Record<string, unknown>> | undefined"
+        },
+        {
+          "name": "paymentId",
+          "signature": "string"
+        },
+        {
+          "name": "serverTime",
+          "signature": "number | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "SettlementResult",
+      "kind": "interface",
+      "signature": "SettlementResult",
+      "members": [
+        {
+          "name": "amountPaise",
+          "signature": "number"
+        },
+        {
+          "name": "currency",
+          "signature": "string"
+        },
+        {
+          "name": "invoice",
+          "signature": "GstrInvoice"
+        },
+        {
+          "name": "paymentId",
+          "signature": "string"
+        },
+        {
+          "name": "settledAt",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "status",
+          "signature": "string"
+        },
+        {
+          "name": "transfers",
+          "signature": "readonly SplitTransfer[]"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "sha256Algorithm",
+      "kind": "variable",
+      "signature": "\"sha256\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "signatureFieldKeys",
+      "kind": "variable",
+      "signature": "readonly [\"userSignature\", \"merchantSignature\", \"agentSignature\"]",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "signatureHexLength",
+      "kind": "variable",
+      "signature": "128",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "SkuQuote",
+      "kind": "interface",
+      "signature": "SkuQuote",
+      "members": [
+        {
+          "name": "appliedDiscounts",
+          "signature": "readonly AppliedDiscount[]"
+        },
+        {
+          "name": "availableStock",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "baseUnitPricePaise",
+          "signature": "number"
+        },
+        {
+          "name": "finalUnitPricePaise",
+          "signature": "number"
+        },
+        {
+          "name": "gstRatePercent",
+          "signature": "number"
+        },
+        {
+          "name": "hsnCode",
+          "signature": "string"
+        },
+        {
+          "name": "offeredUnitPricePaise",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "quantity",
+          "signature": "number"
+        },
+        {
+          "name": "quoteExpiryTimestamp",
+          "signature": "number"
+        },
+        {
+          "name": "quoteHash",
+          "signature": "string"
+        },
+        {
+          "name": "skuId",
+          "signature": "string"
+        },
+        {
+          "name": "taxableSubtotalPaise",
+          "signature": "number"
+        },
+        {
+          "name": "taxBreakdown",
+          "signature": "TaxBreakdown"
+        },
+        {
+          "name": "totalSavingsPaise",
+          "signature": "number"
+        },
+        {
+          "name": "upcomingPromotions",
+          "signature": "readonly UpcomingPromotion[] | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "SkuQuoteResponse",
+      "kind": "type",
+      "signature": "SkuQuote",
+      "members": [
+        {
+          "name": "appliedDiscounts",
+          "signature": "readonly AppliedDiscount[]"
+        },
+        {
+          "name": "availableStock",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "baseUnitPricePaise",
+          "signature": "number"
+        },
+        {
+          "name": "finalUnitPricePaise",
+          "signature": "number"
+        },
+        {
+          "name": "gstRatePercent",
+          "signature": "number"
+        },
+        {
+          "name": "hsnCode",
+          "signature": "string"
+        },
+        {
+          "name": "offeredUnitPricePaise",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "quantity",
+          "signature": "number"
+        },
+        {
+          "name": "quoteExpiryTimestamp",
+          "signature": "number"
+        },
+        {
+          "name": "quoteHash",
+          "signature": "string"
+        },
+        {
+          "name": "skuId",
+          "signature": "string"
+        },
+        {
+          "name": "taxableSubtotalPaise",
+          "signature": "number"
+        },
+        {
+          "name": "taxBreakdown",
+          "signature": "TaxBreakdown"
+        },
+        {
+          "name": "totalSavingsPaise",
+          "signature": "number"
+        },
+        {
+          "name": "upcomingPromotions",
+          "signature": "readonly UpcomingPromotion[] | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "SlaVerificationResponse",
+      "kind": "interface",
+      "signature": "SlaVerificationResponse",
+      "members": [
+        {
+          "name": "deliverySpeed",
+          "signature": "string"
+        },
+        {
+          "name": "pincode",
+          "signature": "string"
+        },
+        {
+          "name": "shippingFeePaise",
+          "signature": "number"
+        },
+        {
+          "name": "slaHours",
+          "signature": "number"
+        },
+        {
+          "name": "weightGrams",
+          "signature": "number"
+        },
+        {
+          "name": "zone",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "solvePowChallenge",
+      "kind": "function",
+      "signature": "(challengeToken: string, difficultyZeros?: number) => PoWSolution",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "solvePowChallengeAsync",
+      "kind": "function",
+      "signature": "(challengeToken: string, difficultyZeros?: number, chunkSize?: number) => Promise<PoWSolution>",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "SplitTransfer",
+      "kind": "interface",
+      "signature": "SplitTransfer",
+      "members": [
+        {
+          "name": "account",
+          "signature": "string"
+        },
+        {
+          "name": "amount",
+          "signature": "number"
+        },
+        {
+          "name": "currency",
+          "signature": "string"
+        },
+        {
+          "name": "id",
+          "signature": "string"
+        },
+        {
+          "name": "status",
+          "signature": "string | undefined"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "StockLockResponse",
+      "kind": "type",
+      "signature": "InventoryLockResponse",
+      "members": [
+        {
+          "name": "expiresAtUnixMs",
+          "signature": "number"
+        },
+        {
+          "name": "fencingToken",
+          "signature": "number"
+        },
+        {
+          "name": "lockSignature",
+          "signature": "string"
+        },
+        {
+          "name": "lockToken",
+          "signature": "string"
+        },
+        {
+          "name": "quantityLocked",
+          "signature": "number"
+        },
+        {
+          "name": "skuId",
+          "signature": "string"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "TaxBreakdown",
+      "kind": "interface",
+      "signature": "TaxBreakdown",
+      "members": [
+        {
+          "name": "cgstPaise",
+          "signature": "number"
+        },
+        {
+          "name": "igstPaise",
+          "signature": "number"
+        },
+        {
+          "name": "sgstPaise",
+          "signature": "number"
+        },
+        {
+          "name": "totalTaxPaise",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "UpcomingPromotion",
+      "kind": "interface",
+      "signature": "UpcomingPromotion",
+      "members": [
+        {
+          "name": "campaignId",
+          "signature": "string"
+        },
+        {
+          "name": "endsAtUnix",
+          "signature": "number"
+        },
+        {
+          "name": "expectedSavingsPaise",
+          "signature": "number"
+        },
+        {
+          "name": "expectedUnitPricePaise",
+          "signature": "number"
+        },
+        {
+          "name": "limitedStockAllocated",
+          "signature": "number | undefined"
+        },
+        {
+          "name": "name",
+          "signature": "string"
+        },
+        {
+          "name": "startsAtUnix",
+          "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "utf8Encoding",
+      "kind": "variable",
+      "signature": "\"utf-8\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "verifyMandateChain",
+      "kind": "function",
+      "signature": "(intentMandate: IntentMandate, cartMandate: CartMandate, executionMandate: ExecutionMandate, raiseOnMismatch?: boolean) => boolean",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "verifyPowSolution",
+      "kind": "function",
+      "signature": "(challengeToken: string, nonce: number, difficultyZeros?: number) => PowVerificationResult",
+      "members": [],
+      "constructorParameters": []
+    }
+  ]
+}

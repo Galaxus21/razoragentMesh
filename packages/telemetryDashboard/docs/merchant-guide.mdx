@@ -1,4 +1,12 @@
-# Merchant Onboarding & Universal SKU Studio Guide
+---
+title: "Merchant Onboarding & Universal SKU Studio Guide"
+description: "Guides merchants on registering DIDs, ingesting catalogs, configuring volume discounts, setting bullion spot formulas, and applying statutory HSN tax rules."
+navLabel: "Merchant Guide"
+navDescription: "Catalog Ingestion & Pricing"
+order: 4
+icon: "Store"
+audience: "merchant"
+---
 
 A comprehensive guide for merchants and enterprise catalog providers registering Ed25519 DIDs, configuring dynamic bullion formulas, defining volume discount tiers, and automating statutory GSTR-1 tax compliance.
 
@@ -54,12 +62,16 @@ RazorAgent Mesh supports 4 ingestion adapters for populating and vectorizing mer
 ├───────────────────┬───────────────────┬────────────────────────────────┤
 │ Ingestion Channel │ Trigger / Format  │ Processing Pipeline            │
 ├───────────────────┼───────────────────┼────────────────────────────────┤
-│ REST Single SKU   │ POST /catalog/sku │ Real-time sanitization & embed │
+│ REST Single SKU   │ POST .../catalog  │ Real-time sanitization & embed │
 │ CSV Batch Sync    │ Multipart Upload  │ 500-row chunked vectorization  │
 │ Shopify Webhooks  │ products/create   │ Automated payload transform    │
 │ ERP Delta Feed    │ JSON Polling Sync │ Idempotent versioned upserts   │
 └───────────────────┴───────────────────┴────────────────────────────────┘
 ```
+
+The single-SKU route is abbreviated above to fit the diagram. In full it is
+`POST /api/v1/merchant/{merchantDid}/catalog` -- the merchant DID is part of the path, not a header,
+so a catalog write is always scoped to one merchant.
 
 ### Multi-Tier Volume Discount Configuration
 Merchants can define tiered volume discount curves in Basis Points (1 BPS = 0.01%):
@@ -123,3 +135,4 @@ Every SKU maps to an official Indian Harmonized System of Nomenclature (HSN) cha
 | **`6109`** | Cotton & Knitted Apparel | **5.0%** | 2.5% CGST + 2.5% SGST (or 5.0% IGST) |
 | **`3004`** | Essential Pharmaceuticals | **5.0%** | 2.5% CGST + 2.5% SGST (or 5.0% IGST) |
 | **`8471`** | Computing & Electronics | **18.0%** | 9.0% CGST + 9.0% SGST (or 18.0% IGST) |
+

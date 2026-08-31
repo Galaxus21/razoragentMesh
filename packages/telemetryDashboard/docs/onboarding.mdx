@@ -1,4 +1,12 @@
-# RazorAgent Mesh v2.0 — Developer Onboarding Guide
+---
+title: "RazorAgent Mesh v2.0 — Developer Onboarding Guide"
+description: "Provides an integration guide for merchants and buyer agents covering key management, catalog ingestion, AP2 mandates, 2PC settlement, and code examples."
+navLabel: "Developer Onboarding"
+navDescription: "End-to-End Integration Guide"
+order: 2
+icon: "Rocket"
+audience: "developer"
+---
 
 An end-to-end, production-grade technical manual for software engineers, merchant platform developers, and autonomous agent architects integrating with **RazorAgent Mesh v2.0**.
 
@@ -72,7 +80,7 @@ The protocol operates across 5 distinct cryptographic, discovery, negotiation, a
 | Invariant | Name | Formulation / Specification | Enforcement Point |
 |---|---|---|---|
 | **INV-01** | Integer Paise Arithmetic | All monetary values represented in positive integers ($\mathbb{Z}^+$ paise, where ₹1.00 = 100 paise). Floating-point floats are strictly rejected. | `arithmeticEnclave.py`, `jcsCanonicalizer.ts` |
-| **INV-02** | Zero-Penny GST Split | $\text{CGST} = \lfloor (\text{Taxable} \times \lfloor \text{Rate} / 2 \rfloor) / 100 \rfloor$, $\text{SGST} = \lfloor (\text{Taxable} \times \text{Rate}) / 100 \rfloor - \text{CGST}$, $\text{IGST} = \lfloor (\text{Taxable} \times \text{Rate}) / 100 \rfloor$ | `gstrInvoiceEngine.py`, `pricingEngine.ts` |
+| **INV-02** | Equal-Half GST Division | Intra-state: $\text{CGST} = \text{SGST} = \lfloor (\text{Taxable} \times \text{Rate}) / 200 \rfloor$ and $\text{IGST} = 0$. Inter-state: $\text{IGST} = \lfloor (\text{Taxable} \times \text{Rate}) / 100 \rfloor$ and $\text{CGST} = \text{SGST} = 0$. Total tax is *defined* as the sum of the levies. Both halves come from the identical expression, so they are equal by construction; deriving one as the remainder of the other would produce an illegal 2%/3% split on odd slabs such as 5%. | `arithmeticEnclave.py`, `pricingEngine.ts` |
 | **INV-03** | Ed25519 Canonical Signatures | Detached 64-byte Ed25519 cryptographic signatures generated over RFC 8785 JSON Canonicalization Scheme (JCS) byte buffers. | `AgentKeyManager`, `Ed25519Verifier` |
 | **INV-04** | AP2 Budget Gate Invariant | $\text{SettlementAmountPaise} \le \min(\text{MaxBudgetPaise}, \text{SingleTransactionLimitPaise})$ with category whitelisting. | `budgetGate.py`, `agentMandateBuilder.ts` |
 | **INV-05** | Anti-Replay Monotonic Nonces | Nonces are single-use UUIDv4/hex strings recorded via Redis atomic `SETNX` with a 120s TTL and a tight clock drift window $[T - 5\text{s}, T + 60\text{s}]$. | `nonceLedger.py` |
@@ -100,10 +108,10 @@ razoragentMesh/
 │   ├── buyerSdkPy/         # Python Buyer SDK (razoragent_buyer_sdk)
 │   ├── catalogSanitizer/   # Input normalization & currency validation
 │   ├── mandateEngine/      # AP2 Settlement Enclave & GSTR-1 Invoicing (Port 8000)
-│   ├── mcpServer/          # Model Context Protocol JSON-RPC Server (Port 8001 / Stdio)
+│   ├── mcpServer/          # Model Context Protocol JSON-RPC Server (Port 4001 / Stdio)
 │   ├── merchantApi/        # Merchant Registration, Policy & Ingestion (Port 4002)
 │   ├── vectorHealer/       # Vector substitution & healing engine (Port 6333 Qdrant)
-│   └── x402Gateway/        # PoW Ingress & Negotiation State Machine (Port 8000)
+│   └── x402Gateway/        # PoW Ingress & Negotiation State Machine (Port 4003)
 ├── docker-compose.yml      # Infrastructure orchestration (Redis, Qdrant, Microservices)
 └── .env.example            # Environment configuration template
 ```
@@ -125,13 +133,12 @@ RAZORPAY_KEY_SECRET=MockApiSecretKey67890
 REDIS_URL=redis://localhost:6379/0
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
-MERCHANT_API_PORT=4002
 MERCHANT_API_URL=http://localhost:4002
 
-# Ed25519 Cryptographic Keys (Hex Seeds / 32-byte Private Keys)
+# Ed25519 signing key for the merchant enclave. The buyer agent and the user principal are not
+# configured here: both SDKs generate those keypairs at runtime with AgentKeyManager.generate(),
+# which is what the examples in examples/ do.
 MERCHANT_PRIVATE_KEY_HEX=ac262c2b5daf3f4272ed052f7b331cbb6152588ae58dfb022f71c7b8a2c45364
-BUYER_AGENT_PRIVATE_KEY_HEX=ad1b82a9cce6d36564c79f026ff7479072875d80cb85b5b95a3478df90572270
-USER_CFO_PRIVATE_KEY_HEX=ec89f8790fa0bc33882dd0c02c67a79a0a68f6976f52010b7e656564db3c9f8a
 
 # Layer 1 MCP Quote HMAC Signing Key
 HMAC_SECRET_KEY=razoragent_mesh_hmac_secret_key_2026
@@ -568,9 +575,9 @@ const buyerAgentSigner = AgentKeyManager.generate();
 
 // 2. Initialize Unified Mesh Client
 const client = new RazorAgentClient({
-  mcpServerUrl: "http://localhost:8001",
+  mcpServerUrl: "http://localhost:4001",
   mandateEngineUrl: "http://localhost:8000",
-  x402GatewayUrl: "http://localhost:8000",
+  x402GatewayUrl: "http://localhost:4003",
   buyerKeyManager: buyerAgentSigner,
 });
 ```
@@ -749,9 +756,9 @@ async function runAutonomousPurchaseFlow() {
 
   // 2. Initialize Client
   const client = new RazorAgentClient({
-    mcpServerUrl: "http://localhost:8001",
+    mcpServerUrl: "http://localhost:4001",
     mandateEngineUrl: "http://localhost:8000",
-    x402GatewayUrl: "http://localhost:8000",
+    x402GatewayUrl: "http://localhost:4003",
     buyerKeyManager: buyerAgentSigner,
   });
 
@@ -967,3 +974,4 @@ if __name__ == "__main__":
 #### 3. "StalePriceQuoteException: Price quote is stale"
 - **Cause**: Dynamic bullion quote exceeded its `maxQuoteTtlSeconds` (default 60s).
 - **Fix**: Refresh quote via `get_live_sku_quote` immediately prior to issuing $M_C$ and $M_E$.
+

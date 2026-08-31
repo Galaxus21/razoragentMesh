@@ -1,0 +1,209 @@
+---
+title: "System Setup & Environment Architecture Guide"
+description: "Guides platform operators and engineers through prerequisites, environment configuration, Docker Compose deployment, health verification, and local development."
+navLabel: "System Setup"
+navDescription: "Environment & Architecture Setup"
+order: 1
+icon: "Server"
+audience: "operator"
+---
+
+A step-by-step technical guide for Platform Ops and software engineers configuring, booting, and verifying the 7-layer **RazorAgent Mesh v2.0** local development and production enclave.
+
+---
+
+## 1. System Prerequisites & Runtimes
+
+Before launching RazorAgent Mesh, verify your local system meets the following version requirements:
+
+- **Node.js**: `v20.10.0+` (LTS) or `v22.0.0+` with `npm`
+- **Python**: `v3.11.0+` (compatible with `3.12` and `3.13`) with `pip`
+- **Docker & Docker Compose**: Docker `v24+` (Compose `v2.20+`)
+- **Redis**: `v7.0+` (in-memory state, pub/sub, and distributed locks)
+- **Qdrant**: `v1.7.0+` (Vector search engine on port 6333)
+
+---
+
+## 2. Monorepo Package Topology & Localhost Ports
+
+When running the mesh locally (via Docker Compose or native processes), each microservice listens on a dedicated `localhost` port:
+
+| Localhost Port | Microservice | Protocol / Layer | Responsibility & Role | Key Endpoints |
+|---|---|---|---|---|
+| **`localhost:8000`** | **Mandate Engine** | REST / SSE (Layer 4 & 5) | AP2 cryptographic mandate verification (Ed25519), 2-Phase Commit (2PC) multi-party settlement sagas, statutory GSTR-1 tax invoicing, and live Server-Sent Events (SSE) telemetry stream. | `GET /health`<br />`POST /api/v1/settlement/execute`<br />`GET /api/v1/telemetry/stream` |
+| **`localhost:4002`** | **Merchant API** | REST (Layer 1) | Merchant DID registration, autonomous negotiation policy configuration, multi-channel catalog ingestion (REST, CSV, Shopify, ERP), domain facets, and dynamic MCX bullion pricing. | `GET /health`<br />`POST /api/v1/merchant/register`<br />`POST /api/v1/merchant/{merchantDid}/catalog` |
+| **`localhost:4003`** | **x402 Gateway** | REST (Layer 0 & 2) | Dynamic HTTP 402 negotiation gateway, SHA-256 Proof-of-Work (PoW) Sybil/anti-spam shield, Rubinstein-Ståhl bilateral bargaining engine, and AST contract compilation. | `GET /api/v1/mesh/health`<br />`POST /api/v1/mesh/negotiate`<br />`GET /api/v1/mesh/challenge` |
+| **`localhost:4001`** | **MCP Server** | JSON-RPC 2.0 (Layer 1) | Model Context Protocol tool discovery server for autonomous AI buyer agents (`get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`). | `POST /rpc`<br />`Stdio` pipe |
+| **`localhost:3000`** | **Telemetry Dashboard** | Web / HTTP (Layer 5) | Real-time Next.js 15 web inspector, visual audit trail, dynamic Markdown documentation viewer, and Universal SKU Studio. | `GET /`<br />`GET /overview`<br />`GET /docs/setup` |
+| **`localhost:6333`** | **Qdrant Vector DB** | REST / gRPC (Layer 3) | High-speed vector search engine providing Approximate Nearest Neighbor (ANN) cosine similarity search and sub-300ms out-of-stock vector cart healing. | `GET /healthz`<br />`POST /collections/merchant_catalog/points/search` |
+| **`localhost:6379`** | **Redis State Store** | TCP (Layer 0–4) | Distributed in-memory cache, atomic Lua inventory locking with monotonic fencing tokens, Pub/Sub event bus, and single-use anti-replay nonce ledger. | `PING` (via redis-cli) |
+
+---
+
+## 3. Environment Configuration (`.env`)
+
+Create your `.env` file in `razoragentMesh/`. It is shorter than you might expect: `docker-compose.yml`
+sets each service's port and Redis URL directly, so the only values it interpolates from `.env` are the
+two signing keys and the dashboard's stream URL.
+
+```bash
+# Signing keys. docker-compose passes both into the MCP server, which uses HMAC_SECRET_KEY to sign
+# quotes and MERCHANT_PRIVATE_KEY_HEX to sign cart mandates. Both fall back to development defaults
+# if unset, so the mesh boots without them -- but then every install shares the same keys.
+MERCHANT_PRIVATE_KEY_HEX=ac262c2b5daf3f4272ed052f7b331cbb6152588ae58dfb022f71c7b8a2c45364
+HMAC_SECRET_KEY=dev_hmac_secret_key_change_me
+
+# Where the browser opens the telemetry stream. Only override this if the mandate engine is not on
+# localhost:8000.
+NEXT_PUBLIC_TELEMETRY_SSE_URL=http://localhost:8000/api/v1/telemetry/stream
+```
+
+Running a service outside Docker means supplying what compose would otherwise set:
+
+```bash
+# All three FastAPI services read this; nothing else in the repo reads a Redis setting.
+REDIS_URL=redis://localhost:6379/0
+
+# Read by the MCP server only (packages/mcpServer/src/http/httpAdapter.ts). The FastAPI services
+# take their port from their Dockerfile's uvicorn command, not from the environment.
+PORT=4001
+
+# The dashboard's protocol driver resolves each service from these, falling back to localhost.
+MCP_SERVER_URL=http://localhost:4001
+MANDATE_ENGINE_URL=http://localhost:8000
+X402_GATEWAY_URL=http://localhost:4003
+MERCHANT_API_URL=http://localhost:4002
+
+# x402 Gateway: allows a price-drop callback URL pointing at localhost. Development only.
+ALLOW_LOCALHOST_CALLBACK=true
+```
+
+Every variable above is read by code. Earlier revisions of this guide also listed `TELEMETRY_PORT`,
+`MERCHANT_API_PORT`, `GATEWAY_PORT`, `MCP_SERVER_PORT`, `QDRANT_HOST`, `QDRANT_PORT`,
+`QDRANT_COLLECTION_NAME`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
+`ED25519_PRIVATE_KEY` and `AP2_GATE_DAILY_LIMIT_PAISE`. Nothing read any of them — setting them had
+no effect, and `ED25519_PRIVATE_KEY` in particular looked like the way to supply a signing key while
+the code was reading `MERCHANT_PRIVATE_KEY_HEX`. They have been removed rather than left to mislead.
+
+---
+
+## 4. Bootstrapping with Docker Compose
+
+Start the full 7-service mesh in the background:
+
+```bash
+# From razoragentMesh/ directory
+docker compose up -d --build
+```
+
+### Health Probes & Endpoint Verification
+
+Verify container health across all service ports:
+
+#### 1. Mandate Engine Settlement Probe
+Tests the AP2 settlement coordinator, mandate verification enclave, and GSTR-1 tax calculator:
+
+<ApiEndpoint service="mandateEngine" path="/health" />
+
+```bash
+# cURL
+curl -s http://localhost:8000/health
+```
+
+```javascript
+// Fetch API
+const response = await fetch("http://localhost:8000/health");
+const data = await response.json();
+console.log("Mandate Engine:", data);
+```
+
+#### 2. Merchant Registration API Probe
+Tests the merchant onboarding service, GSTIN validator, and catalog ingestion pipeline:
+
+<ApiEndpoint service="merchantApi" path="/health" />
+
+```bash
+# cURL
+curl -s http://localhost:4002/health
+```
+
+```javascript
+// Fetch API
+const response = await fetch("http://localhost:4002/health");
+const data = await response.json();
+console.log("Merchant API:", data);
+```
+
+#### 3. x402 Dynamic Negotiation Gateway Probe
+Tests the HTTP 402 dynamic negotiation gateway and anti-spam PoW solver. Unlike the other
+services, this gateway namespaces its probe under `/api/v1/mesh/` -- `GET /health` on port 4003
+returns 404:
+
+<ApiEndpoint service="x402Gateway" path="/api/v1/mesh/health" />
+
+```bash
+# cURL
+curl -s http://localhost:4003/api/v1/mesh/health
+```
+
+```javascript
+// Fetch API
+const response = await fetch("http://localhost:4003/api/v1/mesh/health");
+const data = await response.json();
+console.log("x402 Gateway:", data);
+```
+
+#### 4. Qdrant Vector Search Engine Probe (`localhost:6333`)
+Tests the Qdrant ANN vector embedding search engine for sub-300ms cart healing:
+
+```bash
+# cURL
+curl -s http://localhost:6333/healthz
+```
+
+```javascript
+// Fetch API
+const response = await fetch("http://localhost:6333/healthz");
+const data = await response.json();
+console.log("Qdrant Health:", data);
+```
+
+#### 5. Real-Time Telemetry SSE Stream (`localhost:8000`)
+Connects an event listener to the live telemetry event streaming bus:
+
+```bash
+# cURL
+curl -N http://localhost:8000/api/v1/telemetry/stream
+```
+
+```javascript
+// Fetch API / EventSource
+const sse = new EventSource("http://localhost:8000/api/v1/telemetry/stream");
+sse.onmessage = (event) => {
+  console.log("SSE Event Received:", JSON.parse(event.data));
+};
+```
+
+---
+
+## 5. Local Development Mode
+
+To run individual packages on your host machine without Docker:
+
+```bash
+# Start Mandate Engine (Port 8000)
+cd packages/mandateEngine && uvicorn mandateApp:mandateApp --port 8000 --reload
+
+# Start Merchant API (Port 4002)
+cd packages/merchantApi && uvicorn src.merchantApp:merchantApp --port 4002 --reload
+
+# Start x402 Negotiation Gateway (Port 4003)
+cd packages/x402Gateway && uvicorn src.gatewayApp:app --port 4003 --reload
+
+# Start MCP Server (Port 4001)
+cd packages/mcpServer && npm run dev
+
+# Start Telemetry Dashboard (Port 3000)
+cd packages/telemetryDashboard && npm run dev
+```
+

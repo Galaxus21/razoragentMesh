@@ -1,0 +1,2488 @@
+{
+  "entryPoint": "packages/buyerSdkPy/razoragent_buyer_sdk/__init__.py",
+  "exports": [
+    {
+      "constructorParameters": [
+        "privateKeyHex"
+      ],
+      "inheritsFrom": [],
+      "kind": "class",
+      "members": [
+        {
+          "name": "fromPrivateKeyHex",
+          "signature": "fromPrivateKeyHex(privateKeyHex: str) -> 'AgentKeyManager'"
+        },
+        {
+          "name": "fromSeed",
+          "signature": "fromSeed(seedBytes: bytes) -> 'AgentKeyManager'"
+        },
+        {
+          "name": "generate",
+          "signature": "generate() -> 'AgentKeyManager'"
+        },
+        {
+          "name": "generateKeypair",
+          "signature": "generateKeypair() -> 'AgentKeyManager'"
+        },
+        {
+          "name": "getAgentDid",
+          "signature": "getAgentDid(self) -> str"
+        },
+        {
+          "name": "getKeypair",
+          "signature": "getKeypair(self) -> razoragent_buyer_sdk.mandateModels.AgentKeypair"
+        },
+        {
+          "name": "getPrivateKeyHex",
+          "signature": "getPrivateKeyHex(self) -> str"
+        },
+        {
+          "name": "getPublicKeyHex",
+          "signature": "getPublicKeyHex(self) -> str"
+        },
+        {
+          "name": "signCanonicalBytes",
+          "signature": "signCanonicalBytes(self, canonicalBytes: bytes) -> str"
+        },
+        {
+          "name": "signPayload",
+          "signature": "signPayload(self, payload: Any) -> str"
+        },
+        {
+          "name": "verifyPayloadSignature",
+          "signature": "verifyPayloadSignature(publicKeyHex: str, payload: Any, signatureHex: str, raiseOnFailure: bool = False) -> bool"
+        },
+        {
+          "name": "verifySignature",
+          "signature": "verifySignature(publicKeyHex: str, canonicalBytes: bytes, signatureHex: str, raiseOnFailure: bool = False) -> bool"
+        }
+      ],
+      "name": "AgentKeyManager",
+      "signature": "AgentKeyManager(privateKeyHex: str) -> None"
+    },
+    {
+      "constructorParameters": [
+        "agentDid",
+        "privateKeyHex",
+        "publicKeyHex"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "agentDid",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "privateKeyHex",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "publicKeyHex",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "AgentKeypair",
+      "signature": "AgentKeypair(*, privateKeyHex: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)], publicKeyHex: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)], agentDid: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')]) -> None"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "class",
+      "members": [
+        {
+          "name": "computeHash",
+          "signature": "computeMandateHash(mandateModel: Any) -> str"
+        },
+        {
+          "name": "createAmendmentMandate",
+          "signature": "createAmendmentMandate(amendmentId: str, buyerKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, merchantKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, previousCartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, newCartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, substitutedSkuMapping: Dict[str, str], priceDeltaPaise: int, amendmentReason: str, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.AmendmentMandate"
+        },
+        {
+          "name": "createCartMandate",
+          "signature": "createCartMandate(cartId: str, merchantKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, merchantGstin: str, merchantStateCode: str, buyerDeliveryPincode: str, buyerDeliveryStateCode: str, items: List[razoragent_buyer_sdk.mandateModels.CartItemSchema], taxableSubtotalPaise: int, taxBreakdown: razoragent_buyer_sdk.mandateModels.TaxBreakdownSchema, shippingPaise: int, discountPaise: int, totalPaise: int, inventoryLockToken: str, inventoryLockExpiresAt: int, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.CartMandate"
+        },
+        {
+          "name": "createExecutionMandate",
+          "signature": "createExecutionMandate(executionId: str, buyerKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, settlementAmountPaise: int, upiCircleToken: str, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.ExecutionMandate"
+        },
+        {
+          "name": "createIntentMandate",
+          "signature": "createIntentMandate(mandateId: str, userKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, delegatedAgentDid: str, maxBudgetPaise: int, upiCircleDelegationToken: str, singleTransactionLimitPaise: int, authorizedCategories: List[str] | None = None, validUntilTimestamp: int | None = None, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.IntentMandate"
+        },
+        {
+          "name": "validateInvariants",
+          "signature": "validateMandateInvariants(intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, executionMandate: razoragent_buyer_sdk.mandateModels.ExecutionMandate, currentTime: int | None = None) -> None"
+        },
+        {
+          "name": "verifyHashChain",
+          "signature": "verifyMandateHashChain(intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, executionMandate: razoragent_buyer_sdk.mandateModels.ExecutionMandate, raiseOnMismatch: bool = True) -> bool"
+        }
+      ],
+      "name": "AgentMandateBuilder",
+      "signature": "AgentMandateBuilder()"
+    },
+    {
+      "constructorParameters": [
+        "agentSignature",
+        "amendmentId",
+        "amendmentReason",
+        "merchantSignature",
+        "newCartMandateHash",
+        "nonce",
+        "previousCartMandateHash",
+        "priceDeltaPaise",
+        "substitutedSkuMapping",
+        "timestamp"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "agentSignature",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "amendmentId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "amendmentReason",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "merchantSignature",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "newCartMandateHash",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "nonce",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "previousCartMandateHash",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "priceDeltaPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "substitutedSkuMapping",
+          "signature": "dict[str, str]"
+        },
+        {
+          "name": "timestamp",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "AmendmentMandate",
+      "signature": "AmendmentMandate(*, amendmentId: Annotated[str, MinLen(min_length=1)], previousCartMandateHash: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)], newCartMandateHash: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)], substitutedSkuMapping: dict[str, str] = <factory>, priceDeltaPaise: int, amendmentReason: Annotated[str, MinLen(min_length=1), MaxLen(max_length=200)], nonce: Annotated[str, MinLen(min_length=1)], timestamp: Annotated[int, Gt(gt=0)], agentSignature: Annotated[str, MinLen(min_length=128), MaxLen(max_length=128)], merchantSignature: Annotated[str, MinLen(min_length=128), MaxLen(max_length=128)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "discountBps",
+        "discountPaise",
+        "label",
+        "type"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "discountBps",
+          "signature": "int | None"
+        },
+        {
+          "name": "discountPaise",
+          "signature": "int | None"
+        },
+        {
+          "name": "label",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "type",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "AppliedDiscountItem",
+      "signature": "AppliedDiscountItem(*, type: Annotated[str, MinLen(min_length=1)], label: Annotated[str, MinLen(min_length=1)], discountBps: Annotated[int | None, Ge(ge=0)] = None, discountPaise: Annotated[int | None, Ge(ge=0)] = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "ArithmeticDriftError",
+      "signature": "ArithmeticDriftError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "ArithmeticDriftException",
+      "signature": "ArithmeticDriftError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "BuyerSdkError",
+      "signature": "BuyerSdkError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "BuyerSdkException",
+      "signature": "BuyerSdkError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "gstRatePercent",
+        "hsnCode",
+        "lineTotalPaise",
+        "quantity",
+        "skuId",
+        "unitPricePaise"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "gstRatePercent",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "hsnCode",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "lineTotalPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "quantity",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "skuId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "unitPricePaise",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "CartItemSchema",
+      "signature": "CartItemSchema(*, skuId: Annotated[str, MinLen(min_length=1)], quantity: Annotated[int, Gt(gt=0)], unitPricePaise: Annotated[int, Gt(gt=0)], hsnCode: Annotated[str, _PydanticGeneralMetadata(pattern='^[0-9]{4,8}$')], gstRatePercent: Annotated[int, Ge(ge=0), Le(le=28)], lineTotalPaise: Annotated[int, Gt(gt=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "buyerDeliveryPincode",
+        "buyerDeliveryStateCode",
+        "cartId",
+        "discountPaise",
+        "inventoryLockExpiresAt",
+        "inventoryLockToken",
+        "items",
+        "merchantDid",
+        "merchantGstin",
+        "merchantSignature",
+        "merchantStateCode",
+        "nonce",
+        "shippingPaise",
+        "taxBreakdown",
+        "taxableSubtotalPaise",
+        "timestamp",
+        "totalPaise"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "buyerDeliveryPincode",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "buyerDeliveryStateCode",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "cartId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "discountPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "inventoryLockExpiresAt",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "inventoryLockToken",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "items",
+          "signature": "list[razoragent_buyer_sdk.mandateModels.CartItemSchema]"
+        },
+        {
+          "name": "merchantDid",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "merchantGstin",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "merchantSignature",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "merchantStateCode",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "nonce",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "shippingPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "taxBreakdown",
+          "signature": "<class 'razoragent_buyer_sdk.mandateModels.TaxBreakdownSchema'>"
+        },
+        {
+          "name": "taxableSubtotalPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "timestamp",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalPaise",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "CartMandate",
+      "signature": "CartMandate(*, cartId: Annotated[str, MinLen(min_length=1)], merchantDid: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], merchantGstin: Annotated[str, MinLen(min_length=15), MaxLen(max_length=15)], merchantStateCode: Annotated[str, MinLen(min_length=2), MaxLen(max_length=2)], buyerDeliveryPincode: Annotated[str, MinLen(min_length=6), MaxLen(max_length=6)], buyerDeliveryStateCode: Annotated[str, MinLen(min_length=2), MaxLen(max_length=2)], items: Annotated[list[razoragent_buyer_sdk.mandateModels.CartItemSchema], MinLen(min_length=1)], taxableSubtotalPaise: Annotated[int, Gt(gt=0)], taxBreakdown: razoragent_buyer_sdk.mandateModels.TaxBreakdownSchema, shippingPaise: Annotated[int, Ge(ge=0)] = 0, discountPaise: Annotated[int, Ge(ge=0)] = 0, totalPaise: Annotated[int, Gt(gt=0)], inventoryLockToken: Annotated[str, MinLen(min_length=1)], inventoryLockExpiresAt: Annotated[int, Gt(gt=0)], nonce: Annotated[str, MinLen(min_length=1)], timestamp: Annotated[int, Gt(gt=0)], merchantSignature: Annotated[str, MinLen(min_length=128), MaxLen(max_length=128)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "CryptographicVerificationError",
+      "signature": "CryptographicVerificationError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "CryptographicVerificationException",
+      "signature": "CryptographicVerificationError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "refundAmountPaise",
+        "sessionToken",
+        "status"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "refundAmountPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "sessionToken",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "status",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "EscrowRefundReceipt",
+      "signature": "EscrowRefundReceipt(*, sessionToken: Annotated[str, MinLen(min_length=1)], refundAmountPaise: Annotated[int, Ge(ge=0)], status: str = 'refunded') -> None"
+    },
+    {
+      "constructorParameters": [
+        "balancePaise",
+        "buyerAgentDid",
+        "expiresAtUnix",
+        "sessionToken"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "balancePaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "buyerAgentDid",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "expiresAtUnix",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "sessionToken",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "EscrowSession",
+      "signature": "EscrowSession(*, sessionToken: Annotated[str, MinLen(min_length=1)], buyerAgentDid: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], balancePaise: Annotated[int, Ge(ge=0)], expiresAtUnix: Annotated[int, Gt(gt=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "cartMandate",
+        "executionMandate",
+        "intentMandate",
+        "merchantAccount",
+        "metadata",
+        "paymentId",
+        "serverTime"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "cartMandate",
+          "signature": "<class 'razoragent_buyer_sdk.mandateModels.CartMandate'>"
+        },
+        {
+          "name": "executionMandate",
+          "signature": "<class 'razoragent_buyer_sdk.mandateModels.ExecutionMandate'>"
+        },
+        {
+          "name": "intentMandate",
+          "signature": "<class 'razoragent_buyer_sdk.mandateModels.IntentMandate'>"
+        },
+        {
+          "name": "merchantAccount",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "metadata",
+          "signature": "dict[str, typing.Any]"
+        },
+        {
+          "name": "paymentId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "serverTime",
+          "signature": "int | None"
+        }
+      ],
+      "name": "ExecuteSettlementRequestSchema",
+      "signature": "ExecuteSettlementRequestSchema(*, intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, executionMandate: razoragent_buyer_sdk.mandateModels.ExecutionMandate, merchantAccount: Annotated[str, MinLen(min_length=1)], paymentId: Annotated[str, MinLen(min_length=1)], serverTime: int | None = None, metadata: dict[str, typing.Any] = <factory>) -> None"
+    },
+    {
+      "constructorParameters": [
+        "agentSignature",
+        "buyerAgentDid",
+        "cartMandateHash",
+        "currency",
+        "executionId",
+        "intentMandateHash",
+        "nonce",
+        "settlementAmountPaise",
+        "timestamp",
+        "upiCircleToken"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "agentSignature",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "buyerAgentDid",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "cartMandateHash",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "currency",
+          "signature": "typing.Literal['INR']"
+        },
+        {
+          "name": "executionId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "intentMandateHash",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "nonce",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "settlementAmountPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "timestamp",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "upiCircleToken",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "ExecutionMandate",
+      "signature": "ExecutionMandate(*, executionId: Annotated[str, MinLen(min_length=1)], buyerAgentDid: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], intentMandateHash: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)], cartMandateHash: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)], settlementAmountPaise: Annotated[int, Gt(gt=0)], currency: Literal['INR'] = 'INR', upiCircleToken: Annotated[str, MinLen(min_length=1)], nonce: Annotated[str, MinLen(min_length=1)], timestamp: Annotated[int, Gt(gt=0)], agentSignature: Annotated[str, MinLen(min_length=128), MaxLen(max_length=128)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "cryptographicAuditHash",
+        "discountPaise",
+        "grandTotalPaise",
+        "invoiceDate",
+        "invoiceNumber",
+        "isIntraState",
+        "lineItems",
+        "merchantStateCode",
+        "placeOfSupplyStateCode",
+        "sellerGstin",
+        "shippingPaise",
+        "taxableAmountPaise",
+        "totalCgstPaise",
+        "totalIgstPaise",
+        "totalSgstPaise",
+        "totalTaxPaise",
+        "totalTcsPaise"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "cryptographicAuditHash",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "discountPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "grandTotalPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "invoiceDate",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "invoiceNumber",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "isIntraState",
+          "signature": "<class 'bool'>"
+        },
+        {
+          "name": "lineItems",
+          "signature": "list[razoragent_buyer_sdk.transportModels.GstrLineItem]"
+        },
+        {
+          "name": "merchantStateCode",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "placeOfSupplyStateCode",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "sellerGstin",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "shippingPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "taxableAmountPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalCgstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalIgstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalSgstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalTaxPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalTcsPaise",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "GstrInvoicePayload",
+      "signature": "GstrInvoicePayload(*, invoiceNumber: Annotated[str, MinLen(min_length=1)], invoiceDate: Annotated[str, MinLen(min_length=1)], sellerGstin: Annotated[str, MinLen(min_length=15), MaxLen(max_length=15)], merchantStateCode: Annotated[str, MinLen(min_length=2), MaxLen(max_length=2)], placeOfSupplyStateCode: Annotated[str, MinLen(min_length=2), MaxLen(max_length=2)], isIntraState: bool, lineItems: Annotated[list[razoragent_buyer_sdk.transportModels.GstrLineItem], MinLen(min_length=1)], taxableAmountPaise: Annotated[int, Gt(gt=0)], totalCgstPaise: Annotated[int, Ge(ge=0)], totalSgstPaise: Annotated[int, Ge(ge=0)], totalIgstPaise: Annotated[int, Ge(ge=0)], totalTaxPaise: Annotated[int, Ge(ge=0)], totalTcsPaise: Annotated[int, Ge(ge=0)], shippingPaise: Annotated[int, Ge(ge=0)] = 0, discountPaise: Annotated[int, Ge(ge=0)] = 0, grandTotalPaise: Annotated[int, Gt(gt=0)], cryptographicAuditHash: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "cgstPaise",
+        "gstRatePercent",
+        "hsnCode",
+        "igstPaise",
+        "quantity",
+        "sgstPaise",
+        "skuId",
+        "taxableAmountPaise",
+        "totalLinePaise",
+        "unitPricePaise"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "cgstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "gstRatePercent",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "hsnCode",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "igstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "quantity",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "sgstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "skuId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "taxableAmountPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalLinePaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "unitPricePaise",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "GstrLineItem",
+      "signature": "GstrLineItem(*, skuId: Annotated[str, MinLen(min_length=1)], hsnCode: Annotated[str, _PydanticGeneralMetadata(pattern='^[0-9]{4,8}$')], quantity: Annotated[int, Gt(gt=0)], unitPricePaise: Annotated[int, Gt(gt=0)], taxableAmountPaise: Annotated[int, Gt(gt=0)], gstRatePercent: Annotated[int, Ge(ge=0), Le(le=28)], cgstPaise: Annotated[int, Ge(ge=0)], sgstPaise: Annotated[int, Ge(ge=0)], igstPaise: Annotated[int, Ge(ge=0)], totalLinePaise: Annotated[int, Gt(gt=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "challengeToken",
+        "powDifficultyZeros",
+        "statusCode",
+        "tokenCostPaise",
+        "wwwAuthenticate"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "challengeToken",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "powDifficultyZeros",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "statusCode",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "tokenCostPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "wwwAuthenticate",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "Http402ChallengeResponse",
+      "signature": "PoWChallenge(*, statusCode: int = 402, wwwAuthenticate: str = 'x402-INR', challengeToken: Annotated[str, MinLen(min_length=1)], tokenCostPaise: Annotated[int, Ge(ge=0)] = 50, powDifficultyZeros: Annotated[int, Ge(ge=1)] = 4) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "challengeToken",
+        "difficulty"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "Http402RequiredError",
+      "signature": "Http402RequiredError(message: str, challengeToken: str | None = None, difficulty: int | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "challengeToken",
+        "difficulty"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "Http402RequiredException",
+      "signature": "Http402RequiredError(message: str, challengeToken: str | None = None, difficulty: int | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "InsufficientEscrowError",
+      "signature": "InsufficientEscrowError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "InsufficientEscrowException",
+      "signature": "InsufficientEscrowError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "authorizedCategories",
+        "currency",
+        "delegatedAgentDid",
+        "mandateId",
+        "maxBudgetPaise",
+        "nonce",
+        "singleTransactionLimitPaise",
+        "timestamp",
+        "upiCircleDelegationToken",
+        "userDid",
+        "userSignature",
+        "validUntilTimestamp"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "authorizedCategories",
+          "signature": "list[str]"
+        },
+        {
+          "name": "currency",
+          "signature": "typing.Literal['INR']"
+        },
+        {
+          "name": "delegatedAgentDid",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "mandateId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "maxBudgetPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "nonce",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "singleTransactionLimitPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "timestamp",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "upiCircleDelegationToken",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "userDid",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "userSignature",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "validUntilTimestamp",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "IntentMandate",
+      "signature": "IntentMandate(*, mandateId: Annotated[str, MinLen(min_length=1)], userDid: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], delegatedAgentDid: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], maxBudgetPaise: Annotated[int, Gt(gt=0)], currency: Literal['INR'] = 'INR', authorizedCategories: list[str] = <factory>, validUntilTimestamp: Annotated[int, Gt(gt=0)], upiCircleDelegationToken: Annotated[str, MinLen(min_length=1)], singleTransactionLimitPaise: Annotated[int, Gt(gt=0)], nonce: Annotated[str, MinLen(min_length=1)], timestamp: Annotated[int, Gt(gt=0)], userSignature: Annotated[str, MinLen(min_length=128), MaxLen(max_length=128)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "InvalidDidError",
+      "signature": "InvalidDidError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "InvalidDidException",
+      "signature": "InvalidDidError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "buyer_agent_id",
+        "lock_ttl_seconds",
+        "quantity",
+        "quote_hash",
+        "sku_id"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "buyer_agent_id",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "lock_ttl_seconds",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "quantity",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "quote_hash",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "sku_id",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "InventoryLockRequest",
+      "signature": "InventoryLockRequest(*, sku_id: Annotated[str, MinLen(min_length=1)], quantity: Annotated[int, Gt(gt=0)], lock_ttl_seconds: Annotated[int, Ge(ge=10), Le(le=300)] = 60, buyer_agent_id: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], quote_hash: Annotated[str, MinLen(min_length=1)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "expires_at_unix_ms",
+        "fencing_token",
+        "lock_token",
+        "quantity_locked",
+        "signature",
+        "sku_id"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "expires_at_unix_ms",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "fencing_token",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "lock_token",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "quantity_locked",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "signature",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "sku_id",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "InventoryLockResponse",
+      "signature": "InventoryLockResponse(*, lock_token: Annotated[str, MinLen(min_length=1)], fencing_token: Annotated[int, Gt(gt=0)], sku_id: Annotated[str, MinLen(min_length=1)], quantity_locked: Annotated[int, Gt(gt=0)], expires_at_unix_ms: Annotated[int, Gt(gt=0)], signature: Annotated[str, MinLen(min_length=1)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "MandateHashChainMismatchException",
+      "signature": "MandateHashMismatchError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "MandateHashMismatchError",
+      "signature": "MandateHashMismatchError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "MandateHashMismatchException",
+      "signature": "MandateHashMismatchError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "MandateValidationError",
+      "signature": "MandateValidationError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "MandateValidationException",
+      "signature": "MandateValidationError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "autoSolvePow",
+        "defaultPowDifficulty",
+        "gatewayBaseUrl",
+        "maxDeliveryHoursSla",
+        "maxRetries",
+        "mcpBaseUrl",
+        "merchantApiBaseUrl",
+        "minSavingsThresholdPaise",
+        "timeoutSeconds",
+        "x402GatewayBaseUrl"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "autoSolvePow",
+          "signature": "<class 'bool'>"
+        },
+        {
+          "name": "defaultPowDifficulty",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "gatewayBaseUrl",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "maxDeliveryHoursSla",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "maxRetries",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "mcpBaseUrl",
+          "signature": "str | None"
+        },
+        {
+          "name": "merchantApiBaseUrl",
+          "signature": "str | None"
+        },
+        {
+          "name": "minSavingsThresholdPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "timeoutSeconds",
+          "signature": "<class 'float'>"
+        },
+        {
+          "name": "x402GatewayBaseUrl",
+          "signature": "str | None"
+        }
+      ],
+      "name": "MeshSlaConfig",
+      "signature": "MeshSlaConfig(*, gatewayBaseUrl: str = 'http://127.0.0.1:8000', mcpBaseUrl: str | None = 'http://127.0.0.1:4001', merchantApiBaseUrl: str | None = 'http://127.0.0.1:4002', x402GatewayBaseUrl: str | None = 'http://127.0.0.1:4003', timeoutSeconds: Annotated[float, Gt(gt=0)] = 30.0, maxRetries: Annotated[int, Ge(ge=0)] = 3, autoSolvePow: bool = True, defaultPowDifficulty: Annotated[int, Ge(ge=1)] = 4, maxDeliveryHoursSla: Annotated[int, Gt(gt=0)] = 24, minSavingsThresholdPaise: Annotated[int, Ge(ge=0)] = 1000) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "statusCode",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "NetworkClientError",
+      "signature": "NetworkClientError(message: str, statusCode: int | None = None, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "challengeToken",
+        "powDifficultyZeros",
+        "statusCode",
+        "tokenCostPaise",
+        "wwwAuthenticate"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "challengeToken",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "powDifficultyZeros",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "statusCode",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "tokenCostPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "wwwAuthenticate",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "PoWChallenge",
+      "signature": "PoWChallenge(*, statusCode: int = 402, wwwAuthenticate: str = 'x402-INR', challengeToken: Annotated[str, MinLen(min_length=1)], tokenCostPaise: Annotated[int, Ge(ge=0)] = 50, powDifficultyZeros: Annotated[int, Ge(ge=1)] = 4) -> None"
+    },
+    {
+      "constructorParameters": [
+        "attemptsCount",
+        "computedDigest",
+        "elapsedTimeMs",
+        "isValid",
+        "nonce"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "attemptsCount",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "computedDigest",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "elapsedTimeMs",
+          "signature": "<class 'float'>"
+        },
+        {
+          "name": "isValid",
+          "signature": "<class 'bool'>"
+        },
+        {
+          "name": "nonce",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "PoWSolution",
+      "signature": "PoWSolution(*, nonce: Annotated[int, Ge(ge=0)], computedDigest: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)], attemptsCount: Annotated[int, Ge(ge=0)] = 0, elapsedTimeMs: Annotated[float, Ge(ge=0.0)] = 0.0, isValid: bool = True) -> None"
+    },
+    {
+      "constructorParameters": [
+        "attemptsCount",
+        "computedDigest",
+        "elapsedTimeMs",
+        "isValid",
+        "nonce"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "attemptsCount",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "computedDigest",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "elapsedTimeMs",
+          "signature": "<class 'float'>"
+        },
+        {
+          "name": "isValid",
+          "signature": "<class 'bool'>"
+        },
+        {
+          "name": "nonce",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "PowSolutionResult",
+      "signature": "PoWSolution(*, nonce: Annotated[int, Ge(ge=0)], computedDigest: Annotated[str, MinLen(min_length=64), MaxLen(max_length=64)], attemptsCount: Annotated[int, Ge(ge=0)] = 0, elapsedTimeMs: Annotated[float, Ge(ge=0.0)] = 0.0, isValid: bool = True) -> None"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "class",
+      "members": [
+        {
+          "name": "createHeaders",
+          "signature": "createHeaders(challengeToken: str, nonce: int, escrowToken: str | None = None, buyerAgentDid: str | None = None) -> Dict[str, str]"
+        },
+        {
+          "name": "solve",
+          "signature": "solve(challengeToken: str, difficultyZeros: int = 4, maxIterations: int = 10000000) -> int"
+        },
+        {
+          "name": "solveWithMetrics",
+          "signature": "solveWithMetrics(challengeToken: str, difficultyZeros: int = 4, maxIterations: int = 10000000) -> razoragent_buyer_sdk.transportModels.PoWSolution"
+        },
+        {
+          "name": "verify",
+          "signature": "verify(challengeToken: str, nonce: int, difficultyZeros: int = 4) -> bool"
+        }
+      ],
+      "name": "PowSolver",
+      "signature": "PowSolver()"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "PowSolverError",
+      "signature": "PowSolverError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "alertId",
+        "status"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "alertId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "status",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "PriceDropAlertCancelResponse",
+      "signature": "PriceDropAlertCancelResponse(*, alertId: Annotated[str, MinLen(min_length=1)], status: str = 'cancelled') -> None"
+    },
+    {
+      "constructorParameters": [
+        "buyerAgentId",
+        "callbackUrl",
+        "expiresAtUnix",
+        "skuId",
+        "targetPricePaise"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "buyerAgentId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "callbackUrl",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "expiresAtUnix",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "skuId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "targetPricePaise",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "PriceDropAlertRegisterRequest",
+      "signature": "PriceDropAlertRegisterRequest(*, skuId: Annotated[str, MinLen(min_length=1)], targetPricePaise: Annotated[int, Gt(gt=0)], callbackUrl: Annotated[str, MinLen(min_length=1)], buyerAgentId: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], expiresAtUnix: Annotated[int, Gt(gt=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "alertId",
+        "expiresAtUnix",
+        "skuId",
+        "status",
+        "targetPricePaise"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "alertId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "expiresAtUnix",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "skuId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "status",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "targetPricePaise",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "PriceDropAlertResponse",
+      "signature": "PriceDropAlertResponse(*, alertId: Annotated[str, MinLen(min_length=1)], skuId: Annotated[str, MinLen(min_length=1)], targetPricePaise: Annotated[int, Gt(gt=0)], status: str = 'active', expiresAtUnix: Annotated[int, Gt(gt=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "ProofOfWorkException",
+      "signature": "PowSolverError(message: str, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "cgst_paise",
+        "igst_paise",
+        "sgst_paise",
+        "total_tax_paise"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "cgst_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "igst_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "sgst_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "total_tax_paise",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "QuoteTaxBreakdown",
+      "signature": "QuoteTaxBreakdown(*, cgst_paise: Annotated[int, Ge(ge=0)] = 0, sgst_paise: Annotated[int, Ge(ge=0)] = 0, igst_paise: Annotated[int, Ge(ge=0)] = 0, total_tax_paise: Annotated[int, Ge(ge=0)] = 0) -> None"
+    },
+    {
+      "constructorParameters": [
+        "config",
+        "keyManager",
+        "httpClient"
+      ],
+      "inheritsFrom": [],
+      "kind": "class",
+      "members": [
+        {
+          "name": "cancelPriceDropAlert",
+          "signature": "cancelPriceDropAlert(self, alertId: str) -> razoragent_buyer_sdk.transportModels.PriceDropAlertCancelResponse"
+        },
+        {
+          "name": "createEscrowSession",
+          "signature": "createEscrowSession(self, initialHoldPaise: int = 5000) -> razoragent_buyer_sdk.transportModels.EscrowSession"
+        },
+        {
+          "name": "executeSettlement",
+          "signature": "executeSettlement(self, intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, executionMandate: razoragent_buyer_sdk.mandateModels.ExecutionMandate, merchantAccount: str, paymentId: str, serverTime: int | None = None, metadata: Dict[str, Any] | None = None) -> razoragent_buyer_sdk.transportModels.SettlementResult"
+        },
+        {
+          "name": "getAgentDid",
+          "signature": "getAgentDid(self) -> str"
+        },
+        {
+          "name": "getKeyManager",
+          "signature": "getKeyManager(self) -> razoragent_buyer_sdk.agentKeyManager.AgentKeyManager"
+        },
+        {
+          "name": "getLiveSkuQuote",
+          "signature": "getLiveSkuQuote(self, skuId: str, quantity: int = 1, deliveryPincode: str = '560001', promoCode: str | None = None, buyerAgentDid: str | None = None) -> razoragent_buyer_sdk.transportModels.SkuQuote"
+        },
+        {
+          "name": "getPowChallenge",
+          "signature": "getPowChallenge(self) -> razoragent_buyer_sdk.transportModels.PoWChallenge"
+        },
+        {
+          "name": "handlePriceDropAlert",
+          "signature": "handlePriceDropAlert(self, skuId: str, targetPricePaise: int, callbackUrl: str, expiresAtUnix: int, buyerAgentId: str | None = None) -> razoragent_buyer_sdk.transportModels.PriceDropAlertResponse"
+        },
+        {
+          "name": "registerPriceDropAlert",
+          "signature": "handlePriceDropAlert(self, skuId: str, targetPricePaise: int, callbackUrl: str, expiresAtUnix: int, buyerAgentId: str | None = None) -> razoragent_buyer_sdk.transportModels.PriceDropAlertResponse"
+        },
+        {
+          "name": "releaseEscrow",
+          "signature": "releaseEscrow(self, sessionToken: str) -> razoragent_buyer_sdk.transportModels.EscrowRefundReceipt"
+        },
+        {
+          "name": "reserveInventoryLock",
+          "signature": "reserveInventoryLock(self, skuId: str, quantity: int = 1, lockTtlSeconds: int = 60, quoteHash: str | None = None, buyerAgentDid: str | None = None, autoSolvePow: bool | None = None) -> razoragent_buyer_sdk.transportModels.InventoryLockResponse"
+        }
+      ],
+      "name": "RazorAgentClient",
+      "signature": "RazorAgentClient(config: razoragent_buyer_sdk.transportModels.MeshSlaConfig | None = None, keyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager | None = None, httpClient: httpx.AsyncClient | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "autoSolvePow",
+        "defaultPowDifficulty",
+        "gatewayBaseUrl",
+        "maxDeliveryHoursSla",
+        "maxRetries",
+        "mcpBaseUrl",
+        "merchantApiBaseUrl",
+        "minSavingsThresholdPaise",
+        "timeoutSeconds",
+        "x402GatewayBaseUrl"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "autoSolvePow",
+          "signature": "<class 'bool'>"
+        },
+        {
+          "name": "defaultPowDifficulty",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "gatewayBaseUrl",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "maxDeliveryHoursSla",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "maxRetries",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "mcpBaseUrl",
+          "signature": "str | None"
+        },
+        {
+          "name": "merchantApiBaseUrl",
+          "signature": "str | None"
+        },
+        {
+          "name": "minSavingsThresholdPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "timeoutSeconds",
+          "signature": "<class 'float'>"
+        },
+        {
+          "name": "x402GatewayBaseUrl",
+          "signature": "str | None"
+        }
+      ],
+      "name": "RazorAgentClientConfig",
+      "signature": "MeshSlaConfig(*, gatewayBaseUrl: str = 'http://127.0.0.1:8000', mcpBaseUrl: str | None = 'http://127.0.0.1:4001', merchantApiBaseUrl: str | None = 'http://127.0.0.1:4002', x402GatewayBaseUrl: str | None = 'http://127.0.0.1:4003', timeoutSeconds: Annotated[float, Gt(gt=0)] = 30.0, maxRetries: Annotated[int, Ge(ge=0)] = 3, autoSolvePow: bool = True, defaultPowDifficulty: Annotated[int, Ge(ge=1)] = 4, maxDeliveryHoursSla: Annotated[int, Gt(gt=0)] = 24, minSavingsThresholdPaise: Annotated[int, Ge(ge=0)] = 1000) -> None"
+    },
+    {
+      "constructorParameters": [
+        "account",
+        "amount",
+        "createdAt",
+        "currency",
+        "entity",
+        "id",
+        "status"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "account",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "amount",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "createdAt",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "currency",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "entity",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "id",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "status",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "RouteTransferResponse",
+      "signature": "RouteTransferResponse(*, id: Annotated[str, MinLen(min_length=1)], entity: str = 'transfer', account: Annotated[str, MinLen(min_length=1)], amount: Annotated[int, Gt(gt=0)], currency: str = 'INR', status: str = 'processed', createdAt: Annotated[int, Gt(gt=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "statusCode",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "SettlementError",
+      "signature": "SettlementError(message: str, statusCode: int | None = None, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "message",
+        "statusCode",
+        "details"
+      ],
+      "inheritsFrom": [
+        "builtins.Exception",
+        "builtins.BaseException"
+      ],
+      "kind": "class",
+      "members": [],
+      "name": "SettlementExecutionException",
+      "signature": "SettlementError(message: str, statusCode: int | None = None, details: dict | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "cartMandate",
+        "executionMandate",
+        "intentMandate",
+        "merchantAccount",
+        "metadata",
+        "paymentId",
+        "serverTime"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "cartMandate",
+          "signature": "<class 'razoragent_buyer_sdk.mandateModels.CartMandate'>"
+        },
+        {
+          "name": "executionMandate",
+          "signature": "<class 'razoragent_buyer_sdk.mandateModels.ExecutionMandate'>"
+        },
+        {
+          "name": "intentMandate",
+          "signature": "<class 'razoragent_buyer_sdk.mandateModels.IntentMandate'>"
+        },
+        {
+          "name": "merchantAccount",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "metadata",
+          "signature": "dict[str, typing.Any]"
+        },
+        {
+          "name": "paymentId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "serverTime",
+          "signature": "int | None"
+        }
+      ],
+      "name": "SettlementRequest",
+      "signature": "ExecuteSettlementRequestSchema(*, intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, executionMandate: razoragent_buyer_sdk.mandateModels.ExecutionMandate, merchantAccount: Annotated[str, MinLen(min_length=1)], paymentId: Annotated[str, MinLen(min_length=1)], serverTime: int | None = None, metadata: dict[str, typing.Any] = <factory>) -> None"
+    },
+    {
+      "constructorParameters": [
+        "amountPaise",
+        "invoice",
+        "paymentId",
+        "settledAt",
+        "status",
+        "transfers"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "amountPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "invoice",
+          "signature": "<class 'razoragent_buyer_sdk.transportModels.GstrInvoicePayload'>"
+        },
+        {
+          "name": "paymentId",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "settledAt",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "status",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "transfers",
+          "signature": "list[razoragent_buyer_sdk.transportModels.RouteTransferResponse]"
+        }
+      ],
+      "name": "SettlementResult",
+      "signature": "SettlementResult(*, status: str = 'captured', paymentId: Annotated[str, MinLen(min_length=1)], amountPaise: Annotated[int, Gt(gt=0)], transfers: Annotated[list[razoragent_buyer_sdk.transportModels.RouteTransferResponse], MinLen(min_length=1)], invoice: razoragent_buyer_sdk.transportModels.GstrInvoicePayload, settledAt: Annotated[int, Gt(gt=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "applied_discounts",
+        "available_stock",
+        "base_unit_price_paise",
+        "currency",
+        "gst_rate_percent",
+        "hsn_code",
+        "offered_unit_price_paise",
+        "quote_expiry_timestamp",
+        "quote_hash",
+        "sku_id",
+        "tax_breakdown",
+        "total_savings_paise",
+        "upcoming_promotions"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "applied_discounts",
+          "signature": "list[razoragent_buyer_sdk.transportModels.AppliedDiscountItem]"
+        },
+        {
+          "name": "available_stock",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "base_unit_price_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "currency",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "gst_rate_percent",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "hsn_code",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "offered_unit_price_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "quote_expiry_timestamp",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "quote_hash",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "sku_id",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "tax_breakdown",
+          "signature": "<class 'razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown'>"
+        },
+        {
+          "name": "total_savings_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "upcoming_promotions",
+          "signature": "list[razoragent_buyer_sdk.transportModels.UpcomingPromotion]"
+        }
+      ],
+      "name": "SkuQuote",
+      "signature": "SkuQuote(*, sku_id: Annotated[str, MinLen(min_length=1)], available_stock: Annotated[int, Ge(ge=0)], base_unit_price_paise: Annotated[int, Ge(ge=0)], offered_unit_price_paise: Annotated[int, Ge(ge=0)], currency: str = 'INR', hsn_code: Annotated[str, MinLen(min_length=1)], gst_rate_percent: Annotated[int, Ge(ge=0), Le(le=28)], tax_breakdown: razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown, quote_expiry_timestamp: Annotated[int, Gt(gt=0)], quote_hash: Annotated[str, MinLen(min_length=1)], applied_discounts: list[razoragent_buyer_sdk.transportModels.AppliedDiscountItem] = <factory>, total_savings_paise: Annotated[int, Ge(ge=0)] = 0, upcoming_promotions: list[razoragent_buyer_sdk.transportModels.UpcomingPromotion] = <factory>) -> None"
+    },
+    {
+      "constructorParameters": [
+        "buyer_agent_id",
+        "delivery_pincode",
+        "promo_code",
+        "quantity",
+        "sku_id"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "buyer_agent_id",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "delivery_pincode",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "promo_code",
+          "signature": "str | None"
+        },
+        {
+          "name": "quantity",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "sku_id",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "SkuQuoteRequest",
+      "signature": "SkuQuoteRequest(*, sku_id: Annotated[str, MinLen(min_length=1)], quantity: Annotated[int, Gt(gt=0)] = 1, buyer_agent_id: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], delivery_pincode: Annotated[str, MinLen(min_length=6), MaxLen(max_length=6)], promo_code: str | None = None) -> None"
+    },
+    {
+      "constructorParameters": [
+        "applied_discounts",
+        "available_stock",
+        "base_unit_price_paise",
+        "currency",
+        "gst_rate_percent",
+        "hsn_code",
+        "offered_unit_price_paise",
+        "quote_expiry_timestamp",
+        "quote_hash",
+        "sku_id",
+        "tax_breakdown",
+        "total_savings_paise",
+        "upcoming_promotions"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "applied_discounts",
+          "signature": "list[razoragent_buyer_sdk.transportModels.AppliedDiscountItem]"
+        },
+        {
+          "name": "available_stock",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "base_unit_price_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "currency",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "gst_rate_percent",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "hsn_code",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "offered_unit_price_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "quote_expiry_timestamp",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "quote_hash",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "sku_id",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "tax_breakdown",
+          "signature": "<class 'razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown'>"
+        },
+        {
+          "name": "total_savings_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "upcoming_promotions",
+          "signature": "list[razoragent_buyer_sdk.transportModels.UpcomingPromotion]"
+        }
+      ],
+      "name": "SkuQuoteResponse",
+      "signature": "SkuQuote(*, sku_id: Annotated[str, MinLen(min_length=1)], available_stock: Annotated[int, Ge(ge=0)], base_unit_price_paise: Annotated[int, Ge(ge=0)], offered_unit_price_paise: Annotated[int, Ge(ge=0)], currency: str = 'INR', hsn_code: Annotated[str, MinLen(min_length=1)], gst_rate_percent: Annotated[int, Ge(ge=0), Le(le=28)], tax_breakdown: razoragent_buyer_sdk.transportModels.QuoteTaxBreakdown, quote_expiry_timestamp: Annotated[int, Gt(gt=0)], quote_hash: Annotated[str, MinLen(min_length=1)], applied_discounts: list[razoragent_buyer_sdk.transportModels.AppliedDiscountItem] = <factory>, total_savings_paise: Annotated[int, Ge(ge=0)] = 0, upcoming_promotions: list[razoragent_buyer_sdk.transportModels.UpcomingPromotion] = <factory>) -> None"
+    },
+    {
+      "constructorParameters": [
+        "cgstPaise",
+        "igstPaise",
+        "sgstPaise",
+        "totalTaxPaise"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "cgstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "igstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "sgstPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalTaxPaise",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "TaxBreakdownSchema",
+      "signature": "TaxBreakdownSchema(*, cgstPaise: Annotated[int, Ge(ge=0)], sgstPaise: Annotated[int, Ge(ge=0)], igstPaise: Annotated[int, Ge(ge=0)], totalTaxPaise: Annotated[int, Ge(ge=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "account",
+        "amount",
+        "createdAt",
+        "currency",
+        "entity",
+        "id",
+        "status"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "account",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "amount",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "createdAt",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "currency",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "entity",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "id",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "status",
+          "signature": "<class 'str'>"
+        }
+      ],
+      "name": "TransferRecord",
+      "signature": "RouteTransferResponse(*, id: Annotated[str, MinLen(min_length=1)], entity: str = 'transfer', account: Annotated[str, MinLen(min_length=1)], amount: Annotated[int, Gt(gt=0)], currency: str = 'INR', status: str = 'processed', createdAt: Annotated[int, Gt(gt=0)]) -> None"
+    },
+    {
+      "constructorParameters": [
+        "campaign_id",
+        "ends_at_unix",
+        "expected_savings_paise",
+        "expected_unit_price_paise",
+        "limited_stock_allocated",
+        "name",
+        "starts_at_unix"
+      ],
+      "inheritsFrom": [
+        "pydantic.main.BaseModel"
+      ],
+      "kind": "class",
+      "members": [
+        {
+          "name": "campaign_id",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "ends_at_unix",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "expected_savings_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "expected_unit_price_paise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "limited_stock_allocated",
+          "signature": "int | None"
+        },
+        {
+          "name": "name",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "starts_at_unix",
+          "signature": "<class 'int'>"
+        }
+      ],
+      "name": "UpcomingPromotion",
+      "signature": "UpcomingPromotion(*, campaign_id: Annotated[str, MinLen(min_length=1)], name: Annotated[str, MinLen(min_length=1)], starts_at_unix: Annotated[int, Gt(gt=0)], ends_at_unix: Annotated[int, Gt(gt=0)], expected_unit_price_paise: Annotated[int, Ge(ge=0)], expected_savings_paise: Annotated[int, Ge(ge=0)], limited_stock_allocated: Annotated[int | None, Ge(ge=0)] = None) -> None"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "buildPowHeaders",
+      "signature": "buildPowHeaders(challengeToken: str, nonce: int, escrowToken: str | None = None, buyerAgentDid: str | None = None) -> Dict[str, str]"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "canonicalizeAndHash",
+      "signature": "canonicalizeAndHash(payload: Any) -> Tuple[bytes, str]"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "canonicalizeJson",
+      "signature": "canonicalizeJson(payload: Any) -> bytes"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "computeMandateHash",
+      "signature": "computeMandateHash(mandateModel: Any) -> str"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "computeSha256Digest",
+      "signature": "computeSha256Digest(canonicalBytes: bytes) -> str"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "createAmendmentMandate",
+      "signature": "createAmendmentMandate(amendmentId: str, buyerKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, merchantKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, previousCartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, newCartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, substitutedSkuMapping: Dict[str, str], priceDeltaPaise: int, amendmentReason: str, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.AmendmentMandate"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "createCartMandate",
+      "signature": "createCartMandate(cartId: str, merchantKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, merchantGstin: str, merchantStateCode: str, buyerDeliveryPincode: str, buyerDeliveryStateCode: str, items: List[razoragent_buyer_sdk.mandateModels.CartItemSchema], taxableSubtotalPaise: int, taxBreakdown: razoragent_buyer_sdk.mandateModels.TaxBreakdownSchema, shippingPaise: int, discountPaise: int, totalPaise: int, inventoryLockToken: str, inventoryLockExpiresAt: int, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.CartMandate"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "createExecutionMandate",
+      "signature": "createExecutionMandate(executionId: str, buyerKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, settlementAmountPaise: int, upiCircleToken: str, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.ExecutionMandate"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "createIntentMandate",
+      "signature": "createIntentMandate(mandateId: str, userKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, delegatedAgentDid: str, maxBudgetPaise: int, upiCircleDelegationToken: str, singleTransactionLimitPaise: int, authorizedCategories: List[str] | None = None, validUntilTimestamp: int | None = None, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.IntentMandate"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "createSignedAmendmentMandate",
+      "signature": "createAmendmentMandate(amendmentId: str, buyerKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, merchantKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, previousCartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, newCartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, substitutedSkuMapping: Dict[str, str], priceDeltaPaise: int, amendmentReason: str, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.AmendmentMandate"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "createSignedCartMandate",
+      "signature": "createCartMandate(cartId: str, merchantKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, merchantGstin: str, merchantStateCode: str, buyerDeliveryPincode: str, buyerDeliveryStateCode: str, items: List[razoragent_buyer_sdk.mandateModels.CartItemSchema], taxableSubtotalPaise: int, taxBreakdown: razoragent_buyer_sdk.mandateModels.TaxBreakdownSchema, shippingPaise: int, discountPaise: int, totalPaise: int, inventoryLockToken: str, inventoryLockExpiresAt: int, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.CartMandate"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "createSignedExecutionMandate",
+      "signature": "createExecutionMandate(executionId: str, buyerKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, settlementAmountPaise: int, upiCircleToken: str, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.ExecutionMandate"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "createSignedIntentMandate",
+      "signature": "createIntentMandate(mandateId: str, userKeyManager: razoragent_buyer_sdk.agentKeyManager.AgentKeyManager, delegatedAgentDid: str, maxBudgetPaise: int, upiCircleDelegationToken: str, singleTransactionLimitPaise: int, authorizedCategories: List[str] | None = None, validUntilTimestamp: int | None = None, nonce: str | None = None, timestamp: int | None = None) -> razoragent_buyer_sdk.mandateModels.IntentMandate"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "defaultCurrency",
+      "signature": "'INR'"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "defaultIntentValiditySeconds",
+      "signature": "86400"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "defaultLockTtlSeconds",
+      "signature": "60"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "defaultPowDifficulty",
+      "signature": "4"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "didPrefix",
+      "signature": "'did:agent:'"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "extractPublicKeyFromDid",
+      "signature": "extractPublicKeyFromDid(did: str) -> str"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "formatDid",
+      "signature": "formatDid(publicKeyHex: str) -> str"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "generateKeyPair",
+      "signature": "generateKeyPair() -> Tuple[str, str]"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "headerBuyerAgentDid",
+      "signature": "'X-Buyer-Agent-Did'"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "headerEscrowToken",
+      "signature": "'X-Mesh-Escrow-Token'"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "headerPowChallenge",
+      "signature": "'X-Mesh-Pow-Challenge'"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "headerPowSolution",
+      "signature": "'X-Mesh-Pow-Solution'"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "keyHexLength",
+      "signature": "64"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "variable",
+      "members": [],
+      "name": "signatureHexLength",
+      "signature": "128"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "solvePoWChallenge",
+      "signature": "solvePoWChallenge(challengeToken: str, difficultyZeros: int = 4, maxIterations: int = 10000000) -> int"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "solvePoWChallengeWithMetrics",
+      "signature": "solvePoWChallengeWithMetrics(challengeToken: str, difficultyZeros: int = 4, maxIterations: int = 10000000) -> razoragent_buyer_sdk.transportModels.PoWSolution"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "validateMandateInvariants",
+      "signature": "validateMandateInvariants(intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, executionMandate: razoragent_buyer_sdk.mandateModels.ExecutionMandate, currentTime: int | None = None) -> None"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "verifyMandateHashChain",
+      "signature": "verifyMandateHashChain(intentMandate: razoragent_buyer_sdk.mandateModels.IntentMandate, cartMandate: razoragent_buyer_sdk.mandateModels.CartMandate, executionMandate: razoragent_buyer_sdk.mandateModels.ExecutionMandate, raiseOnMismatch: bool = True) -> bool"
+    },
+    {
+      "constructorParameters": [],
+      "inheritsFrom": [],
+      "kind": "function",
+      "members": [],
+      "name": "verifyPoWSolution",
+      "signature": "verifyPoWSolution(challengeToken: str, nonce: int, difficultyZeros: int = 4) -> bool"
+    }
+  ],
+  "inheritedMembers": {
+    "builtins.BaseException": [
+      {
+        "name": "add_note",
+        "signature": "add_note(self, note, /)"
+      },
+      {
+        "name": "args",
+        "signature": "getset_descriptor"
+      },
+      {
+        "name": "with_traceback",
+        "signature": "with_traceback(self, tb, /)"
+      }
+    ],
+    "builtins.Exception": [
+      {
+        "name": "add_note",
+        "signature": "add_note(self, note, /)"
+      },
+      {
+        "name": "args",
+        "signature": "getset_descriptor"
+      },
+      {
+        "name": "with_traceback",
+        "signature": "with_traceback(self, tb, /)"
+      }
+    ],
+    "pydantic.main.BaseModel": [
+      {
+        "name": "construct",
+        "signature": "construct(_fields_set: 'set[str] | None' = None, **values: 'Any') -> 'Self'"
+      },
+      {
+        "name": "copy",
+        "signature": "copy(self, *, include: 'AbstractSetIntStr | MappingIntStrAny | None' = None, exclude: 'AbstractSetIntStr | MappingIntStrAny | None' = None, update: 'Dict[str, Any] | None' = None, deep: 'bool' = False) -> 'Self'"
+      },
+      {
+        "name": "dict",
+        "signature": "dict(self, *, include: 'IncEx | None' = None, exclude: 'IncEx | None' = None, by_alias: 'bool' = False, exclude_unset: 'bool' = False, exclude_defaults: 'bool' = False, exclude_none: 'bool' = False) -> 'Dict[str, Any]'"
+      },
+      {
+        "name": "from_orm",
+        "signature": "from_orm(obj: 'Any') -> 'Self'"
+      },
+      {
+        "name": "json",
+        "signature": "json(self, *, include: 'IncEx | None' = None, exclude: 'IncEx | None' = None, by_alias: 'bool' = False, exclude_unset: 'bool' = False, exclude_defaults: 'bool' = False, exclude_none: 'bool' = False, encoder: 'Callable[[Any], Any] | None' = PydanticUndefined, models_as_dict: 'bool' = PydanticUndefined, **dumps_kwargs: 'Any') -> 'str'"
+      },
+      {
+        "name": "model_computed_fields",
+        "signature": "dict"
+      },
+      {
+        "name": "model_config",
+        "signature": "dict"
+      },
+      {
+        "name": "model_construct",
+        "signature": "model_construct(_fields_set: 'set[str] | None' = None, **values: 'Any') -> 'Self'"
+      },
+      {
+        "name": "model_copy",
+        "signature": "model_copy(self, *, update: 'Mapping[str, Any] | None' = None, deep: 'bool' = False) -> 'Self'"
+      },
+      {
+        "name": "model_dump",
+        "signature": "model_dump(self, *, mode: \"Literal['json', 'python'] | str\" = 'python', include: 'IncEx | None' = None, exclude: 'IncEx | None' = None, context: 'Any | None' = None, by_alias: 'bool | None' = None, exclude_unset: 'bool' = False, exclude_defaults: 'bool' = False, exclude_none: 'bool' = False, exclude_computed_fields: 'bool' = False, round_trip: 'bool' = False, warnings: \"bool | Literal['none', 'warn', 'error']\" = True, fallback: 'Callable[[Any], Any] | None' = None, serialize_as_any: 'bool' = False, polymorphic_serialization: 'bool | None' = None) -> 'dict[str, Any]'"
+      },
+      {
+        "name": "model_dump_json",
+        "signature": "model_dump_json(self, *, indent: 'int | None' = None, ensure_ascii: 'bool' = False, include: 'IncEx | None' = None, exclude: 'IncEx | None' = None, context: 'Any | None' = None, by_alias: 'bool | None' = None, exclude_unset: 'bool' = False, exclude_defaults: 'bool' = False, exclude_none: 'bool' = False, exclude_computed_fields: 'bool' = False, round_trip: 'bool' = False, warnings: \"bool | Literal['none', 'warn', 'error']\" = True, fallback: 'Callable[[Any], Any] | None' = None, serialize_as_any: 'bool' = False, polymorphic_serialization: 'bool | None' = None) -> 'str'"
+      },
+      {
+        "name": "model_extra",
+        "signature": "property"
+      },
+      {
+        "name": "model_fields",
+        "signature": "dict"
+      },
+      {
+        "name": "model_fields_set",
+        "signature": "property"
+      },
+      {
+        "name": "model_json_schema",
+        "signature": "model_json_schema(by_alias: 'bool' = True, ref_template: 'str' = '#/$defs/{model}', schema_generator: 'type[GenerateJsonSchema]' = <class 'pydantic.json_schema.GenerateJsonSchema'>, mode: 'JsonSchemaMode' = 'validation', *, union_format: \"Literal['any_of', 'primitive_type_array']\" = 'any_of') -> 'dict[str, Any]'"
+      },
+      {
+        "name": "model_parametrized_name",
+        "signature": "model_parametrized_name(params: 'tuple[type[Any], ...]') -> 'str'"
+      },
+      {
+        "name": "model_post_init",
+        "signature": "model_post_init(self, context: 'Any', /) -> 'None'"
+      },
+      {
+        "name": "model_rebuild",
+        "signature": "model_rebuild(*, force: 'bool' = False, raise_errors: 'bool' = True, _parent_namespace_depth: 'int' = 2, _types_namespace: 'MappingNamespace | None' = None) -> 'bool | None'"
+      },
+      {
+        "name": "model_validate",
+        "signature": "model_validate(obj: 'Any', *, strict: 'bool | None' = None, extra: 'ExtraValues | None' = None, from_attributes: 'bool | None' = None, context: 'Any | None' = None, by_alias: 'bool | None' = None, by_name: 'bool | None' = None) -> 'Self'"
+      },
+      {
+        "name": "model_validate_json",
+        "signature": "model_validate_json(json_data: 'str | bytes | bytearray', *, strict: 'bool | None' = None, extra: 'ExtraValues | None' = None, context: 'Any | None' = None, by_alias: 'bool | None' = None, by_name: 'bool | None' = None) -> 'Self'"
+      },
+      {
+        "name": "model_validate_strings",
+        "signature": "model_validate_strings(obj: 'Any', *, strict: 'bool | None' = None, extra: 'ExtraValues | None' = None, context: 'Any | None' = None, by_alias: 'bool | None' = None, by_name: 'bool | None' = None) -> 'Self'"
+      },
+      {
+        "name": "parse_file",
+        "signature": "parse_file(path: 'str | Path', *, content_type: 'str | None' = None, encoding: 'str' = 'utf8', proto: 'DeprecatedParseProtocol | None' = None, allow_pickle: 'bool' = False) -> 'Self'"
+      },
+      {
+        "name": "parse_obj",
+        "signature": "parse_obj(obj: 'Any') -> 'Self'"
+      },
+      {
+        "name": "parse_raw",
+        "signature": "parse_raw(b: 'str | bytes', *, content_type: 'str | None' = None, encoding: 'str' = 'utf8', proto: 'DeprecatedParseProtocol | None' = None, allow_pickle: 'bool' = False) -> 'Self'"
+      },
+      {
+        "name": "schema",
+        "signature": "schema(by_alias: 'bool' = True, ref_template: 'str' = '#/$defs/{model}') -> 'Dict[str, Any]'"
+      },
+      {
+        "name": "schema_json",
+        "signature": "schema_json(*, by_alias: 'bool' = True, ref_template: 'str' = '#/$defs/{model}', **dumps_kwargs: 'Any') -> 'str'"
+      },
+      {
+        "name": "update_forward_refs",
+        "signature": "update_forward_refs(**localns: 'Any') -> 'None'"
+      },
+      {
+        "name": "validate",
+        "signature": "validate(value: 'Any') -> 'Self'"
+      }
+    ]
+  },
+  "packageName": "razoragent_buyer_sdk"
+}
