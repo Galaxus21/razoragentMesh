@@ -1,5 +1,6 @@
 """Adversarial stress tests for AgentKeyManager and JCS canonicalization."""
 
+from typing import Any
 import pytest
 import nacl.signing
 from pydantic import BaseModel

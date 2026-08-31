@@ -1,10 +1,12 @@
 """Adversarial stress tests for RazorAgentClient async transport, retry loops, and error paths."""
 
+from typing import Any
 import httpx
 import pytest
 from razoragent_buyer_sdk import (
     AgentKeyManager,
     CartMandate,
+    ExecutionMandate,
     Http402RequiredError,
     IntentMandate,
     MandateValidationError,

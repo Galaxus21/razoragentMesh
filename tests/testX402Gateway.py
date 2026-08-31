@@ -1,5 +1,6 @@
 """Comprehensive unit and integration tests for Layer 2 x402Gateway."""
 
+from typing import Optional
 import time
 import pytest
 from httpx import ASGITransport, AsyncClient

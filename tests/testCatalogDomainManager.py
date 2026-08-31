@@ -1,5 +1,6 @@
 """Unit test suite for merchantApi catalog manager, Qdrant patcher, and vectorizer."""
 
+from typing import Any
 from decimal import Decimal
 import pytest
 import pytest_asyncio

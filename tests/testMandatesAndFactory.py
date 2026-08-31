@@ -1,5 +1,6 @@
 """Unit tests for Mandate schemas, factory builders, and cryptographic hash chaining."""
 
+from typing import Tuple
 import pytest
 from razoragentMesh.packages.mandateEngine.mandates.amendmentMandateSchema import AmendmentMandate
 from razoragentMesh.packages.mandateEngine.mandates.cartMandateSchema import (
