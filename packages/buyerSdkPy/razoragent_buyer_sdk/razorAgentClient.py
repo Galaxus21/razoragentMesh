@@ -100,22 +100,26 @@ class RazorAgentClient:
     async def getLiveSkuQuote(
         self,
         skuId: str,
+        deliveryPincode: str,
         quantity: int = 1,
-        deliveryPincode: str = "560001",
         promoCode: Optional[str] = None,
         buyerAgentDid: Optional[str] = None,
     ) -> SkuQuote:
         """Discovers product listing and fetches live, dynamic quote."""
         client = self._getClient()
         agentDid = buyerAgentDid or self.getAgentDid()
-        requestModel = SkuQuoteRequest(
-            sku_id=skuId,
-            quantity=quantity,
-            buyer_agent_id=agentDid,
-            delivery_pincode=deliveryPincode,
-            promo_code=promoCode,
-        )
-        resp = await client.post(endpointLiveSkuQuote, json=requestModel.model_dump())
+        # The MCP HTTP face serves quotes as GET with query parameters. This used to POST a body
+        # to /api/v1/quotes/live, a route nothing has ever served, so every call 404'd -- invisible
+        # to the SDK's own suite, which mocks the transport and answers whatever it is asked.
+        queryParameters = {
+            "skuId": skuId,
+            "quantity": str(quantity),
+            "buyerAgentDid": agentDid,
+            "deliveryPincode": deliveryPincode,
+        }
+        if promoCode:
+            queryParameters["promoCode"] = promoCode
+        resp = await client.get(endpointLiveSkuQuote, params=queryParameters)
         if resp.status_code != 200:
             raise NetworkClientError(f"Quote failed with status {resp.status_code}: {resp.text}", resp.status_code)
         return SkuQuote.model_validate(resp.json())
@@ -137,9 +141,9 @@ class RazorAgentClient:
     async def reserveInventoryLock(
         self,
         skuId: str,
+        quoteHash: str,
         quantity: int = 1,
         lockTtlSeconds: int = defaultLockTtlSeconds,
-        quoteHash: Optional[str] = None,
         buyerAgentDid: Optional[str] = None,
         autoSolvePow: Optional[bool] = None,
     ) -> InventoryLockResponse:

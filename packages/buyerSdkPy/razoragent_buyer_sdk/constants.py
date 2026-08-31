@@ -48,8 +48,8 @@ endpointMeshEscrowRelease: str = "/api/v1/mesh/escrow/release"
 endpointMeshNegotiate: str = "/api/v1/mesh/negotiate"
 endpointPriceDropAlerts: str = "/api/v1/alerts/price-drop"
 endpointSettlementExecute: str = "/api/v1/settlement/execute"
-endpointLiveSkuQuote: str = "/api/v1/quotes/live"
-endpointInventoryLock: str = "/api/v1/inventory/lock"
+endpointLiveSkuQuote: str = "/api/v1/quote"
+endpointInventoryLock: str = "/api/v1/lock"
 
 # Default Network Timeouts
 defaultRequestTimeoutSeconds: float = 30.0

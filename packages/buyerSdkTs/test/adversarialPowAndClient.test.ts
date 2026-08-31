@@ -60,12 +60,12 @@ describe("PoW Solver & RazorAgentClient Adversarial Stress Suite", () => {
     const client = new RazorAgentClient({ buyerKeyManager, customFetch: errorFetch });
 
     await assert.rejects(
-      () => client.getLiveSkuQuote("SKU-FAIL-01"),
+      () => client.getLiveSkuQuote("SKU-FAIL-01", 1, { deliveryPincode: "560001" }),
       (err: unknown) => err instanceof ClientRequestError && err.statusCode === 500
     );
 
     await assert.rejects(
-      () => client.reserveInventoryLock("SKU-FAIL-01"),
+      () => client.reserveInventoryLock("SKU-FAIL-01", 1, { quoteHash: "qh_test" }),
       (err: unknown) => err instanceof ClientRequestError && err.statusCode === 500
     );
 
@@ -95,7 +95,7 @@ describe("PoW Solver & RazorAgentClient Adversarial Stress Suite", () => {
 
     const client = new RazorAgentClient({ buyerKeyManager, customFetch: retryFailFetch });
     await assert.rejects(
-      () => client.reserveInventoryLock("SKU-POW-FAIL"),
+      () => client.reserveInventoryLock("SKU-POW-FAIL", 1, { quoteHash: "qh_test" }),
       (err: unknown) => err instanceof ClientRequestError && err.statusCode === 403
     );
   });

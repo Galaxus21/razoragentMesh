@@ -17,22 +17,29 @@ from razoragent_buyer_sdk import (
 async def testClientDiscoveryQuote(agentKeyManager: AgentKeyManager) -> None:
     """Verifies live SKU quote fetching and parsing."""
     sampleQuoteData = {
-        "sku_id": "SKU-001", "available_stock": 25, "base_unit_price_paise": 420000,
-        "offered_unit_price_paise": 420000, "currency": "INR", "hsn_code": "8504",
-        "gst_rate_percent": 18,
-        "tax_breakdown": {"cgst_paise": 37800, "sgst_paise": 37800, "igst_paise": 0, "total_tax_paise": 75600},
-        "quote_expiry_timestamp": 1700000060, "quote_hash": "a5f82c64hexhash",
-        "applied_discounts": [], "total_savings_paise": 0, "upcoming_promotions": [],
+        "skuId": "SKU-001", "availableStock": 25, "baseUnitPricePaise": 420000,
+        "offeredUnitPricePaise": 420000, "finalUnitPricePaise": 420000, "quantity": 1,
+        "currency": "INR", "hsnCode": "8504", "gstRatePercent": 18,
+        "taxableSubtotalPaise": 420000,
+        "taxBreakdown": {"cgstPaise": 37800, "sgstPaise": 37800, "igstPaise": 0, "totalTaxPaise": 75600},
+        "quoteExpiryTimestamp": 1700000060, "quoteHash": "a5f82c64hexhash",
+        "appliedDiscounts": [], "totalSavingsPaise": 0, "upcomingPromotions": [],
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/api/v1/quotes/live"
+        # Route, verb and query parameters all as the MCP HTTP adapter declares them. The old
+        # version asserted "/api/v1/quotes/live", a route nothing serves, which is how the client
+        # stayed broken through 1,200 passing tests.
+        assert request.url.path == "/api/v1/quote"
+        assert request.method == "GET"
+        assert request.url.params["skuId"] == "SKU-001"
+        assert request.url.params["deliveryPincode"] == "560001"
         return httpx.Response(200, json=sampleQuoteData)
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as httpClient:
         client = RazorAgentClient(keyManager=agentKeyManager, httpClient=httpClient)
-        quote = await client.getLiveSkuQuote("SKU-001", quantity=1)
+        quote = await client.getLiveSkuQuote("SKU-001", "560001", quantity=1)
         assert quote.sku_id == "SKU-001"
         assert quote.offered_unit_price_paise == 420000
 
@@ -41,19 +48,19 @@ async def testClientDiscoveryQuote(agentKeyManager: AgentKeyManager) -> None:
 async def testClientInventoryLockHappyPath(agentKeyManager: AgentKeyManager) -> None:
     """Verifies 200 OK inventory lock reservation."""
     sampleLockData = {
-        "lock_token": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", "fencing_token": 142,
-        "sku_id": "SKU-001", "quantity_locked": 1, "expires_at_unix_ms": 1700000060000,
-        "signature": "base64_signature_here",
+        "lockToken": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", "fencingToken": 142,
+        "skuId": "SKU-001", "quantityLocked": 1, "expiresAtUnixMs": 1700000060000,
+        "lockSignature": "base64_signature_here",
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/api/v1/inventory/lock"
+        assert request.url.path == "/api/v1/lock"
         return httpx.Response(200, json=sampleLockData)
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as httpClient:
         client = RazorAgentClient(keyManager=agentKeyManager, httpClient=httpClient)
-        lock = await client.reserveInventoryLock("SKU-001", quantity=1)
+        lock = await client.reserveInventoryLock("SKU-001", "qh_test", quantity=1)
         assert lock.lock_token == "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
         assert lock.fencing_token == 142
 
@@ -66,7 +73,7 @@ async def testClientInventoryLock402AutoResolution(agentKeyManager: AgentKeyMana
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal callCount
         callCount += 1
-        assert request.url.path == "/api/v1/inventory/lock"
+        assert request.url.path == "/api/v1/lock"
         if callCount == 1:
             return httpx.Response(
                 402,
@@ -77,15 +84,15 @@ async def testClientInventoryLock402AutoResolution(agentKeyManager: AgentKeyMana
         return httpx.Response(
             200,
             json={
-                "lock_token": "lock_after_pow_solved", "fencing_token": 143, "sku_id": "SKU-001",
-                "quantity_locked": 1, "expires_at_unix_ms": 1700000060000, "signature": "valid_sig",
+                "lockToken": "lock_after_pow_solved", "fencingToken": 143, "skuId": "SKU-001",
+                "quantityLocked": 1, "expiresAtUnixMs": 1700000060000, "lockSignature": "valid_sig",
             },
         )
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as httpClient:
         client = RazorAgentClient(keyManager=agentKeyManager, httpClient=httpClient)
-        lock = await client.reserveInventoryLock("SKU-001", quantity=1)
+        lock = await client.reserveInventoryLock("SKU-001", "qh_test", quantity=1)
         assert lock.lock_token == "lock_after_pow_solved"
         assert callCount == 2
 
@@ -100,7 +107,7 @@ async def testClientInventoryLock402WithoutAutoSolve(agentKeyManager: AgentKeyMa
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as httpClient:
         client = RazorAgentClient(keyManager=agentKeyManager, httpClient=httpClient)
         with pytest.raises(Http402RequiredError) as excInfo:
-            await client.reserveInventoryLock("SKU-001", autoSolvePow=False)
+            await client.reserveInventoryLock("SKU-001", "qh_test", autoSolvePow=False)
         assert excInfo.value.challengeToken == "challenge_token_123"
         assert excInfo.value.difficulty == 4
 

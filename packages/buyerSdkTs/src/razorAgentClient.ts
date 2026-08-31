@@ -25,14 +25,20 @@ export interface RazorAgentClientConfig {
 }
 
 export interface QuoteOptions {
-  readonly deliveryPincode?: string;
+  // Required, though it reads like a detail: the delivery pincode decides whether the tax splits
+  // CGST+SGST or lands entirely in IGST. The MCP tool rejects a quote request without it (HTTP
+  // 422), so typing it optional only moved the failure from the compiler to the network.
+  readonly deliveryPincode: string;
   readonly promoCode?: string;
   readonly merchantDid?: string;
 }
 
 export interface LockOptions {
+  // Also required. The hash binds the lock to the price it was quoted at, which is what stops a
+  // lock being reused after the price moves -- so there is no such thing as locking stock without
+  // first getting a quote, and the type now says so.
+  readonly quoteHash: string;
   readonly lockTtlSeconds?: number;
-  readonly quoteHash?: string;
   readonly escrowToken?: string;
   readonly maxRetries?: number;
 }
@@ -81,14 +87,14 @@ export class RazorAgentClient {
   public async getLiveSkuQuote(
     skuId: string,
     quantity: number = defaultPurchaseQuantity,
-    options: QuoteOptions = {}
+    options: QuoteOptions
   ): Promise<SkuQuote> {
     const query = new URLSearchParams({
       skuId,
       quantity: quantity.toString(),
       buyerAgentDid: this.getAgentDid()
     });
-    if (options.deliveryPincode) query.set("deliveryPincode", options.deliveryPincode);
+    query.set("deliveryPincode", options.deliveryPincode);
     if (options.promoCode) query.set("promoCode", options.promoCode);
 
     const url = `${this._mcpServerUrl}${endpointQuote}?${query.toString()}`;
@@ -105,7 +111,7 @@ export class RazorAgentClient {
   public async reserveInventoryLock(
     skuId: string,
     quantity: number = defaultPurchaseQuantity,
-    options: LockOptions = {}
+    options: LockOptions
   ): Promise<InventoryLockResponse> {
     const lockTtl = options.lockTtlSeconds ?? this._defaultLockTtlSeconds;
     const bodyPayload = {

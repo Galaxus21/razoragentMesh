@@ -2,6 +2,7 @@
 
 from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 from .mandateModels import (
     CartMandate,
@@ -13,7 +14,9 @@ from .mandateModels import (
 class QuoteTaxBreakdown(BaseModel):
     """Tax breakdown for SKU discovery quote payloads."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", alias_generator=to_camel, populate_by_name=True
+    )
 
     cgst_paise: int = Field(default=0, ge=0)
     sgst_paise: int = Field(default=0, ge=0)
@@ -54,10 +57,14 @@ PowSolutionResult = PoWSolution
 class AppliedDiscountItem(BaseModel):
     """Applied promotion or volume discount item."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", alias_generator=to_camel, populate_by_name=True
+    )
 
     type: str = Field(min_length=1)
-    label: str = Field(min_length=1)
+    # The HTTP face sends this as "name", alongside a "code" that echoes the type.
+    label: str = Field(min_length=1, alias="name")
+    code: Optional[str] = Field(default=None)
     discountBps: Optional[int] = Field(default=None, ge=0)
     discountPaise: Optional[int] = Field(default=None, ge=0)
 
@@ -65,7 +72,9 @@ class AppliedDiscountItem(BaseModel):
 class UpcomingPromotion(BaseModel):
     """Future scheduled promotion signaled in SKU quote."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", alias_generator=to_camel, populate_by_name=True
+    )
 
     campaign_id: str = Field(min_length=1)
     name: str = Field(min_length=1)
@@ -91,7 +100,9 @@ class SkuQuoteRequest(BaseModel):
 class SkuQuote(BaseModel):
     """Live product and price quote."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", alias_generator=to_camel, populate_by_name=True
+    )
 
     sku_id: str = Field(min_length=1)
     available_stock: int = Field(ge=0)
@@ -106,6 +117,11 @@ class SkuQuote(BaseModel):
     applied_discounts: list[AppliedDiscountItem] = Field(default_factory=list)
     total_savings_paise: int = Field(default=0, ge=0)
     upcoming_promotions: list[UpcomingPromotion] = Field(default_factory=list)
+    # Present only on the HTTP face: the post-discount unit price under its SDK name, the
+    # quantity the quote was priced for, and their product.
+    final_unit_price_paise: Optional[int] = Field(default=None, ge=0)
+    quantity: Optional[int] = Field(default=None, gt=0)
+    taxable_subtotal_paise: Optional[int] = Field(default=None, ge=0)
 
 
 SkuQuoteResponse = SkuQuote
@@ -126,14 +142,17 @@ class InventoryLockRequest(BaseModel):
 class InventoryLockResponse(BaseModel):
     """Confirmed stock reservation token."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", alias_generator=to_camel, populate_by_name=True
+    )
 
     lock_token: str = Field(min_length=1)
     fencing_token: int = Field(gt=0)
     sku_id: str = Field(min_length=1)
     quantity_locked: int = Field(gt=0)
     expires_at_unix_ms: int = Field(gt=0)
-    signature: str = Field(min_length=1)
+    # The HTTP face renames this to lockSignature on the way out.
+    signature: str = Field(min_length=1, alias="lockSignature")
 
 
 class RouteTransferResponse(BaseModel):
@@ -283,9 +302,13 @@ class MeshSlaConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    # Ports must match docker-compose.yml: mandate-engine 8000, mcp-server 4001,
+    # merchant-api 4002, x402-gateway 4003. `packages/buyerSdkTs/src/sdkConstants.ts`
+    # carries the same map for the TypeScript SDK; the two are asserted equal in tests.
     gatewayBaseUrl: str = Field(default="http://127.0.0.1:8000")
-    mcpBaseUrl: Optional[str] = Field(default="http://127.0.0.1:8001")
-    merchantApiBaseUrl: Optional[str] = Field(default="http://127.0.0.1:8002")
+    mcpBaseUrl: Optional[str] = Field(default="http://127.0.0.1:4001")
+    merchantApiBaseUrl: Optional[str] = Field(default="http://127.0.0.1:4002")
+    x402GatewayBaseUrl: Optional[str] = Field(default="http://127.0.0.1:4003")
     timeoutSeconds: float = Field(default=30.0, gt=0)
     maxRetries: int = Field(default=3, ge=0)
     autoSolvePow: bool = Field(default=True)

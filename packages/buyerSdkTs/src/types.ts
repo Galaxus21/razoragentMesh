@@ -125,6 +125,11 @@ export interface UpcomingPromotion {
 
 export interface SkuQuote {
   readonly skuId: string;
+  // HSN chapter and its statutory GST rate travel with the quote because a CartMandate line
+  // item requires both, and re-deriving them buyer-side would let the buyer pick its own tax
+  // rate. They come from the merchant's catalog, alongside the price.
+  readonly hsnCode: string;
+  readonly gstRatePercent: number;
   readonly baseUnitPricePaise: number;
   readonly offeredUnitPricePaise?: number;
   readonly finalUnitPricePaise: number;

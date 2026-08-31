@@ -25,7 +25,7 @@ async def testQuoteDiscoveryErrorHandling(agentKeyManager: AgentKeyManager) -> N
     async with httpx.AsyncClient(transport=httpx.MockTransport(notFoundHandler), base_url="http://testserver") as httpCli:
         client = RazorAgentClient(keyManager=agentKeyManager, httpClient=httpCli)
         with pytest.raises(NetworkClientError) as exc404:
-            await client.getLiveSkuQuote("SKU-NON-EXISTENT")
+            await client.getLiveSkuQuote("SKU-NON-EXISTENT", "560001")
         assert exc404.value.statusCode == 404
 
     def serverErrorHandler(request: httpx.Request) -> httpx.Response:
@@ -34,7 +34,7 @@ async def testQuoteDiscoveryErrorHandling(agentKeyManager: AgentKeyManager) -> N
     async with httpx.AsyncClient(transport=httpx.MockTransport(serverErrorHandler), base_url="http://testserver") as httpCli:
         client = RazorAgentClient(keyManager=agentKeyManager, httpClient=httpCli)
         with pytest.raises(NetworkClientError) as exc500:
-            await client.getLiveSkuQuote("SKU-001")
+            await client.getLiveSkuQuote("SKU-001", "560001")
         assert exc500.value.statusCode == 500
 
 
@@ -54,7 +54,7 @@ async def testInventoryLockRepeated402(agentKeyManager: AgentKeyManager) -> None
     async with httpx.AsyncClient(transport=httpx.MockTransport(persistent402Handler), base_url="http://testserver") as httpCli:
         client = RazorAgentClient(keyManager=agentKeyManager, httpClient=httpCli)
         with pytest.raises(Http402RequiredError) as excInfo:
-            await client.reserveInventoryLock("SKU-001", quantity=1)
+            await client.reserveInventoryLock("SKU-001", "qh_test", quantity=1)
         assert callCount == 2
         assert excInfo.value.challengeToken == "ch_2"
 

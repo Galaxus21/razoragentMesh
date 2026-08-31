@@ -149,7 +149,7 @@ describe("RazorAgentClientCore", () => {
     };
 
     const client = new RazorAgentClient({ buyerKeyManager, customFetch });
-    const quote = await client.getLiveSkuQuote("SKU-TEST-001", 1, { promoCode: "FESTIVE" });
+    const quote = await client.getLiveSkuQuote("SKU-TEST-001", 1, { deliveryPincode: "560001", promoCode: "FESTIVE" });
     assert.equal(quote.skuId, "SKU-TEST-001");
     assert.equal(quote.finalUnitPricePaise, 400000);
     assert.equal(quote.totalSavingsPaise, 2000);
@@ -161,7 +161,7 @@ describe("RazorAgentClientCore", () => {
       new Response(JSON.stringify(mockLock), { status: 200, headers: { "Content-Type": "application/json" } });
 
     const client = new RazorAgentClient({ buyerKeyManager, customFetch });
-    const lock = await client.reserveInventoryLock("SKU-TEST-001", 1);
+    const lock = await client.reserveInventoryLock("SKU-TEST-001", 1, { quoteHash: "qh_test" });
     assert.equal(lock.lockToken, "lock_uuid_12345");
     assert.equal(lock.fencingToken, 42);
     assert.equal(lock.quantityLocked, 1);
@@ -194,7 +194,7 @@ describe("RazorAgentClientCore", () => {
     };
 
     const client = new RazorAgentClient({ buyerKeyManager, customFetch });
-    const lock = await client.reserveInventoryLock("SKU-POW-001", 1);
+    const lock = await client.reserveInventoryLock("SKU-POW-001", 1, { quoteHash: "qh_test" });
     assert.equal(callCount, 2);
     assert.equal(lock.lockToken, "lock_pow_solved_777");
     assert.equal(lock.fencingToken, 101);

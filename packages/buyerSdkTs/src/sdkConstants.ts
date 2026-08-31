@@ -13,7 +13,7 @@ export const microFeePerTurnPaise = 50;
 
 export const defaultMandateEngineUrl = "http://localhost:8000";
 export const defaultMcpServerUrl = "http://localhost:4001";
-export const defaultX402GatewayUrl = "http://localhost:4002";
+export const defaultX402GatewayUrl = "http://localhost:4003";
 
 export const endpointQuote = "/api/v1/quote" as const;
 export const endpointLock = "/api/v1/lock" as const;
