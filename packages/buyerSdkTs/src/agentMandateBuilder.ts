@@ -214,22 +214,38 @@ export function createSignedAmendmentMandate(
 
 export const createAmendmentMandate = createSignedAmendmentMandate;
 
+// Returns true when the chain holds. What happens when it does not is the caller's choice, and
+// that choice used to be unavailable: this returned `boolean` but only ever returned `true` or
+// threw, so `if (!verifyMandateChain(...))` typechecked and could never run its else branch. The
+// parameter mirrors the Python SDK's `verifyMandateHashChain(..., raiseOnMismatch=True)`, and
+// defaults to throwing so existing callers are unaffected.
 export function verifyMandateChain(
   intentMandate: IntentMandate,
   cartMandate: CartMandate,
-  executionMandate: ExecutionMandate
+  executionMandate: ExecutionMandate,
+  raiseOnMismatch: boolean = true
 ): boolean {
-  _verifyIntentSignature(intentMandate, executionMandate);
-  _verifyCartSignature(cartMandate, executionMandate);
-  _verifyChainLinkage(intentMandate, cartMandate, executionMandate);
-  return true;
+  try {
+    _verifyIntentSignature(intentMandate, executionMandate);
+    _verifyCartSignature(cartMandate, executionMandate);
+    _verifyChainLinkage(intentMandate, cartMandate, executionMandate);
+    return true;
+  } catch (error) {
+    // Only a failed verification becomes `false`. Anything else -- a malformed mandate that makes
+    // canonicalization itself throw -- is a different problem and must not be reported as a
+    // cleanly rejected chain.
+    if (raiseOnMismatch || !(error instanceof MandateVerificationError)) {
+      throw error;
+    }
+    return false;
+  }
 }
 
 function _verifyIntentSignature(intentMandate: IntentMandate, executionMandate: ExecutionMandate): void {
   const computedIntentHash = computeMandateHash(intentMandate as unknown as Record<string, unknown>);
   if (computedIntentHash !== executionMandate.intentMandateHash) {
     throw new MandateVerificationError(
-      `Intent mandate hash mismatch: expected ${computedIntentHash}, got ${executionMandate.intentMandateHash}`
+      `Intent mandate hash mismatch: expected ${executionMandate.intentMandateHash} (recorded in the execution mandate), got ${computedIntentHash} (recomputed now)`
     );
   }
 }
@@ -238,7 +254,7 @@ function _verifyCartSignature(cartMandate: CartMandate, executionMandate: Execut
   const computedCartHash = computeMandateHash(cartMandate as unknown as Record<string, unknown>);
   if (computedCartHash !== executionMandate.cartMandateHash) {
     throw new MandateVerificationError(
-      `Cart mandate hash mismatch: expected ${computedCartHash}, got ${executionMandate.cartMandateHash}`
+      `Cart mandate hash mismatch: expected ${executionMandate.cartMandateHash} (recorded in the execution mandate), got ${computedCartHash} (recomputed now)`
     );
   }
 }
