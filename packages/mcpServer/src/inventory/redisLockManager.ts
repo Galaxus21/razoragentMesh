@@ -1,6 +1,23 @@
 import type { Redis } from "ioredis";
 import { millisPerSecond } from "../constants/protocolConstants.js";
 import { CatalogStore } from "../catalog/catalogStore.js";
+import {
+  activeReservationsKey,
+  buildReservationEntry,
+  globalFencingKey,
+  lockKeyPrefix,
+  reservationQuantitiesKey,
+  stockKeyPrefix
+} from "./inventoryKeys.js";
+import {
+  ReservationRecord,
+  SweepResult,
+  sweepExpiredInMemoryLocks,
+  sweepExpiredRedisLocks
+} from "./lockExpirySweeper.js";
+
+export type { ReservationRecord };
+export { stockKeyPrefix, lockKeyPrefix, globalFencingKey };
 
 export interface LockExecutionResult {
   readonly success: boolean;
@@ -17,14 +34,14 @@ export interface LockRecordPayload {
   readonly expiresAtUnixMs: number;
 }
 
-export const stockKeyPrefix = "{inventory}:stock:";
-export const lockKeyPrefix = "{inventory}:lock:";
-export const globalFencingKey = "{inventory}:fencing:global";
 export const initialInMemoryFencingCounter = 1000;
 export const failureFencingToken = 0;
-export const luaKeysCount = 3;
+export const luaKeysCount = 5;
 export const luaSuccessCode = 1;
 
+// Registers the reservation in a sorted set scored by expiry alongside decrementing stock, so
+// the sweeper can later credit the quantity back. Without the ZADD/HSET pair, an expired lock
+// key would vanish and take its stock with it.
 export const atomicLockLuaScript = `
 local currentStock = tonumber(redis.call('GET', KEYS[1]) or '0')
 local requestedQty = tonumber(ARGV[1])
@@ -34,12 +51,14 @@ end
 local remainingStock = redis.call('DECRBY', KEYS[1], requestedQty)
 local fencingToken = redis.call('INCR', KEYS[3])
 redis.call('SETEX', KEYS[2], tonumber(ARGV[2]), ARGV[3])
+redis.call('ZADD', KEYS[4], tonumber(ARGV[4]), ARGV[5])
+redis.call('HSET', KEYS[5], ARGV[5], requestedQty)
 return {1, remainingStock, fencingToken}
 `;
 
 export class InMemoryAtomicLocker {
   private fencingCounter = initialInMemoryFencingCounter;
-  private readonly locks = new Map<string, { skuId: string; quantity: number; expiresAt: number }>();
+  private readonly reservations = new Map<string, ReservationRecord>();
 
   public executeLock(
     catalogStore: CatalogStore,
@@ -48,6 +67,10 @@ export class InMemoryAtomicLocker {
     lockTtlSeconds: number,
     lockToken: string
   ): LockExecutionResult {
+    // Reclaim lapsed reservations first, so a caller that arrives after a TTL boundary sees
+    // the stock those reservations were holding.
+    sweepExpiredInMemoryLocks(catalogStore, this.reservations, Date.now());
+
     const currentStock = catalogStore.getStock(skuId);
     if (currentStock < quantity) {
       return { success: false, remainingStock: currentStock, fencingToken: failureFencingToken };
@@ -56,10 +79,21 @@ export class InMemoryAtomicLocker {
     const remainingStock = catalogStore.updateStock(skuId, -quantity);
     this.fencingCounter += 1;
     const fencingToken = this.fencingCounter;
-    const expiresAt = Date.now() + lockTtlSeconds * millisPerSecond;
+    const expiresAtUnixMs = Date.now() + lockTtlSeconds * millisPerSecond;
 
-    this.locks.set(lockToken, { skuId, quantity, expiresAt });
+    this.reservations.set(lockToken, { skuId, quantity, expiresAtUnixMs });
     return { success: true, remainingStock, fencingToken };
+  }
+
+  // Exposed for the READ path. Sweeping only on acquire leaves `availableStock` understated
+  // between a reservation lapsing and the next lock attempt, so a quote would advertise stock
+  // that is actually free as unavailable. Callers that merely read stock invoke this first.
+  public reclaimExpired(catalogStore: CatalogStore): SweepResult {
+    return sweepExpiredInMemoryLocks(catalogStore, this.reservations, Date.now());
+  }
+
+  public getActiveReservationCount(): number {
+    return this.reservations.size;
   }
 }
 
@@ -73,17 +107,26 @@ export async function executeRedisLock(
   lockToken: string,
   lockRecordJson: string
 ): Promise<LockExecutionResult> {
+  await sweepExpiredRedisLocks(redis, Date.now());
+
   const stockKey = `${stockKeyPrefix}${skuId}`;
   const lockKey = `${lockKeyPrefix}${lockToken}`;
+  const expiresAtUnixMs = Date.now() + ttlSeconds * millisPerSecond;
+  const reservationEntry = buildReservationEntry(lockToken, skuId);
+
   const result = (await redis.eval(
     atomicLockLuaScript,
     luaKeysCount,
     stockKey,
     lockKey,
     globalFencingKey,
+    activeReservationsKey,
+    reservationQuantitiesKey,
     quantity,
     ttlSeconds,
-    lockRecordJson
+    lockRecordJson,
+    expiresAtUnixMs,
+    reservationEntry
   )) as [number, number, number];
 
   return {
