@@ -171,3 +171,75 @@ test("a dead telemetry bus does not fail the tool call", async () => {
   assert.equal(quote.sku_id, testSkuId, "the quote must be returned regardless");
   await settlePublishes();
 });
+
+test("the three mandate tools each publish MANDATE_SIGNED, which lights the Mandate Explorer", async () => {
+  // The panel's three cards stayed PENDING for every live agent run: its only producers were the
+  // dashboard's own driver and the synthetic seeder, so an external MCP buyer left it dark while
+  // Metrics Bar and Webhook Feed filled from the engine's own PAYMENT_CAPTURED.
+  const delegation = (await dispatchToolCall(
+    "establish_agent_delegation",
+    { key_custody: "mesh_demo_custodial", max_budget_paise: 10_000_000, single_transaction_limit_paise: 10_000_000 },
+    { sessionId: testSessionId }
+  )) as Record<string, unknown>;
+  await settlePublishes();
+
+  const intent = eventsOfType("MANDATE_SIGNED");
+  assert.equal(intent.length, 1);
+  assert.equal(intent[0].payload.mandateType, "INTENT");
+  assert.equal(intent[0].payload.verificationStatus, "VALID");
+  assert.equal(typeof intent[0].payload.mandateHash, "string");
+  assert.ok(intent[0].payload.signerKeyDid, "the panel falls back to a role label without this");
+  assert.equal(intent[0].provenance, "LIVE");
+
+  const quote = (await dispatchToolCall(
+    "get_live_sku_quote",
+    { sku_id: testSkuId, quantity: 2, buyer_agent_id: String(delegation.delegated_agent_did), delivery_pincode: testPincode },
+    { sessionId: testSessionId }
+  )) as Record<string, unknown>;
+  const lock = (await dispatchToolCall(
+    "reserve_inventory_lock",
+    {
+      sku_id: testSkuId, quantity: 2, lock_ttl_seconds: 60,
+      buyer_agent_id: String(delegation.delegated_agent_did), quote_hash: String(quote.quote_hash)
+    },
+    { sessionId: testSessionId }
+  )) as Record<string, unknown>;
+
+  await dispatchToolCall(
+    "create_cart_mandate",
+    {
+      delegation_id: String(delegation.delegation_id), sku_id: testSkuId, quantity: 2,
+      delivery_pincode: testPincode, delivery_state_code: "29",
+      quote_hash: String(quote.quote_hash), quote_expiry_timestamp: quote.quote_expiry_timestamp,
+      lock_token: String(lock.lock_token), fencing_token: lock.fencing_token,
+      lock_expires_at_unix_ms: lock.expires_at_unix_ms, lock_signature: String(lock.signature)
+    },
+    { sessionId: testSessionId }
+  );
+  await dispatchToolCall(
+    "sign_execution_mandate",
+    { delegation_id: String(delegation.delegation_id) },
+    { sessionId: testSessionId }
+  );
+  await settlePublishes();
+
+  const kinds = eventsOfType("MANDATE_SIGNED").map((event) => event.payload.mandateType);
+  assert.deepEqual(kinds, ["INTENT", "CART", "EXECUTION"]);
+
+  // Every card the panel renders must carry a hash, or it shows an em dash where the chain
+  // linkage should be. Only create_cart_mandate returns one, so the other two are computed.
+  for (const event of eventsOfType("MANDATE_SIGNED")) {
+    assert.equal(typeof event.payload.mandateHash, "string", String(event.payload.mandateType));
+    assert.match(String(event.payload.mandateHash), /^[0-9a-f]{64}$/);
+  }
+});
+
+test("a tool that signs no mandate publishes no MANDATE_SIGNED", async () => {
+  await dispatchToolCall(
+    "get_live_sku_quote",
+    { sku_id: testSkuId, quantity: 1, buyer_agent_id: testBuyerDid, delivery_pincode: testPincode },
+    { sessionId: testSessionId }
+  );
+  await settlePublishes();
+  assert.equal(eventsOfType("MANDATE_SIGNED").length, 0);
+});

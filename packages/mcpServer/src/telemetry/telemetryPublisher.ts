@@ -17,7 +17,13 @@ import {
   telemetryEventsPath,
   telemetryTimeoutMs
 } from "../constants/telemetryConstants.js";
-import { toolReserveInventoryLock } from "../constants/protocolConstants.js";
+import {
+  toolCreateCartMandate,
+  toolEstablishAgentDelegation,
+  toolReserveInventoryLock,
+  toolSignExecutionMandate
+} from "../constants/protocolConstants.js";
+import { computeMandateHash } from "@razorpay/agent-buyer-sdk";
 
 /** The six root keys the engine's TelemetryEventModel accepts. It is extra="forbid". */
 interface TelemetryEvent {
@@ -32,6 +38,7 @@ interface TelemetryEvent {
 const eventTypeToolCall = "MCP_TOOL_CALL";
 const eventTypeToolResult = "MCP_TOOL_RESULT";
 const eventTypeInventoryLocked = "INVENTORY_LOCKED";
+const eventTypeMandateSigned = "MANDATE_SIGNED";
 const unknownAgentId = "unknown";
 
 /**
@@ -118,6 +125,7 @@ export function publishToolResult(
   if (toolName === toolReserveInventoryLock) {
     publishInventoryLocked(result, asRecord(toolArguments), sessionId, callId);
   }
+  publishMandateSigned(toolName, result, sessionId, callId);
 }
 
 /**
@@ -195,4 +203,109 @@ function publishInventoryLocked(
       ttlSeconds: resolveLockTtlSeconds(result, toolArguments)
     }
   });
+}
+
+/**
+ * MANDATE_SIGNED -- what lights the dashboard's Mandate Explorer for an external MCP buyer.
+ *
+ * The panel's three cards stayed PENDING for every live agent run, because the only producers of
+ * this event were the dashboard's own protocol driver and the synthetic seeder: nothing on the
+ * MCP path emitted it. Metrics Bar and Webhook Feed did populate, because the engine emits
+ * PAYMENT_CAPTURED server-side -- so the empty panel read as "the dashboard does not see external
+ * agents", which was never true.
+ *
+ * Derived here rather than in the tools, following publishInventoryLocked: the tool files stay
+ * about producing mandates, and the whole feature is one function plus a dispatch line.
+ */
+function publishMandateSigned(
+  toolName: string,
+  result: Record<string, unknown>,
+  sessionId: string,
+  callId: string
+): void {
+  const signed = _resolveSignedMandate(toolName, result);
+  if (!signed) {
+    return;
+  }
+  publishEvent({
+    eventId: `${callId}-mandate`,
+    eventType: eventTypeMandateSigned,
+    timestampMs: nowMs(),
+    sessionId,
+    provenance: liveProvenanceValue,
+    payload: {
+      mandateType: signed.mandateType,
+      mandateHash: signed.mandateHash,
+      signerKeyDid: signed.signerKeyDid,
+      // The panel treats anything other than "INVALID" as valid. These mandates were just minted
+      // and signed by this server, so saying so is accurate rather than optimistic.
+      verificationStatus: "VALID",
+      ...(signed.canonicalJcsPreview === undefined
+        ? {}
+        : { canonicalJcsPreview: signed.canonicalJcsPreview })
+    }
+  });
+}
+
+interface SignedMandateFacts {
+  readonly mandateType: string;
+  readonly mandateHash: string | null;
+  readonly signerKeyDid: unknown;
+  readonly canonicalJcsPreview?: unknown;
+}
+
+/**
+ * Maps a tool result onto the three mandate kinds the panel renders. The mandate TYPE comes from
+ * the tool name -- no tool reports its own kind, and it does not need to. The hash is read where
+ * a tool already returns one and computed from the mandate document otherwise, which is why this
+ * needs no changes inside the tools: they all return the signed document itself.
+ */
+function _resolveSignedMandate(
+  toolName: string,
+  result: Record<string, unknown>
+): SignedMandateFacts | undefined {
+  if (toolName === toolEstablishAgentDelegation) {
+    const intentMandate = asRecord(result.intent_mandate);
+    return {
+      mandateType: "INTENT",
+      mandateHash: _hashMandate(intentMandate),
+      signerKeyDid: result.user_did ?? intentMandate.userDid
+    };
+  }
+  if (toolName === toolCreateCartMandate) {
+    return {
+      mandateType: "CART",
+      // Already computed by the tool, so reuse it rather than rehashing and risking a document
+      // that canonicalises differently from the one the agent was handed.
+      mandateHash: typeof result.cart_mandate_hash === "string" ? result.cart_mandate_hash : null,
+      signerKeyDid: result.merchant_did
+    };
+  }
+  if (toolName === toolSignExecutionMandate) {
+    // Custodial mode returns the complete signed mandate; agent-held returns the unsigned payload
+    // plus the exact canonical JSON the agent is asked to sign. Hash whichever is present.
+    const executionMandate = asRecord(result.execution_mandate ?? result.unsigned_payload);
+    return {
+      mandateType: "EXECUTION",
+      mandateHash: _hashMandate(executionMandate),
+      signerKeyDid: result.buyer_agent_did,
+      canonicalJcsPreview:
+        typeof result.signing_payload_canonical_json === "string"
+          ? result.signing_payload_canonical_json
+          : undefined
+    };
+  }
+  return undefined;
+}
+
+/** Best-effort: a hash the panel merely displays must never be able to fail a tool call. */
+function _hashMandate(mandate: Record<string, unknown>): string | null {
+  if (Object.keys(mandate).length === 0) {
+    return null;
+  }
+  try {
+    return computeMandateHash(mandate);
+  } catch {
+    return null;
+  }
 }
