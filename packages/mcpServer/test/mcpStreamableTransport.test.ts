@@ -234,3 +234,24 @@ test("a notification on the session is accepted with no body", async () => {
     await close();
   }
 });
+
+test("lets a client re-initialize while still carrying a stale session id", async () => {
+  const { baseUrl, close } = await startTestServer();
+  try {
+    // initialize is what ESTABLISHES a session, so a client reconnecting after a server restart
+    // still holds the old id. Refusing that would strand the one call that recovers.
+    const response = await postMcp(
+      baseUrl,
+      {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "initialize",
+        params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } }
+      },
+      "00000000-0000-0000-0000-000000000000"
+    );
+    assert.equal(response.status, 200);
+  } finally {
+    await close();
+  }
+});

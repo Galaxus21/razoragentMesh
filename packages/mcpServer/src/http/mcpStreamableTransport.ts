@@ -139,14 +139,21 @@ export async function handleStreamableRequest(
   }
 
   const sessionId = readSessionId(request);
-  let existing = sessionId ? activeTransports.get(sessionId) : undefined;
+  const existingForId = sessionId ? activeTransports.get(sessionId) : undefined;
 
-  if (!existing && sessionId) {
-    existing = await openSession(options, sessionId);
-    (existing as unknown as { _webStandardTransport: { _initialized: boolean; sessionId: string } })._webStandardTransport._initialized = true;
-    (existing as unknown as { _webStandardTransport: { _initialized: boolean; sessionId: string } })._webStandardTransport.sessionId = sessionId;
-    activeTransports.set(sessionId, existing);
+  // A session id we do not hold is REFUSED, not adopted. Minting a fresh session under the
+  // caller's id looks like it works and then behaves inexplicably: the delegation, cart and
+  // execution payload the client believed it had are gone, so the next tool call fails with
+  // "Unknown or expired delegation_id" and nothing anywhere connects that to a dropped session.
+  // Returning false here lets httpAdapter answer 400 InvalidSession, which tells the client to
+  // re-initialize -- the one thing that actually recovers the situation.
+  // initialize is exempt: it is the request that ESTABLISHES a session, so a client re-initializing
+  // after a server restart may still be carrying its old id, and refusing that would strand the
+  // one call that recovers.
+  if (sessionId && !existingForId && !isInitializeRequest(parsedBody)) {
+    return false;
   }
+  let existing = existingForId;
 
   if (!existing && request.method === "GET") {
     const newId = randomUUID();
