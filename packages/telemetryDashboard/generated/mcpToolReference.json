@@ -6,6 +6,7 @@
       "requestFields": [
         "brand",
         "category",
+        "has_upcoming_promotion",
         "hsn_code",
         "limit",
         "min_stock",
@@ -101,12 +102,14 @@
       "schemaName": "ExecuteSettlement",
       "requestFields": [
         "agent_signature",
+        "allow_repeat_purchase",
         "delegation_id",
         "execution_id",
         "merchant_account"
       ],
       "responseFields": [
         "amountPaise",
+        "buyerNotice",
         "invoice",
         "paymentId",
         "settledAt",
@@ -144,6 +147,7 @@
         "sku_id"
       ],
       "responseFields": [
+        "agreed_price_is_bindable",
         "agreed_unit_price_paise",
         "contract_ast_hash",
         "currency",
@@ -153,6 +157,7 @@
         "micro_fees_paid_paise",
         "next_step",
         "quantity",
+        "savings_realised_paise",
         "savings_vs_list_paise",
         "sku_id",
         "status",

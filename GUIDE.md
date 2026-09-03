@@ -332,7 +332,7 @@ The Telemetry Dashboard (`packages/telemetryDashboard`) has been completely rede
 - **Composite Dashboard:** Highlights recent agent tool executions, active negotiations, cryptographic mandate chains, and self-healing vector diffs in a unified grid.
 
 #### 2. Route `/agent-observability` (Agent Trace Terminal)
-- **Live Event Stream:** Streams real-time tool calls across all eight MCP tools -- discovery (`search_catalog`), commerce (`get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`) and purchase (`establish_agent_delegation`, `create_cart_mandate`, `sign_execution_mandate`, `execute_settlement`) -- with caller agent DID, target SKU, and millisecond execution timers.
+- **Live Event Stream:** Streams real-time tool calls across all ten MCP tools -- discovery (`search_catalog`, `browse_catalog`), commerce (`get_live_sku_quote`, `negotiate_price`, `reserve_inventory_lock`, `verify_shipping_sla`) and purchase (`establish_agent_delegation`, `create_cart_mandate`, `sign_execution_mandate`, `execute_settlement`) -- with caller agent DID, target SKU, and millisecond execution timers.
 - **Interactive JSON Inspector:** Click on any trace event to inspect input parameters, returned GST breakdowns, and cryptographic quote signatures.
 
 #### 3. Route `/negotiation-hub` (Rubinstein-Ståhl Bargaining Hub)
@@ -426,10 +426,10 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
 | Python backend + Python Buyer SDK | 1370 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
-| MCP discovery server | 243 | `cd packages/mcpServer && npm test` |
+| MCP discovery server | 257 | `cd packages/mcpServer && npm test` |
 | TypeScript Buyer SDK | 98 | `cd packages/buyerSdkTs && npm test` |
 | Telemetry dashboard + SKU Studio | 348 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **2,059** | `python scripts/countTests.py` |
+| **Total** | **2,073** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 

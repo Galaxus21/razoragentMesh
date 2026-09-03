@@ -67,7 +67,7 @@ Services exposed:
 - **x402 Dynamic Negotiation Gateway Docs:** [http://localhost:4003/docs](http://localhost:4003/docs)
 - **MCP Server:** three faces on port 4001. **Streamable HTTP at
   [http://localhost:4001/mcp](http://localhost:4001/mcp)** is how an external agent connects --
-  Claude Desktop, Claude Code or Cursor points at that URL and gets all eight tools. MCP JSON-RPC
+  Claude Desktop, Claude Code or Cursor points at that URL and gets all ten tools. MCP JSON-RPC
   2.0 over **stdio** serves runtimes that spawn a process instead. A **REST adapter** (`/health`,
   `/api/v1/tools`, `/api/v1/quote`, `/api/v1/lock`, `/api/v1/sla`) serves the buyer SDKs, whose
   calls are plain HTTP.
@@ -154,10 +154,10 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
 | Python backend + Python Buyer SDK | 1370 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
-| MCP discovery server | 243 | `cd packages/mcpServer && npm test` |
+| MCP discovery server | 257 | `cd packages/mcpServer && npm test` |
 | TypeScript Buyer SDK | 98 | `cd packages/buyerSdkTs && npm test` |
 | Telemetry dashboard + SKU Studio | 348 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **2,059** | `python scripts/countTests.py` |
+| **Total** | **2,073** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 
@@ -303,6 +303,38 @@ be structurally correct but not yet discriminating, which is why it was not adde
 **Out-of-stock substitution is HTTP-only.** `POST /api/v1/catalog/heal-oos` works and publishes
 `OOS_HEALED`, but no MCP tool reaches it, so an agent that hits an out-of-stock SKU over MCP is
 told no and has to search again itself.
+
+**An offer is authored one SKU at a time; there are no product tags.** A merchant who wants the
+same campaign on ten listings fills the Studio's Offers panel ten times. Tagging products and
+scoping one offer to a tag was evaluated on 2026-09-03 and deliberately deferred, for three
+reasons worth stating rather than leaving as a gap.
+
+The first is that the fan-out does not exist here. Across both SKU sets -- 25 seeded plus 22
+compiled -- the largest category holds **four** listings (`Pantry & Groceries`, `IT Hardware`),
+and most hold one to three. Reproduce with
+`grep -o '"category": *"[^"]*"' tests/fixtures/catalogFixtures.json | sort | uniq -c | sort -rn`.
+A tag-scoped offer would spare a merchant at most three repetitions of a form they fill once per
+listing, and cost a schema change through the Pydantic model, the broadcast payload, the
+TypeScript type and its Zod preprocess, both fixture sets, the seeder and the Studio.
+
+The second is that it collides with the rule that makes merchant-authored offers honest.
+`resolveSkuOffers` (`mcpServer/src/catalog/pricingEngine.ts`) treats the presence of
+`merchantOffers` as a *complete* statement of a SKU's offers, which is the only reason a merchant
+can switch the mesh's built-in festive discount off. A tag-scoped offer layered on top has no good
+answer for a SKU that declares `merchantOffers` and also carries a promoted tag: let the tag win
+and the merchant can no longer opt out per SKU; let the SKU win and tags do nothing on any listing
+the merchant has touched; merge them and the built-in defaults become unremovable again.
+
+The third is that `category` stopped being decorative. `_verifyCategoryAuthorization`
+(`mandateEngine/verification/budgetGate.py`) enforces it against the delegation's
+`authorized_categories`, fed from the merchant-signed cart, and its docstring commits to "one
+category vocabulary, one notion of equality". A second merchant-authored label set beside it would
+have to be explicitly non-authorizing, which is a claim to defend rather than a field to add.
+
+What the idea was actually reaching for -- an agent finding what is about to get cheaper without
+quoting the whole catalog -- shipped instead as `next_promotion` and `has_upcoming_promotion` on
+`browse_catalog`, using the quote's own evaluator so the two surfaces cannot disagree. Tags remain
+the right answer at a few hundred SKUs, alongside a deliberate decision on offer precedence.
 
 **A negotiated price is recorded, not applied.** `negotiate_price` runs the real protocol and the
 gateway compiles an immutable contract AST on convergence, but nothing feeds that price back into

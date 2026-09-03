@@ -154,6 +154,14 @@ One parameter is easy to miss: `reserve_inventory_lock` returns its signature un
 `signature`, but `create_cart_mandate` expects it as `lock_signature`. Pass the value through
 unchanged.
 
+**Quote before you lock.** `reserve_inventory_lock` only reserves stock against a `quote_hash`
+this mesh issued for that exact SKU, quantity and `buyer_agent_id`. A hash it does not recognise
+is refused and **no stock is reserved**, so the refusal costs nothing and names what to fix —
+quote first, quote again because yours lapsed, or quote for what you actually meant to lock. Mind
+the two clocks while you are here: a lock lasts `lock_ttl_seconds`, but the quote behind it dies
+60 seconds after it was issued, and `create_cart_mandate` needs both alive. Taking a 120-second
+lock does not buy a 120-second quote.
+
 A successful settlement returns a capture, the Route split, and a statutory GSTR-1 invoice:
 
 ```json

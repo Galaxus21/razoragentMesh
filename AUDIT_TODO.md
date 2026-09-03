@@ -1251,14 +1251,308 @@ Every response also carries `embeddingMode`, because a score computed from chara
 pseudo-vectors after a `fastembed` load failure is not a semantic similarity and must not be
 rendered as one (item 5).
 
+---
+
+### [x] 44. A settled sale returned its unit to the shelf, so a one-unit SKU sold three times
+
+`reserve_inventory_lock` decrements stock and files a reservation in a sorted set scored by
+expiry (`packages/mcpServer/src/inventory/redisLockManager.ts`, `atomicLockLuaScript`).
+`lockExpirySweeper.ts` credits every lapsed reservation back to the stock counter. Nothing told
+the two apart, and `tools/settlementExecutor.ts` never referenced the lock at all, so a completed
+sale expired exactly like an abandoned cart and its unit became available again.
+
+- Evidence: `SKU-TEST-DESK-LASTONE`, authored with `availableStock: 1`, took three
+  `PAYMENT_CAPTURED` events of `1772462` paise on 2026-09-03 — 21:54:58 (`pay_mcp_3fbde55ab4ab`),
+  21:57:49 (`pay_mcp_27afb169f791`), 21:59:50 (`pay_mcp_7378bf3c40f2`) — and
+  `inventory:stock:SKU-TEST-DESK-LASTONE` still read `1` afterwards.
+- Control: `SKU-TEST-PHARMA-12` sold 5 units of 100 through `harness/probe_stock.py` and read
+  `100` again.
+- `grep -rn "activeReservationsKey" packages/mcpServer/src` returned only the lock manager and
+  the sweeper: no settlement path.
+
+**Why it matters:** the demo's scarcity moment is two agents racing for one unit. Both won. The
+buyer-run log recorded "exactly one unit sold" because it was read while the second agent was
+still running.
+
+**Fix:** `consumeReservation` / `consumeRedisReservation` retire the reservation without crediting
+stock back, called from `executeSettlementForDelegation` after capture. Non-fatal by design: the
+money has already moved, so a failure is logged and the capture stands. Pinned by
+`test/settledReservationHoldsStock.test.ts`, whose fourth case is the last-unit regression. The
+existing `lockExpiryRestoresStock.test.ts` still passes — an abandoned cart must still give its
+stock back, and that is now the distinction rather than the rule.
+
+---
+
+### [x] 45. A second delegation started a second budget, and an agent charged a buyer twice
+
+`recordCumulativeSpend` (`packages/mandateEngine/verification/settlementLedger.py:56`) keys its
+ceiling on `mandateId`, so `max_budget_paise` binds one delegation. Every
+`establish_agent_delegation` also mints a fresh buyer DID, so two delegations from the same agent,
+in the same run, for the same person, are uncorrelated.
+
+- Evidence: `B04_flash` on 2026-09-03 was told "set my spending limit to exactly what it will cost
+  all-in and not a rupee more". It settled `pay_mcp_5d1cd87ef22d` (₹21,854.62) under a ₹25,000
+  delegation, established `dlg_fde0bd050076311b467ca5b7` capped at exactly ₹21,854.62, and settled
+  `pay_mcp_6a664fb8b44a` for the same desk. ₹43,709.24 charged; its final answer reported one
+  payment under the heading "Exactly matched to the spending limit".
+
+**Why it matters:** the budget ceiling is the protocol's headline safety property, and a
+cooperative agent walked around it by accident while trying to obey the buyer more precisely.
+
+**Fix:** `session/sessionPurchaseRegistry.ts` remembers the line items and total of every cart
+settled in an MCP session, and `execute_settlement` refuses an identical cart in that session,
+naming the earlier payment id. The MCP session is the only identifier that survives a new
+delegation. Scope was chosen so the guard cannot misfire on the cases that matter: two agents
+racing for one unit are two sessions, and a second, different purchase is a different cart.
+`allow_repeat_purchase: true` is the deliberate escape. Pinned by
+`test/sessionPurchaseRegistry.test.ts`.
+
+**Not fixed, and worth stating:** across sessions there is still no ceiling, because the protocol
+has no concept of a principal that outlives a delegation. `establish_agent_delegation`'s
+description now says so in as many words. The same file also logs
+`"cumulative budget cap is INACTIVE"` with no Redis and fails open on a Redis error.
+
+---
+
+### [x] 46. A scheduled promotion was advertised while upcoming and never charged once it opened
+
+`evaluateScheduledPromotions` (`packages/mcpServer/src/catalog/pricingEngine.ts:311-335`) split
+promotions into `activePromotions` and `upcomingPromotions`. `activePromotions` was read by no
+production code: `tools/skuQuoter.ts` and `tools/catalogBrowser.ts` both consumed
+`.upcomingPromotions` only, and `computeAutoDiscountStack` had four steps — volume tier, campaign,
+payment rail, promo code — none of them promotions.
+
+- Evidence: `SKU-TEST-MON-SALE`, list ₹24,000 with a merchant 2500 bps sale. At 20:52, before the
+  window opened, the quote promised `expectedUnitPricePaise: 1800000`. At 21:41, thirty minutes
+  into the window, it charged `2397850` and the sale was absent from both fields. Shortfall
+  ₹5,978.50.
+- User-facing: B-10 asked two models to state exactly what they saved on a SKU whose 15% sale was
+  running. Both reported "Total Savings: ₹21.50" — the mesh's own ₹20 campaign and ₹1.50 cashback
+  — against a real sale worth ₹3,300. Both agents were honest; the mesh handed them wrong data.
+
+**Why it matters:** it is the Smart Wait story. The mesh's own advice was advice it could not
+honour, and the false number reached the buyer.
+
+**Fix:** `applyScheduledPromotionStep` is now the first step of the discount stack, applied to the
+base price so that the price promised while a sale is upcoming is the price charged once it opens.
+Overlapping windows take the deepest rather than stacking. It is reported as a
+`SCHEDULED_PROMOTION` line in `applied_discounts` so an agent can name it. Pinned by
+`test/activePromotionIsPriced.test.ts` — the nine existing tests in
+`pricingEnginePromotions.test.ts` all asserted the classifier's return value and none asserted a
+price, which is why this survived them.
+
+**Verified live:** `SKU-TEST-MON-LIVESALE` now quotes `1867850` against a base of `2200000`, with
+`SCHEDULED_PROMOTION 330000` named in `applied_discounts`.
+
+---
+
+### [x] 47. A converged negotiation changes no price, and one agent reported it as a saving
+
+`negotiate_price` converges against the merchant's margin floor and records the agreed price in
+the gateway's contract AST. Only `get_live_sku_quote` issues a bindable `quote_hash`, so the cart
+is priced at list regardless.
+
+- Evidence: 9 of 44 buyer runs on 2026-09-03 reached `CONVERGED`. In all nine the settled amount
+  was the list-based quote. Realised saving from bargaining across the whole matrix: ₹0.
+- `B20_flash` reported "Negotiation Outcome: Successfully converged in 4 turns. Agreed Price:
+  ₹41,338.50 (Savings: ₹661.50 vs list price)" and charged ₹49,584.62.
+
+**Why it matters:** the dashboard gives bargaining two panels. A judge who asks what the
+negotiation saved is currently owed the answer "nothing".
+
+**Partial fix:** the response now carries `savings_realised_paise: 0` and
+`agreed_price_is_bindable: false` next to the hypothetical `savings_vs_list_paise`, and
+`next_step` states plainly that the buyer will pay the list-based price. A field an agent must
+actively ignore is harder to misreport than a sentence in a description.
+
+  Measured once, on the same stack: `B13_pro` re-run converged at ₹37,013.25, settled at the
+  list-based ₹49,584.62, and told its user the price "is not currently bindable" and that
+  "the savings realised on the transaction is reported as ₹0". Same situation as `B20_flash`
+  above, opposite disclosure. One run, so treat it as evidence rather than a rate.
+
+**Fixed 2026-09-04, without touching the quote hash.** The hash was never the obstacle. A
+converged agreement is now recorded in `mcpServer/src/negotiation/agreedPriceRegistry.ts` --
+buyer-scoped, quantity-scoped, 300 s -- and `get_live_sku_quote` consults it exactly as it
+consults a merchant's promotion. `cartMandateCreator` re-runs the same quote before the merchant
+signs, so it finds the same agreement and derives the same price: the mesh still names every
+figure, and an agent still cannot.
+
+Three properties the implementation holds:
+
+- **It can only lower a price.** The quoter takes the lower of the agreed price and the automatic
+  stack, so a sale that opened after the bargain still reaches the buyer.
+- **A quote priced by an agreement cannot outlive it.** `_resolveQuoteExpiry` caps the quote's
+  expiry at the agreement's, so a lapsed bargain arrives as "quote expired, quote again" rather
+  than as a hash mismatch that sends an agent hunting for a hashing bug.
+- **`savings_realised_paise` is measured against the automatic price, not the list price.** A
+  discount the buyer would have received anyway is never counted as something the bargaining won,
+  and `agreed_price_is_bindable` is false when the automatic stack already wins.
+
+Verified live against the running stack (`harness/probe_fixes.py`): `SKU-TEST-DESK-PREMIUM`
+quoted at 4197850, negotiated to 3842220, `savings_realised_paise: 355630` beside
+`savings_vs_list_paise: 357780` -- the ₹21.50 of automatic discount correctly excluded -- the
+re-quote carrying a `NEGOTIATED` line, the cart's independent re-derivation agreeing at 3842220,
+and settlement capturing 4538818.
+
+Verified at the agent layer too. `B08a_flash`, a naive Gemini buyer with no project context,
+negotiated a monitor to 2311800 and was charged 2732924, which is 2311800 + 18% GST + ₹50
+shipping to the paise. Nine converged negotiations on 2026-09-03 realised ₹0 between them.
+
+New tests: `test/negotiatedPriceIsBindable.test.ts` -- ten assertions covering the price, the
+`NEGOTIATED` discount line, buyer scoping, quantity scoping, the never-raises rule, the expiry
+cap, lapse, and each of the three `next_step` branches.
+
+---
+
+### [ ] 48. Agents do not volunteer an upcoming sale, though they reason about one when asked
+
+- Evidence, measured across all 44 runs rather than read off two (`scorerun.py` now emits
+  `advertised_upcoming_sale` and `mentions_upcoming_sale`). Five runs were told a sale was
+  coming. Two mentioned it, and both are B-09 -- the one scenario that *asks*:
+
+      B08_flash   advertised ₹6,000   mentioned: no
+      B09_flash   advertised ₹6,000 + ₹5,200   mentioned: yes
+      B09_pro     advertised ₹6,000 + ₹5,200   mentioned: yes
+      B10_flash   advertised ₹6,000   mentioned: no
+      B10_pro     advertised ₹6,000 + ₹5,200   mentioned: no
+
+  Asked, 2 of 2 mention it. Unasked, 0 of 3. That is the finding, and it is narrower than what
+  was written here first.
+- **Correction.** The original line claimed both B-08 models quoted `SKU-TEST-MON-SALE` and
+  received the promotion. `B08_pro` did neither: one `get_live_sku_quote` call, on
+  `SKU-MONITOR-301`, and `upcoming_promotions` appears zero times in its transcript. It is not
+  evidence of silence about a sale it was never shown.
+- The strongest case is B-10, not B-08, and it is unconfounded: B-10 asks the agent to "tell me
+  exactly which discounts I got and how much I saved in total", and both models answered that
+  question while holding a ₹6,000 sale notice they did not pass on.
+
+**Why it matters:** Smart Wait only reads as a feature if the agent raises it unprompted.
+
+**Partial fix:** `get_live_sku_quote`'s description now requires a non-empty
+`upcoming_promotions` to be stated in the final answer, not merely considered. The same
+description had also gone stale — it told agents a running sale appears in no field, which was
+true only because of item 46.
+
+**Still open:** re-measure. The B-08 confound is worse than
+`findings/F02-smart-wait-not-volunteered.md` records. The two monitors are not merely similar,
+they are interchangeable: both 27-inch 4K 99%-sRGB USB-C-90W panels at `baseUnitPricePaise`
+2400000 from origin pincode 560001, differing only in category and in the promoted one carrying
+"height-adjustable stand" and "home office" in its description. "Buy me a 27-inch monitor" was a
+coin flip.
+
+**Re-measured 2026-09-04, and the description approach is now measured as insufficient.** The
+live description tells an agent, in the strongest terms a description allows: "If
+upcoming_promotions is non-empty you MUST tell the buyer the sale exists, what it would save and
+when it starts ... Say it in your final answer, not only in your reasoning."
+
+Four fresh runs -- both models, the original prompt as a byte-identical control and a variant
+naming a feature only the promoted SKU has -- were each handed a ₹6,000 sale opening ninety
+minutes out. **None mentioned it.** With the three unasked runs already on record that is 0 of 7,
+against 2 of 2 on B-09, the one scenario that asks.
+
+**Partial fix, placed where the evidence says agents actually read.** `execute_settlement` now
+adds a `buyerNotice` to the receipt when the SKU just bought has a sale opening soon
+(`settlementExecutor.ts:_upcomingSaleNotice`). The receipt is the part of a settlement agents
+relay verbatim -- all four runs printed the payment id, the invoice number and the tax split.
+Verified live: buying `SKU-TEST-MON-SALE` returns "This purchase completed shortly before a
+merchant sale ... would have saved ₹6000.00 per unit."
+
+**Still open, and narrower than before.** The notice only covers the case where the agent buys
+the promoted SKU. The behaviour actually observed is different and harder: the agent is shown a
+sale on SKU A, buys SKU B, and never mentions A. In a second batch on the fixed stack, 1 of 4
+unasked runs volunteered it -- `B08a_pro` named the campaign, the ₹18,000 expected price and the
+₹6,000 saving unprompted. One run is not a rate. Reaching the other three needs the notice to
+travel with the *search result* the agent rejected, not only with the receipt for what it bought.
+
+The re-test kit that produced these numbers:
+
+- `smartwait/genPrompts.py` writes two variants -- **B08a**, the original prompt byte-identical as
+  a control, and **B08b**, the same prompt plus "with a height-adjustable stand for my home
+  office", a clause only the promoted SKU's description answers. No catalog data is edited.
+- `smartwait/runSmartWait.sh` runs both on both models from an isolated cwd, and refuses to start
+  if `SKU-TEST-MON-SALE` has no upcoming promotion -- the window ages out silently and a run
+  against an open window measures nothing.
+- `scripts/reauthorSaleWindow.py` moves the window; it is now in the repo rather than a temp
+  directory, alongside `scripts/demoNegotiationPolicy.py`.
+
+### [x] 49. A second delegation reset the budget, and only an identical cart was caught
+
+Item 45 closed the case where an agent buys the SAME cart twice in one session. The general shape
+survived: `recordCumulativeSpend` keys on the Intent Mandate, `establish_agent_delegation` mints a
+fresh buyer DID every time, so every new delegation opens a new budget and a buyer's stated limit
+bounds nothing. `B13_pro` minted eight delegations in a single run.
+
+- Cause: nothing in the protocol outlives a delegation, so there was no principal to hold a
+  ceiling.
+- Fix: the MCP session is that principal, as it already is for the duplicate-purchase guard.
+  `sessionPurchaseRegistry.ts` now records the FIRST `max_budget_paise` a session declares and the
+  cumulative captured spend; `settlementExecutor._rejectOverSessionBudget` refuses before the
+  bundle is posted, so a refused purchase costs nothing.
+- **First declared wins, and a later delegation can only lower it.** Taking the minimum would
+  break "buy the desk, then also buy the chair", which re-pairs with a delegation sized to the
+  chair; taking the latest would restore the hole.
+
+Verified live (`harness/probe_fixes.py`): a session declared 2300000, bought `SKU-TEST-DESK-MID`
+for 2185462, declared a second delegation at 100000000, and was refused the next purchase --
+"Cumulative budget exceeded for this shopping session: 1064344 paise would take the total to
+3249806 paise against a ceiling of 2300000". ₹0 charged. Tests in
+`test/sessionBudgetCeiling.test.ts`.
+
+**Still open:** across MCP *sessions* there is still no ceiling, and there cannot be until the
+protocol grows an identity above the delegation. stdio and the REST adapter have no session to
+scope to and are skipped, which is documented at the guard.
+
+---
+
+### [x] 50. Layer 3 had never healed anything, for three independent reasons
+
+The `## Still open` note below used to read "the mesh has not been brought up under
+`docker compose` to watch a real `OOS_HEALED` arrive". Brought up and watched, on 2026-09-04, it
+never arrived: `/api/v1/catalog/heal-oos` answered `no_qualifying_substitute` for **every** SKU
+tried, including at a similarity floor of 0.0 and a 500% price band, while Qdrant held five
+in-stock desks under the failed SKU's exact HSN. Three defects, each on its own fatal:
+
+**(a) The healer queried a collection nothing writes.**
+`vectorHealer/src/constants/healerConstants.py` set `qdrantCollectionName = "merchantCatalog"`.
+Everything indexes into `razoragent_catalog`
+(`merchantApi/src/constants/merchantConstants.py:defaultCollectionName`). Two test fixtures
+created a collection by the healer's name and pinned the divergence; they now import the
+constant.
+
+**(b) `QdrantClient.search` was removed in qdrant-client 1.19, which is what the image installs.**
+`vectorSearcher._executeRawVectorSearch` guarded on `hasattr(client, "search")`, so against the
+shipped client the entire Qdrant branch was skipped and every search silently became an in-memory
+cosine over the Redis listings. `query_points` is now tried first; the legacy paths stay for the
+tests' fakes and for older clients.
+
+**(c) The query vector came from the commercial listing, not the index.**
+`oosInterceptor._findViableSubstitute` reads `embeddingVector` off the Redis listing, and only
+`scripts/seedCatalog.py` writes that field -- 25 of 47 listings have it, and no SKU a merchant
+publishes from the Studio does. `oosHealingRoute._useIndexedQueryVector` now reads the vector back
+from the index the search runs against. The two are not interchangeable even where both exist:
+SKU-001's listing vector scored its best candidate at 0.0488, where the index's own nearest
+neighbour for that SKU is 0.0954.
+
+**And the telemetry went nowhere.** `docker-compose.yml` never gave `merchant-api` a
+`MANDATE_ENGINE_URL`, so `healingTelemetry.publishOosHealed` posted to `http://localhost:8000`
+inside its own container and logged the failure at DEBUG. Even a successful heal would have
+published nothing, which is why the dashboard's self-healing tile could only ever show the
+seeder's synthetic 214 ms.
+
+Verified live, all four together: `SKU-TEST-DESK-OOS` heals to `SKU-TEST-DESK-LASTONE` at cosine
+**0.86967826**, and three consecutive `OOS_HEALED` events reached the SSE bus the dashboard
+consumes with `provenance: LIVE`, `embeddingMode: model` and measured durations of 4.84, 1.99 and
+2.45 ms -- comfortably inside the sub-300 ms claim, and different every run.
+
+---
+
 ## Still open
 
-- **Live Docker verification.** Everything above is verified against the test suites and by
-  reintroducing defects. The mesh has not been brought up under `docker compose` to watch a real
-  `OOS_HEALED` arrive with `embeddingMode: model` and a duration that changes between runs.
 - **The unswept ground in the Scope table stays unswept.** `mcpServer`, `telemetryDashboard/src`,
   most of `scripts/` and most of `tests/` had no systematic pass, and the four bold rows should
   still be read as "assume findings remain".
+- **`buyerNotice` reaches only the buyer of the promoted SKU.** See item 48: the unaddressed case
+  is an agent shown a sale on one SKU that buys another.
 - `twoPhaseCommitSaga.py` is 364 lines with a 76-line `compensateTransfers` and a 44-line
   `verifyAndCapturePhase`. It violated the 300-line/40-line convention before this pass and is not
   in the `TestMilestone2AstAndLayout` allowlist that would enforce it; the category wiring added 5
