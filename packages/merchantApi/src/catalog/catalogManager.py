@@ -71,6 +71,13 @@ class CatalogManager:
             # a missing `promotions` to [] -- so any live edit to a promoted SKU silently erased
             # its promotions, and "wait for the sale" stopped working until mcp-server restarted.
             "promotions": [promotion.model_dump() for promotion in listing.promotions],
+            # Same reasoning as `promotions` above: the MCP server full-replaces the stored SKU
+            # from this payload, so a field omitted here is a field the live catalog loses on the
+            # merchant's next edit -- silently, and only until someone notices the discount stopped
+            # applying.
+            "merchantOffers": (
+                listing.merchantOffers.model_dump() if listing.merchantOffers else None
+            ),
             "originPincode": listing.originPincode,
         }
         await self._publishEvent(action, listing.skuId, listing.merchantDid, item=itemPayload)

@@ -614,9 +614,17 @@ The buyer agent queries the Layer 1 MCP tool `get_live_sku_quote` and receives a
 
 #### 4-Tier Auto-Discount Pipeline
 1. **Tier 1: Volume Discount**: Basis points based on requested quantity.
-2. **Tier 2: Campaign Promo**: Promo codes (e.g. `FESTIVE10`, 10% off capped at ₹20.00).
-3. **Tier 3: UPI Rail Incentive**: Flat ₹1.50 (150 paise) incentive on UPI Circle rail.
-4. **Tier 4: Corporate Partner Promo**: Additional 5% discount for corporate accounts (`CORP_5PCT`).
+2. **Tier 2: Campaign Promo**: A percentage off, optionally capped.
+3. **Tier 3: UPI Rail Incentive**: A flat cashback on the UPI Circle rail.
+4. **Tier 4: Promo Code**: A further percentage off when the agent passes a code the merchant honours.
+
+All four are the merchant's to set. Tiers 1 is authored per SKU as `volumeTiers`, and tiers 2-4
+as `merchantOffers` — both from the Merchant SKU Studio's **Offers & Promo Codes** panel, or by
+POSTing them on the listing. A SKU that carries `merchantOffers` states its offers *completely*,
+so leaving the campaign out there means no campaign rather than falling back to a default.
+
+A SKU with no `merchantOffers` gets the mesh's demo defaults instead: a 10% campaign capped at
+₹20.00, ₹1.50 of UPI cashback, and the `CORP_5PCT` code at 5% off.
 
 ```typescript
 // 1. Discover Real-time Quote with Auto-Discounts

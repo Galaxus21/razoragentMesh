@@ -138,6 +138,16 @@ export const makingChargesTypeOptions: ReadonlyArray<{ readonly value: MakingCha
   { value: "PERCENTAGE_OF_GOLD", label: "Percentage of Gold Value" },
 ];
 
+// MerchantAuthoredOffers bounds, mirroring universalProductSchema.py. Divergence here surfaces
+// as a 422 the merchant reads as an opaque publish failure, not as a hint about the field.
+export const minOfferDiscountBps = 0;
+export const maxOfferDiscountBps = 10000;
+export const defaultCampaignDiscountBps = 1000;
+export const minPromoCodeLength = 3;
+export const maxPromoCodeLength = 32;
+export const maxPromoCodesPerSku = 10;
+export const defaultPromoCodeDiscountBps = 500;
+
 export const defaultCatalogFormState: MerchantCatalogFormData = {
   skuId: "",
   merchantDid: "",
@@ -153,6 +163,17 @@ export const defaultCatalogFormState: MerchantCatalogFormData = {
   minimumOrderQuantity: defaultMinOrderQuantity,
   volumeTiers: [],
   promotions: [],
+  offers: {
+    // Off by default: a merchant who never opens the Offers section publishes a listing with no
+    // merchantOffers key, and the mesh applies its own defaults exactly as it always has.
+    authorOffers: false,
+    campaignEnabled: false,
+    campaignLabel: "",
+    campaignDiscountBps: defaultCampaignDiscountBps,
+    campaignCapInr: "",
+    paymentRailCashbackInr: "",
+    promoCodes: [],
+  },
   bullionPricing: {
     enabled: false,
     oracleFeedSymbol: "MCX_GOLD_24K_INR_PER_GRAM",
@@ -195,3 +216,4 @@ export const defaultCatalogFormState: MerchantCatalogFormData = {
 // path resolves against the dashboard origin, which serves no such route -- that is why
 // every publish 404ed before this existed. See src/app/api/mesh/catalog/route.ts.
 export const meshCatalogProxyEndpoint = "/api/mesh/catalog";
+

@@ -21,7 +21,9 @@ import {
   DiscountStackResult,
   ScheduledPromotion,
   UpcomingPromotion,
-  EvaluatedPromotionsResult
+  EvaluatedPromotionsResult,
+  MerchantAuthoredOffers,
+  MerchantPromoCodeOffer
 } from "../types/mcpToolTypes.js";
 
 export type {
@@ -134,17 +136,60 @@ function applyVolumeTierDiscountStep(
   return unitPricePaise - discountPaise;
 }
 
+/**
+ * The campaign, cashback and promo codes this SKU actually offers.
+ *
+ * A SKU that carries `merchantOffers` states its offers completely -- so an absent `campaign`
+ * there means no campaign, not "fall back to the demo default". Otherwise a merchant could add
+ * offers from the Studio but never switch the built-in festive discount off, which is worse than
+ * not letting them author offers at all.
+ *
+ * A SKU with no `merchantOffers` keeps the original demo-wide constants, so every fixture and
+ * every previously published listing prices exactly as before.
+ */
+export function resolveSkuOffers(offers: MerchantAuthoredOffers | undefined): {
+  readonly campaignBps: number;
+  readonly campaignCapPaise: number | null;
+  readonly campaignLabel: string | null;
+  readonly cashbackPaise: number;
+  readonly promoCodes: readonly MerchantPromoCodeOffer[];
+} {
+  if (!offers) {
+    return {
+      campaignBps: festiveCampaignBps,
+      campaignCapPaise: festiveCampaignCapPaise,
+      campaignLabel: null,
+      cashbackPaise: upiCashbackPaise,
+      promoCodes: [{ code: corporatePromoCode, discountBps: corporatePromoBps }]
+    };
+  }
+  return {
+    campaignBps: offers.campaign?.discountBps ?? zeroBps,
+    // null is uncapped. `?? null` rather than `|| null` because a cap of 0 is a real instruction
+    // -- it means the campaign discounts nothing -- and must not be read as "no cap".
+    campaignCapPaise: offers.campaign?.capPaise ?? null,
+    campaignLabel: offers.campaign?.label ?? null,
+    cashbackPaise: offers.paymentRailCashbackPaise ?? zeroPaise,
+    promoCodes: offers.promoCodes ?? []
+  };
+}
+
 function applyCampaignDiscountStep(
   unitPricePaise: number,
+  offers: MerchantAuthoredOffers | undefined,
   appliedDiscounts: AppliedDiscountItem[]
 ): number {
-  const uncappedPaise = Math.floor((unitPricePaise * festiveCampaignBps) / bpsDivisor);
-  const discountPaise = Math.min(festiveCampaignCapPaise, uncappedPaise);
+  const { campaignBps, campaignCapPaise, campaignLabel } = resolveSkuOffers(offers);
+  if (campaignBps <= zeroBps) return unitPricePaise;
+  const uncappedPaise = Math.floor((unitPricePaise * campaignBps) / bpsDivisor);
+  const discountPaise =
+    campaignCapPaise === null ? uncappedPaise : Math.min(campaignCapPaise, uncappedPaise);
   if (discountPaise <= zeroPaise) return unitPricePaise;
+  const capText = campaignCapPaise === null ? "" : ` capped at ₹${campaignCapPaise / 100}`;
   appliedDiscounts.push({
     type: discountTypeCampaign,
-    label: `Festive Campaign (${festiveCampaignBps / 100}% off capped at ₹${festiveCampaignCapPaise / 100})`,
-    discountBps: festiveCampaignBps,
+    label: `${campaignLabel ?? "Festive Campaign"} (${campaignBps / 100}% off${capText})`,
+    discountBps: campaignBps,
     discountPaise
   });
   return unitPricePaise - discountPaise;
@@ -152,13 +197,15 @@ function applyCampaignDiscountStep(
 
 function applyPaymentRailDiscountStep(
   unitPricePaise: number,
+  offers: MerchantAuthoredOffers | undefined,
   appliedDiscounts: AppliedDiscountItem[]
 ): number {
-  const discountPaise = Math.min(unitPricePaise, upiCashbackPaise);
+  const { cashbackPaise } = resolveSkuOffers(offers);
+  const discountPaise = Math.min(unitPricePaise, cashbackPaise);
   if (discountPaise <= zeroPaise) return unitPricePaise;
   appliedDiscounts.push({
     type: discountTypePaymentRail,
-    label: `UPI Instant Cashback (₹${(upiCashbackPaise / 100).toFixed(2)})`,
+    label: `UPI Instant Cashback (₹${(discountPaise / 100).toFixed(2)})`,
     discountPaise
   });
   return unitPricePaise - discountPaise;
@@ -167,15 +214,20 @@ function applyPaymentRailDiscountStep(
 function applyPromoCodeDiscountStep(
   unitPricePaise: number,
   promoCode: string | undefined,
+  offers: MerchantAuthoredOffers | undefined,
   appliedDiscounts: AppliedDiscountItem[]
 ): number {
-  if (!promoCode || promoCode.trim().toUpperCase() !== corporatePromoCode) return unitPricePaise;
-  const discountPaise = Math.floor((unitPricePaise * corporatePromoBps) / bpsDivisor);
+  if (!promoCode) return unitPricePaise;
+  const normalised = promoCode.trim().toUpperCase();
+  const { promoCodes } = resolveSkuOffers(offers);
+  const matched = promoCodes.find((offer) => offer.code.trim().toUpperCase() === normalised);
+  if (!matched || matched.discountBps <= zeroBps) return unitPricePaise;
+  const discountPaise = Math.floor((unitPricePaise * matched.discountBps) / bpsDivisor);
   if (discountPaise <= zeroPaise) return unitPricePaise;
   appliedDiscounts.push({
     type: discountTypePromoCode,
-    label: `Corporate Promo Code (${corporatePromoBps / 100}% off)`,
-    discountBps: corporatePromoBps,
+    label: `${matched.label ?? "Promo Code"} ${matched.code} (${matched.discountBps / 100}% off)`,
+    discountBps: matched.discountBps,
     discountPaise
   });
   return unitPricePaise - discountPaise;
@@ -185,7 +237,8 @@ export function computeAutoDiscountStack(
   baseUnitPricePaise: number,
   quantity: number,
   volumeTiers: readonly VolumeTier[],
-  promoCode?: string
+  promoCode?: string,
+  merchantOffers?: MerchantAuthoredOffers
 ): DiscountStackResult {
   assertIntegerPaise(baseUnitPricePaise, "baseUnitPricePaise");
   assertIntegerPaise(quantity, "quantity");
@@ -196,9 +249,9 @@ export function computeAutoDiscountStack(
 
   const appliedDiscounts: AppliedDiscountItem[] = [];
   let currentPrice = applyVolumeTierDiscountStep(baseUnitPricePaise, quantity, volumeTiers, appliedDiscounts);
-  currentPrice = applyCampaignDiscountStep(currentPrice, appliedDiscounts);
-  currentPrice = applyPaymentRailDiscountStep(currentPrice, appliedDiscounts);
-  currentPrice = applyPromoCodeDiscountStep(currentPrice, promoCode, appliedDiscounts);
+  currentPrice = applyCampaignDiscountStep(currentPrice, merchantOffers, appliedDiscounts);
+  currentPrice = applyPaymentRailDiscountStep(currentPrice, merchantOffers, appliedDiscounts);
+  currentPrice = applyPromoCodeDiscountStep(currentPrice, promoCode, merchantOffers, appliedDiscounts);
 
   const offeredUnitPricePaise = Math.max(zeroPaise, currentPrice);
   const totalSavingsPaise = (baseUnitPricePaise - offeredUnitPricePaise) * quantity;

@@ -112,7 +112,7 @@ function _computeQuoteWithDiscounts(
   promoCode: string | undefined,
   buyerState: string
 ): SkuQuotePricingResult {
-  const discountResult = computeAutoDiscountStack(sku.baseUnitPricePaise, quantity, sku.volumeTiers, promoCode);
+  const discountResult = computeAutoDiscountStack(sku.baseUnitPricePaise, quantity, sku.volumeTiers, promoCode, sku.merchantOffers);
   const taxableSubtotalPaise = discountResult.offeredUnitPricePaise * quantity;
   const tax = calculateGstBreakdown(taxableSubtotalPaise, sku.gstRatePercent, defaultMerchantState, buyerState);
 

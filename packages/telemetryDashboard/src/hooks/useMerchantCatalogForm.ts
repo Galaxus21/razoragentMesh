@@ -22,6 +22,7 @@ import {
   FormValidationErrors,
   JewelryFacetFormData,
   MerchantCatalogFormData,
+  MerchantOffersFormData,
   PharmaFacetFormData,
   ScheduledPromotionInput,
   UniversalProductListingPayload,
@@ -66,6 +67,7 @@ export interface UseMerchantCatalogFormReturn {
   readonly handleAddPromotion: () => void;
   readonly handleRemovePromotion: (index: number) => void;
   readonly handleUpdatePromotion: (index: number, updated: ScheduledPromotionInput) => void;
+  readonly handleUpdateOffers: (patch: Partial<MerchantOffersFormData>) => void;
   readonly handleUpdateBullion: <K extends keyof BullionPricingFormData>(
     field: K,
     value: BullionPricingFormData[K]
@@ -206,6 +208,27 @@ export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
     setErrors((prev) => _withoutPromotionErrors(prev, index));
   }, []);
 
+  /**
+   * Patch-shaped rather than field-and-value: the promo-code list is edited as a whole array by
+   * the builder, and a per-field setter would force it to read current state to append a row.
+   *
+   * Clears every offer error rather than only the patched key, because the offer errors are
+   * positional (`offer_promo_2_code`) and a removal slides the rows underneath it -- leaving a
+   * message pointing at whichever row moved into that index.
+   */
+  const handleUpdateOffers = useCallback((patch: Partial<MerchantOffersFormData>) => {
+    setFormData((prev) => ({ ...prev, offers: { ...prev.offers, ...patch } }));
+    setErrors((prev) => {
+      const remaining: FormValidationErrors = {};
+      for (const [key, message] of Object.entries(prev)) {
+        if (!key.startsWith("offer_")) {
+          remaining[key] = message;
+        }
+      }
+      return remaining;
+    });
+  }, []);
+
   const handleUpdateBullion = useCallback(
     <K extends keyof BullionPricingFormData>(field: K, value: BullionPricingFormData[K]) => {
       setFormData((prev) => ({
@@ -333,6 +356,7 @@ export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
     handleAddPromotion,
     handleRemovePromotion,
     handleUpdatePromotion,
+    handleUpdateOffers,
     handleUpdateBullion,
     handleSelectFacet,
     handleUpdateJewelry,

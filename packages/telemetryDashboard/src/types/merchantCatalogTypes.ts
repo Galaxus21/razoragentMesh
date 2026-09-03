@@ -101,12 +101,56 @@ export interface MerchantCatalogFormData {
   readonly minimumOrderQuantity: number;
   readonly volumeTiers: ReadonlyArray<VolumeTierInput>;
   readonly promotions: ReadonlyArray<ScheduledPromotionInput>;
+  readonly offers: MerchantOffersFormData;
   readonly bullionPricing: BullionPricingFormData;
   readonly selectedFacet: DomainFacetType;
   readonly jewelryFacet: JewelryFacetFormData;
   readonly apparelFacet: ApparelFacetFormData;
   readonly pharmaFacet: PharmaFacetFormData;
   readonly fmcgFacet: FmcgFacetFormData;
+}
+
+/**
+ * The offers a merchant writes for one SKU: their own campaign, their own UPI cashback, and
+ * their own promo codes.
+ *
+ * Until this existed, three of the four discount types a quote applies were global constants in
+ * the MCP server -- one festive percentage, one cashback amount, one corporate promo code --
+ * identical for every SKU in the mesh and unwritable by any merchant. Only volume tiers and
+ * scheduled sales were genuinely theirs.
+ */
+export interface MerchantPromoCodeInput {
+  readonly code: string;
+  readonly discountBps: number;
+  readonly label: string;
+}
+
+export interface MerchantOffersFormData {
+  /** Off means "do not send merchantOffers at all", which keeps the mesh's default offers. */
+  readonly authorOffers: boolean;
+  readonly campaignEnabled: boolean;
+  readonly campaignLabel: string;
+  readonly campaignDiscountBps: number;
+  /** Blank is uncapped. Not the same as "0", which caps the campaign at nothing. */
+  readonly campaignCapInr: string;
+  readonly paymentRailCashbackInr: string;
+  readonly promoCodes: ReadonlyArray<MerchantPromoCodeInput>;
+}
+
+export interface MerchantPromoCodePayload {
+  readonly code: string;
+  readonly discountBps: number;
+  readonly label?: string;
+}
+
+export interface MerchantOffersPayload {
+  readonly campaign?: {
+    readonly label?: string;
+    readonly discountBps: number;
+    readonly capPaise?: number;
+  };
+  readonly paymentRailCashbackPaise?: number;
+  readonly promoCodes: ReadonlyArray<MerchantPromoCodePayload>;
 }
 
 // No "offline" state: a publish either reached the mesh or it did not, and the dashboard
@@ -203,6 +247,12 @@ export interface UniversalProductListingPayload {
    * the payload carries exactly the keys the backend model declares.
    */
   readonly promotions?: ReadonlyArray<ScheduledPromotionPayload>;
+  /**
+   * Omitted unless the merchant actually authored something. Presence is a complete statement:
+   * a listing that carries merchantOffers gets exactly what it declares, so sending an empty
+   * object would silently switch off the campaign and cashback the mesh applies by default.
+   */
+  readonly merchantOffers?: MerchantOffersPayload;
   readonly jewelryFacet?: JewelryFacetPayload;
   readonly apparelFacet?: ApparelFacetPayload;
   readonly pharmaFacet?: PharmaFacetPayload;

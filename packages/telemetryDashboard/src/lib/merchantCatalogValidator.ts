@@ -5,6 +5,11 @@ import {
   maxPromotionDiscountBps,
   maxQuoteTtlSeconds,
   minPromotionDiscountBps,
+  maxOfferDiscountBps,
+  maxPromoCodeLength,
+  maxPromoCodesPerSku,
+  minOfferDiscountBps,
+  minPromoCodeLength,
   minPromotionWindowSeconds,
   minQuoteTtlSeconds,
   minVolumeQuantity,
@@ -15,6 +20,8 @@ import {
   FormValidationErrors,
   FormValidationResult,
   MerchantCatalogFormData,
+  MerchantOffersFormData,
+  MerchantOffersPayload,
   ScheduledPromotionInput,
   ScheduledPromotionPayload,
   UniversalProductListingPayload,
@@ -119,6 +126,9 @@ export function buildUniversalProductPayload(
     // Omitted when empty. The backend model is extra="forbid" and `promotions` is optional, so
     // an empty array is accepted but says something the merchant did not: that they considered
     // promotions and chose none, rather than never touching the section.
+    ...(formData.offers.authorOffers && {
+      merchantOffers: buildMerchantOffersPayload(formData.offers),
+    }),
     ...(formData.promotions.length > 0 && {
       promotions: formData.promotions.map(buildScheduledPromotionPayload),
     }),
@@ -352,10 +362,110 @@ export function validateMerchantCatalogForm(formData: MerchantCatalogFormData): 
   validatePricingAndStock(formData, errors);
   validateVolumeTiers(formData, errors);
   validatePromotions(formData, errors);
+  validateMerchantOffers(formData, errors);
   validateFacets(formData, errors);
 
   return {
     isValid: Object.keys(errors).length === 0,
     errors,
   };
+}
+
+
+/**
+ * The offers this SKU declares, in MerchantAuthoredOffers' exact shape.
+ *
+ * Only called when the merchant switched authoring on. Presence of `merchantOffers` on a listing
+ * is a COMPLETE statement of that SKU's offers -- the mesh applies exactly what is here and
+ * nothing else -- so a merchant who turns the section on and leaves it empty has genuinely said
+ * "no campaign, no cashback, no codes", and that is what gets sent.
+ */
+export function buildMerchantOffersPayload(
+  offers: MerchantOffersFormData
+): MerchantOffersPayload {
+  const capPaise = offers.campaignCapInr.trim().length > 0
+    ? convertInrToPaise(offers.campaignCapInr)
+    : undefined;
+  const cashbackPaise = offers.paymentRailCashbackInr.trim().length > 0
+    ? convertInrToPaise(offers.paymentRailCashbackInr)
+    : undefined;
+
+  return {
+    ...(offers.campaignEnabled && {
+      campaign: {
+        ...(offers.campaignLabel.trim().length > 0 && { label: offers.campaignLabel.trim() }),
+        discountBps: offers.campaignDiscountBps,
+        // Blank is uncapped, and an uncapped campaign is not the same as one capped at zero, so
+        // the key is dropped rather than sent as 0.
+        ...(capPaise !== undefined && { capPaise }),
+      },
+    }),
+    ...(cashbackPaise !== undefined && { paymentRailCashbackPaise: cashbackPaise }),
+    promoCodes: offers.promoCodes.map((entry) => ({
+      code: entry.code.trim().toUpperCase(),
+      discountBps: entry.discountBps,
+      ...(entry.label.trim().length > 0 && { label: entry.label.trim() }),
+    })),
+  };
+}
+
+/** Mirrors MerchantAuthoredOffers' Field() bounds and its distinct-codes validator. */
+function validateMerchantOffers(
+  formData: MerchantCatalogFormData,
+  errors: FormValidationErrors
+): void {
+  const offers = formData.offers;
+  if (!offers.authorOffers) {
+    return;
+  }
+
+  if (offers.campaignEnabled) {
+    if (
+      !Number.isInteger(offers.campaignDiscountBps) ||
+      offers.campaignDiscountBps < minOfferDiscountBps ||
+      offers.campaignDiscountBps > maxOfferDiscountBps
+    ) {
+      errors.offer_campaign_discount = `Campaign discount must be between ${minOfferDiscountBps} and ${maxOfferDiscountBps} basis points.`;
+    }
+    if (offers.campaignCapInr.trim().length > 0 && !isUsableRupeeAmount(offers.campaignCapInr)) {
+      errors.offer_campaign_cap = "Enter a cap in rupees, or leave blank for uncapped.";
+    }
+  }
+
+  if (
+    offers.paymentRailCashbackInr.trim().length > 0 &&
+    !isUsableRupeeAmount(offers.paymentRailCashbackInr)
+  ) {
+    errors.offer_cashback = "Enter an amount in rupees, e.g. 1.50.";
+  }
+
+  if (offers.promoCodes.length > maxPromoCodesPerSku) {
+    errors.offer_promo_codes = `At most ${maxPromoCodesPerSku} promo codes per SKU.`;
+  }
+
+  const seen = new Set<string>();
+  offers.promoCodes.forEach((entry, idx) => {
+    const code = entry.code.trim().toUpperCase();
+    if (code.length < minPromoCodeLength || code.length > maxPromoCodeLength) {
+      errors[`offer_promo_${idx}_code`] = `Between ${minPromoCodeLength} and ${maxPromoCodeLength} characters.`;
+    } else if (seen.has(code)) {
+      // The backend refuses duplicates outright. Caught here so the merchant is told which row,
+      // rather than getting a 422 naming the whole object.
+      errors[`offer_promo_${idx}_code`] = `"${code}" is already listed above.`;
+    } else {
+      seen.add(code);
+    }
+    if (
+      !Number.isInteger(entry.discountBps) ||
+      entry.discountBps < minOfferDiscountBps ||
+      entry.discountBps > maxOfferDiscountBps
+    ) {
+      errors[`offer_promo_${idx}_discount`] = `Must be between ${minOfferDiscountBps} and ${maxOfferDiscountBps} basis points.`;
+    }
+  });
+}
+
+/** A rupee amount the backend will accept: non-negative, at most two decimal places. */
+function isUsableRupeeAmount(value: string): boolean {
+  return /^\d+(\.\d{1,2})?$/.test(value.trim());
 }

@@ -147,6 +147,7 @@
         "agreed_unit_price_paise",
         "contract_ast_hash",
         "currency",
+        "declined_reason",
         "escrow_refunded_paise",
         "list_unit_price_paise",
         "micro_fees_paid_paise",

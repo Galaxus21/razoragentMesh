@@ -56,6 +56,37 @@ export interface EvaluatedPromotionsResult {
   readonly upcomingPromotions: readonly UpcomingPromotion[];
 }
 
+/**
+ * The offers a merchant writes for one SKU.
+ *
+ * Three of the four discount types a quote can apply used to be global constants in
+ * protocolConstants.ts -- one festive campaign percentage, one UPI cashback amount, and one
+ * corporate promo code -- identical across every SKU in the mesh and unwritable by any merchant.
+ * Only volume tiers and scheduled promotions were genuinely theirs.
+ *
+ * Presence is the whole statement: if a SKU carries `merchantOffers` at all, it describes that
+ * SKU's offers completely, so an absent `campaign` means no campaign rather than "use the demo
+ * default". Without that rule a merchant could add offers but never remove the built-in ones.
+ */
+export interface MerchantCampaignOffer {
+  readonly label?: string;
+  readonly discountBps: number;
+  /** Undefined is uncapped, which is not the same as a cap of zero. */
+  readonly capPaise?: number;
+}
+
+export interface MerchantPromoCodeOffer {
+  readonly code: string;
+  readonly discountBps: number;
+  readonly label?: string;
+}
+
+export interface MerchantAuthoredOffers {
+  readonly campaign?: MerchantCampaignOffer;
+  readonly paymentRailCashbackPaise?: number;
+  readonly promoCodes?: readonly MerchantPromoCodeOffer[];
+}
+
 export interface CatalogSkuItem {
   readonly skuId: string;
   readonly name: string;
@@ -67,6 +98,7 @@ export interface CatalogSkuItem {
   readonly availableStock: number;
   readonly volumeTiers: VolumeTier[];
   readonly promotions?: readonly ScheduledPromotion[];
+  readonly merchantOffers?: MerchantAuthoredOffers;
   readonly embeddingVector?: number[];
   readonly allergens?: string[];
   readonly brand?: string;
@@ -145,6 +177,68 @@ export const scheduledPromotionSchema = z.preprocess(
   })
 );
 
+/**
+ * Accepts both key spellings, like its siblings: this schema parses SKUs arriving over the Redis
+ * broadcast as well as ones compiled into fixtures, and the two have historically disagreed on
+ * camelCase versus snake_case.
+ */
+/** Python's model_dump() emits null for an unset Optional; Zod's .optional() only accepts undefined. */
+function _nullToUndefined<T>(value: T | null | undefined): T | undefined {
+  return value === null ? undefined : value;
+}
+
+export const merchantAuthoredOffersSchema = z.preprocess(
+  (val: unknown) => {
+    if (!val || typeof val !== "object") {
+      return val;
+    }
+    const obj = val as Record<string, unknown>;
+    const campaign = obj.campaign as Record<string, unknown> | null | undefined;
+    return {
+      // Every field is normalised from null to undefined. Python's model_dump() emits `None` for
+      // an unset Optional, so the broadcast carries `"capPaise": null` where a fixture carries no
+      // key at all -- and an optional Zod field rejects null, which would make every SKU
+      // published from the Studio fail to parse and silently vanish from the live catalog.
+      campaign: _nullToUndefined(campaign)
+        ? {
+            label: _nullToUndefined(campaign?.label),
+            discountBps: campaign?.discountBps,
+            capPaise: _nullToUndefined(campaign?.capPaise)
+          }
+        : undefined,
+      paymentRailCashbackPaise: _nullToUndefined(
+        obj.paymentRailCashbackPaise ?? obj.payment_rail_cashback_paise
+      ),
+      promoCodes: ((obj.promoCodes ?? obj.promo_codes ?? []) as Array<Record<string, unknown>>).map(
+        (entry) => ({
+          code: entry?.code,
+          discountBps: entry?.discountBps ?? entry?.discount_bps,
+          label: _nullToUndefined(entry?.label)
+        })
+      )
+    };
+  },
+  z.object({
+    campaign: z
+      .object({
+        label: z.string().optional(),
+        discountBps: z.number().int().min(0).max(10000),
+        capPaise: z.number().int().min(0).optional()
+      })
+      .optional(),
+    paymentRailCashbackPaise: z.number().int().min(0).optional(),
+    promoCodes: z
+      .array(
+        z.object({
+          code: z.string().min(1),
+          discountBps: z.number().int().min(0).max(10000),
+          label: z.string().optional()
+        })
+      )
+      .optional()
+  })
+);
+
 export const catalogSkuItemSchema = z.preprocess(
   (val: unknown) => {
     if (val && typeof val === "object") {
@@ -153,7 +247,10 @@ export const catalogSkuItemSchema = z.preprocess(
         ...obj,
         name: obj.name ?? obj.title ?? obj.skuId,
         volumeTiers: obj.volumeTiers ?? [],
-        promotions: obj.promotions ?? []
+        promotions: obj.promotions ?? [],
+        // Normalised to undefined rather than left as null: the broadcast payload sends
+        // `"merchantOffers": null` for a SKU with none, and an optional Zod field rejects null.
+        merchantOffers: obj.merchantOffers ?? obj.merchant_offers ?? undefined
       };
     }
     return val;
@@ -169,6 +266,7 @@ export const catalogSkuItemSchema = z.preprocess(
     availableStock: z.number().int().min(0),
     volumeTiers: z.array(volumeTierSchema),
     promotions: z.array(scheduledPromotionSchema).optional(),
+    merchantOffers: merchantAuthoredOffersSchema.optional(),
     embeddingVector: z.array(z.number()).optional(),
     allergens: z.array(z.string()).optional(),
     brand: z.string().optional(),

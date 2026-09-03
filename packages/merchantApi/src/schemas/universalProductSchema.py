@@ -31,6 +31,10 @@ minPromotionDurationSeconds: int = 1
 minPromotionDiscountPaise: int = 0
 minPromotionFixedPricePaise: int = 0
 minPromotionLimitedStock: int = 0
+minPromoCodeLength: int = 3
+maxPromoCodeLength: int = 32
+minCashbackPaise: int = 0
+maxPromoCodesPerSku: int = 10
 
 
 class ScheduledPromotionSchema(BaseModel):
@@ -62,6 +66,59 @@ class ScheduledPromotionSchema(BaseModel):
             raise ValueError(
                 "At least one of discountBps, discountPaise, or fixedPricePaise must be specified."
             )
+        return self
+
+
+class MerchantCampaignOffer(BaseModel):
+    """A standing percentage discount the merchant runs on this SKU, optionally capped."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    label: Optional[str] = None
+    discountBps: int = Field(ge=minDiscountBps, le=maxDiscountBps)
+    # A cap is what stops a percentage campaign from being ruinous on a high-value SKU. None
+    # means uncapped, which is a real choice; zero would mean "no discount at all" and is not the
+    # same thing, so the two are kept distinct rather than collapsed into a sentinel.
+    capPaise: Optional[int] = Field(default=None, ge=minPromotionDiscountPaise)
+
+
+class MerchantPromoCodeOffer(BaseModel):
+    """One promo code this merchant honours on this SKU."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    code: str = Field(min_length=minPromoCodeLength, max_length=maxPromoCodeLength)
+    discountBps: int = Field(ge=minDiscountBps, le=maxDiscountBps)
+    label: Optional[str] = None
+
+
+class MerchantAuthoredOffers(BaseModel):
+    """The offers a merchant writes for one SKU, replacing the demo-wide hardcoded defaults.
+
+    Until this existed, three of the four discount types a quote can apply were global constants
+    in the MCP server (`festiveCampaignBps`, `upiCashbackPaise`, a single `corporatePromoCode`),
+    identical for every SKU in the mesh and unwritable by any merchant. Only volume tiers and
+    scheduled promotions were actually the merchant's.
+
+    Presence is the statement. If this object is on a listing at all it describes that SKU's
+    offers COMPLETELY, so an absent `campaign` means no campaign rather than "fall back to the
+    demo default" -- otherwise a merchant would have no way to switch the festive discount off.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    campaign: Optional[MerchantCampaignOffer] = None
+    paymentRailCashbackPaise: Optional[int] = Field(default=None, ge=minCashbackPaise)
+    promoCodes: list[MerchantPromoCodeOffer] = Field(
+        default_factory=list, max_length=maxPromoCodesPerSku
+    )
+
+    @model_validator(mode="after")
+    def validatePromoCodesAreDistinct(self) -> "MerchantAuthoredOffers":
+        """Two rows with the same code make the second unreachable and the form look broken."""
+        seen = [offer.code.strip().upper() for offer in self.promoCodes]
+        if len(seen) != len(set(seen)):
+            raise ValueError("Promo codes must be distinct; the same code was listed twice.")
         return self
 
 
@@ -153,6 +210,7 @@ class UniversalProductListing(BaseModel):
         ge=minOrderQuantityLimit,
     )
     promotions: list[ScheduledPromotionSchema] = Field(default_factory=list)
+    merchantOffers: Optional[MerchantAuthoredOffers] = None
     jewelryFacet: Optional[JewelryFacet] = None
     apparelFacet: Optional[ApparelFacet] = None
     pharmaFacet: Optional[PharmaFacet] = None
@@ -162,6 +220,9 @@ class UniversalProductListing(BaseModel):
 __all__ = [
     "ApparelFacet",
     "FmcgFacet",
+    "MerchantAuthoredOffers",
+    "MerchantCampaignOffer",
+    "MerchantPromoCodeOffer",
     "JewelryFacet",
     "PharmaFacet",
     "ProductAttributes",

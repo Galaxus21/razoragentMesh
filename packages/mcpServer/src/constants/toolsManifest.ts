@@ -86,7 +86,10 @@ const discoveryToolsManifest = [
       "upcoming_promotions with the start time and the expected_savings_paise -- check it before " +
       "committing, because waiting may be the better advice for your buyer. The field lists " +
       "FUTURE sales only: a promotion running right now appears neither there nor in " +
-      "offered_unit_price_paise, which reflects volume tiers, campaigns and promo codes only.",
+      "offered_unit_price_paise, which reflects volume tiers, campaigns and promo codes only. " +
+      "Which campaign, cashback and promo codes apply is set per SKU by its merchant, so a code " +
+      "that discounts one SKU may do nothing on another -- applied_discounts names every one " +
+      "that fired.",
     inputSchema: {
       type: "object",
       required: ["sku_id", "quantity", "buyer_agent_id", "delivery_pincode"],
