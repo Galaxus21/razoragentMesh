@@ -18,7 +18,8 @@ import {
   errorLockSignatureInvalid,
   errorQuoteExpired,
   errorQuoteMismatch,
-  errorUnknownDelegation
+  errorUnknownDelegation,
+  errorUnserviceableAddress
 } from "../constants/mandateToolConstants.js";
 import {
   defaultMerchantPrivateKeyHex,
@@ -156,6 +157,12 @@ export async function createCartMandateForDelegation(
     delivery_pincode: request.delivery_pincode,
     package_weight_grams: request.package_weight_grams
   });
+  // The SLA tool reports an unserviceable address rather than raising, so the cart tool is where
+  // that answer has to become a refusal -- otherwise the merchant signs a cart for a delivery no
+  // courier will accept, and the reason reaches the agent only as a settlement failure.
+  if (!sla.serviceable) {
+    throw new Error(`${errorUnserviceableAddress} ${sla.unserviceable_reason ?? ""}`.trim());
+  }
 
   return _signAndStoreCart({ request, session, quote, sla, options });
 }

@@ -72,9 +72,10 @@ describe("delivery state resolution", () => {
 
 describe("shipping zone resolution", () => {
   it("uses the same lookup as the tax path rather than falling through to the raw prefix", () => {
-    // Behaviour is unchanged for an unmapped delivery -- it was, and remains, out-of-state -- but
-    // it is now a decision rather than a consequence of comparing "99" against "KA".
-    assert.equal(resolveZoneCode("560001", unmappedPincode), "ZONE_C");
+    // An unmapped delivery is ZONE_D -- "the mesh does not know where this is" -- rather than the
+    // raw prefix string, which could never equal the origin state and so read as an ordinary
+    // out-of-state delivery the mesh would happily price.
+    assert.equal(resolveZoneCode("560001", unmappedPincode), "ZONE_D");
     assert.equal(resolveZoneCode("560001", "560034"), "ZONE_A");
     assert.equal(resolveZoneCode("560001", "570001"), "ZONE_B");
     assert.equal(resolveZoneCode("560001", "400001"), "ZONE_C");

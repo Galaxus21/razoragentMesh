@@ -62,3 +62,57 @@ describe("SlaVerifier (Tool 3: verify_shipping_sla)", () => {
     assert.equal(result.courier_partner, "Delhivery");
   });
 });
+
+describe("serviceability", () => {
+  it("refuses an address the mandate engine would later reject outright", () => {
+    // serviceable was hardcoded true, so verify_shipping_sla answered "yes" for a pincode the
+    // engine refuses with InvalidPincodeException: the agent was told the address was fine and
+    // the purchase died at settlement instead.
+    const result = verifyShippingSla({
+      origin_pincode: "560001",
+      delivery_pincode: "999001",
+      package_weight_grams: 500,
+      required_delivery_tier: "standard"
+    });
+    assert.equal(result.serviceable, false);
+    assert.equal(result.zone_code, "ZONE_D");
+    assert.equal(result.shipping_cost_paise, 0);
+    assert.match(String(result.unserviceable_reason), /not in the mesh's serviceability map/);
+    assert.deepEqual(result.available_delivery_tiers, []);
+  });
+
+  it("refuses a tier the zone cannot meet, and names the ones it can", () => {
+    // ZONE_C previously collapsed a sameDay request onto express pricing, promising a tier the
+    // courier network cannot deliver.
+    const result = verifyShippingSla({
+      origin_pincode: "560001",
+      delivery_pincode: "110001",
+      package_weight_grams: 500,
+      required_delivery_tier: "sameDay"
+    });
+    assert.equal(result.serviceable, false);
+    assert.equal(result.zone_code, "ZONE_C");
+    assert.match(String(result.unserviceable_reason), /sameDay delivery is not offered/);
+    assert.deepEqual(result.available_delivery_tiers, ["standard", "express"]);
+  });
+
+  it("still serves the tiers each zone really offers", () => {
+    const sameCity = verifyShippingSla({
+      origin_pincode: "560001",
+      delivery_pincode: "560034",
+      package_weight_grams: 500,
+      required_delivery_tier: "sameDay"
+    });
+    assert.equal(sameCity.serviceable, true);
+    assert.equal(sameCity.zone_code, "ZONE_A");
+
+    const interState = verifyShippingSla({
+      origin_pincode: "560001",
+      delivery_pincode: "110001",
+      package_weight_grams: 500,
+      required_delivery_tier: "express"
+    });
+    assert.equal(interState.serviceable, true);
+    assert.ok(interState.shipping_cost_paise > 0);
+  });
+});

@@ -141,10 +141,12 @@
         "required_delivery_tier"
       ],
       "responseFields": [
+        "available_delivery_tiers",
         "courier_partner",
         "guaranteed_sla_hours",
         "serviceable",
         "shipping_cost_paise",
+        "unserviceable_reason",
         "zone_code"
       ]
     },

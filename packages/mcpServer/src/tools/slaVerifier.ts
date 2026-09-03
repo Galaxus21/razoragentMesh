@@ -7,6 +7,7 @@ import {
   zoneCodeA,
   zoneCodeB,
   zoneCodeC,
+  zoneCodeD,
   zoneAStandardHours,
   zoneAStandardCostPaise,
   zoneAExpressHours,
@@ -51,9 +52,10 @@ export function resolveZoneCode(originPincode: string, deliveryPincode: string):
   const deliveryState = lookupStateFromPincode(deliveryPincode);
 
   if (deliveryState === undefined) {
-    // Unchanged behaviour, now stated rather than emergent: the old code fell back to the raw
-    // prefix string, which could never equal the origin state and so always landed here.
-    return zoneCodeC;
+    // ZONE_D: the mesh does not know where this pincode is. The old code fell back to the raw
+    // prefix string, which could never equal the origin state, so an unknown address quietly
+    // priced as an ordinary out-of-state delivery.
+    return zoneCodeD;
   }
   if (originState === deliveryState) {
     return zoneCodeB;
@@ -109,9 +111,65 @@ function resolveTierAndSla(
   return { slaHours: zoneCStandardHours, baseCostPaise: zoneCStandardCostPaise, courier: courierDelhivery };
 }
 
+/**
+ * Which tiers a zone can actually honour. ZONE_D is the unknown-address zone and honours none:
+ * the mandate engine refuses an unmapped pincode outright with InvalidPincodeException, so a
+ * quote for one is a purchase that dies at settlement.
+ */
+export function availableTiersForZone(zone: string): string[] {
+  if (zone === zoneCodeD) {
+    return [];
+  }
+  if (zone === zoneCodeA) {
+    return [deliveryTierStandard, deliveryTierExpress, deliveryTierSameDay];
+  }
+  // Zones B and C are reachable overnight at best; resolveTierAndSla already collapses a sameDay
+  // request onto express pricing there, which promised a tier the network cannot meet.
+  return [deliveryTierStandard, deliveryTierExpress];
+}
+
 export function verifyShippingSla(rawRequest: unknown): ShippingSlaResponse {
   const request = normalizeShippingRequest(rawRequest);
   const zone = resolveZoneCode(request.origin_pincode, request.delivery_pincode);
+  const availableTiers = availableTiersForZone(zone);
+
+  // serviceable was hardcoded true, so verify_shipping_sla answered "yes" for a pincode the
+  // mandate engine would later refuse outright -- the agent was told the address was fine and
+  // the purchase died at settlement. Report the negative answer instead of raising, following
+  // oosHealingRoute's precedent for an expected no.
+  if (availableTiers.length === 0) {
+    return shippingSlaResponseSchema.parse({
+      guaranteed_sla_hours: zoneCStandardHours,
+      shipping_cost_paise: 0,
+      courier_partner: courierDelhivery,
+      zone_code: zone,
+      serviceable: false,
+      unserviceable_reason:
+        `No courier serves delivery pincode ${request.delivery_pincode}: the prefix ` +
+        `'${request.delivery_pincode.slice(0, statePrefixLength)}' is not in the mesh's ` +
+        "serviceability map, and settlement would refuse it as an invalid pincode. Ask the " +
+        "buyer for a different delivery address.",
+      available_delivery_tiers: availableTiers
+    });
+  }
+
+  if (!availableTiers.includes(request.required_delivery_tier)) {
+    const { slaHours: bestHours, baseCostPaise: bestCost, courier: bestCourier } =
+      resolveTierAndSla(zone, deliveryTierExpress);
+    return shippingSlaResponseSchema.parse({
+      guaranteed_sla_hours: bestHours,
+      shipping_cost_paise: bestCost + computeWeightSurcharge(request.package_weight_grams),
+      courier_partner: bestCourier,
+      zone_code: zone,
+      serviceable: false,
+      unserviceable_reason:
+        `${request.required_delivery_tier} delivery is not offered to ${zone}. The fastest ` +
+        `available tier is express at ${bestHours} hours. Re-request with one of: ` +
+        `${availableTiers.join(", ")}.`,
+      available_delivery_tiers: availableTiers
+    });
+  }
+
   const { slaHours, baseCostPaise, courier } = resolveTierAndSla(
     zone,
     request.required_delivery_tier
@@ -124,7 +182,8 @@ export function verifyShippingSla(rawRequest: unknown): ShippingSlaResponse {
     shipping_cost_paise: totalShippingCostPaise,
     courier_partner: courier,
     zone_code: zone,
-    serviceable: true
+    serviceable: true,
+    available_delivery_tiers: availableTiers
   };
 
   return shippingSlaResponseSchema.parse(response);

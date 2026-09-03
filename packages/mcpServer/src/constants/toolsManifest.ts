@@ -117,7 +117,11 @@ const discoveryToolsManifest = [
   {
     name: toolVerifyShippingSla,
     description:
-      "Deterministically calculates courier routing zone, delivery SLA hours, and shipping cost.",
+      "Deterministically calculates courier routing zone, delivery SLA hours, and shipping cost. " +
+      "CHECK serviceable before building a cart: it is false when no courier serves the delivery " +
+      "pincode, and when the tier you asked for is not offered to that zone. Both cases return " +
+      "unserviceable_reason to relay to your buyer, and available_delivery_tiers so you can " +
+      "re-request usefully. create_cart_mandate refuses an unserviceable address outright.",
     inputSchema: {
       type: "object",
       required: ["origin_pincode", "delivery_pincode", "package_weight_grams", "required_delivery_tier"],

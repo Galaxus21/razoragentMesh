@@ -133,6 +133,10 @@ export const errorLockSignatureInvalid = "lock_signature is not a signature this
 export const errorDelegationAlreadySettled =
   "this delegation has already been settled; call establish_agent_delegation again for another " +
   "purchase.";
+/** Prefix for the cart-level refusal; verify_shipping_sla's own reason is appended to it. */
+export const errorUnserviceableAddress =
+  "this delivery address cannot be serviced, so no cart was signed.";
+
 export const errorNoCartForDelegation = "No cart mandate has been created for this delegation";
 export const errorNoExecutionPayload = "No execution payload has been issued for this delegation";
 export const errorExecutionIdMismatch = "execution_id does not match the payload issued for this delegation";
