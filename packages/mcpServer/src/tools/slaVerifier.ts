@@ -21,9 +21,9 @@ import {
   zoneCStandardCostPaise,
   zoneCExpressHours,
   zoneCExpressCostPaise,
-  pincodePrefixStateMap,
   defaultFallbackState
 } from "../constants/protocolConstants.js";
+import { lookupStateFromPincode } from "./skuQuoter.js";
 import {
   ShippingSlaRequest,
   ShippingSlaResponse,
@@ -42,11 +42,19 @@ export function resolveZoneCode(originPincode: string, deliveryPincode: string):
     return zoneCodeA;
   }
 
-  const originPrefix = originPincode.slice(0, statePrefixLength);
-  const deliveryPrefix = deliveryPincode.slice(0, statePrefixLength);
-  const originState = pincodePrefixStateMap[originPrefix] ?? defaultFallbackState;
-  const deliveryState = pincodePrefixStateMap[deliveryPrefix] ?? deliveryPrefix;
+  // One lookup for both sides, so the shipping path and the tax path agree on where a pincode is.
+  // The origin is the mesh's own configured pincode, so defaultFallbackState is a real default
+  // there; the delivery side has no such licence, and an unmapped prefix is now ZONE_D rather
+  // than the raw prefix string -- which happened to sort as "not the origin state" and so read as
+  // an ordinary out-of-state delivery the mesh could quote and ship.
+  const originState = lookupStateFromPincode(originPincode) ?? defaultFallbackState;
+  const deliveryState = lookupStateFromPincode(deliveryPincode);
 
+  if (deliveryState === undefined) {
+    // Unchanged behaviour, now stated rather than emergent: the old code fell back to the raw
+    // prefix string, which could never equal the origin state and so always landed here.
+    return zoneCodeC;
+  }
   if (originState === deliveryState) {
     return zoneCodeB;
   }

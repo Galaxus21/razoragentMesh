@@ -129,6 +129,9 @@ export const pincodePrefixStateMap: Record<string, string> = {
   "14": "PB",
   "15": "PB",
   "16": "CH",
+  "17": "HP",
+  "18": "JK",
+  "19": "JK",
   "20": "UP",
   "21": "UP",
   "22": "UP",
@@ -152,6 +155,11 @@ export const pincodePrefixStateMap: Record<string, string> = {
   "42": "MH",
   "43": "MH",
   "44": "MH",
+  "45": "MP",
+  "46": "MP",
+  "47": "MP",
+  "48": "MP",
+  "49": "CG",
   "50": "TS",
   "51": "AP",
   "52": "AP",
@@ -172,9 +180,26 @@ export const pincodePrefixStateMap: Record<string, string> = {
   "71": "WB",
   "72": "WB",
   "73": "WB",
-  "74": "WB"
+  "74": "WB",
+  "75": "OD",
+  "76": "OD",
+  "77": "OD",
+  "78": "AS",
+  "79": "AR",
+  "80": "BR",
+  "81": "BR",
+  "82": "JH",
+  "83": "JH",
+  "84": "BR",
+  "85": "BR"
 };
 
+/**
+ * The merchant's own state, used only where the ORIGIN pincode is the mesh's own configured
+ * `defaultOriginPincode`. It is deliberately not a fallback for a buyer's delivery pincode: this
+ * value is also `defaultMerchantState`, so guessing it for an unmapped delivery prefix routes the
+ * cart down the intra-state CGST+SGST branch for a delivery that could be anywhere in India.
+ */
 export const defaultFallbackState = "KA";
  
  export const discountTypeVolumeTier = "VOLUME_TIER" as const;

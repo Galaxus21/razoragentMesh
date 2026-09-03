@@ -210,8 +210,16 @@ export class InsufficientStockException extends Error {
 
 export class InvalidPincodeException extends Error {
   readonly code = "INVALID_PINCODE";
-  constructor(pincode: string) {
-    super(`Invalid delivery pincode provided: ${pincode}`);
+  /**
+   * `reason` is appended when the pincode is well-formed but unusable -- an unmapped prefix, say.
+   * Only err.message reaches an MCP agent, so the distinction has to live in the message.
+   */
+  constructor(pincode: string, reason?: string) {
+    super(
+      reason === undefined
+        ? `Invalid delivery pincode provided: ${pincode}`
+        : `Invalid delivery pincode provided: ${pincode} -- ${reason}`
+    );
     this.name = "InvalidPincodeException";
   }
 }

@@ -1,7 +1,6 @@
 import {
   defaultMerchantState,
   pincodePrefixStateMap,
-  defaultFallbackState,
   quoteValiditySeconds,
   millisPerSecond,
   currencyInr
@@ -22,7 +21,7 @@ import {
   UpcomingPromotion,
   TaxBreakdown
 } from "../catalog/pricingEngine.js";
-import { CatalogSkuItem } from "../types/mcpToolTypes.js";
+import { CatalogSkuItem, InvalidPincodeException } from "../types/mcpToolTypes.js";
 import { computeQuoteHash } from "../crypto/quoteHashSigner.js";
 
 export interface SkuQuotePricingResult {
@@ -41,9 +40,37 @@ export interface SignAndPackageQuoteParams {
 
 export const pincodePrefixLength = 2;
 
+/**
+ * Pure lookup: the state this prefix is registered to, or undefined when it is not in the map.
+ * The single source of truth for "do we know where this pincode is", so the tax path and the
+ * shipping path cannot disagree -- they previously did, one guessing "KA" and the other falling
+ * through to the raw prefix. Callers choose whether an unknown pincode is reported or raised.
+ */
+export function lookupStateFromPincode(pincode: string): string | undefined {
+  return pincodePrefixStateMap[pincode.slice(0, pincodePrefixLength)];
+}
+
+/**
+ * Resolves the delivery state for TAX, and refuses when it cannot.
+ *
+ * This used to fall back to defaultFallbackState ("KA"), which is also defaultMerchantState -- so
+ * an unmapped prefix took the intra-state branch and issued CGST+SGST for a delivery that might
+ * be anywhere in India, with no warning and no field recording that the state was guessed. The
+ * mandate engine already refuses these outright with InvalidPincodeException, so the old
+ * behaviour was a deferred failure rather than a working path: the quote succeeded, and the
+ * purchase died at settlement. Refusing here is a rejected order instead of a wrong tax head.
+ */
 export function resolveStateFromPincode(pincode: string): string {
-  const prefix = pincode.slice(0, pincodePrefixLength);
-  return pincodePrefixStateMap[prefix] ?? defaultFallbackState;
+  const state = lookupStateFromPincode(pincode);
+  if (state === undefined) {
+    throw new InvalidPincodeException(
+      pincode,
+      `no GST state is registered for the prefix '${pincode.slice(0, pincodePrefixLength)}'. ` +
+        "The mesh will not guess a state, because guessing decides whether you are charged " +
+        "CGST+SGST or IGST. Use a delivery pincode in a serviced state."
+    );
+  }
+  return state;
 }
 
 export function normalizeQuoteRequest(rawInput: unknown): SkuQuoteRequest {
