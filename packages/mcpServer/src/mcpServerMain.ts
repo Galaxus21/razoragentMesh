@@ -37,6 +37,7 @@ import type {
 import { executeTool } from "./tools/toolRegistry.js";
 import { startMcpHttpServer } from "./http/httpAdapter.js";
 import { initializeCatalogSubscriber } from "./catalog/catalogSubscriber.js";
+import { indexCompiledFixtures } from "./catalog/fixtureIndexer.js";
 
 export type { JsonRpcRequest, JsonRpcResponse };
 
@@ -268,6 +269,10 @@ export function startAllTransports(): void {
   const transportMode = resolveTransportMode();
   warnOnDevelopmentSigningKeys();
   initializeCatalogSubscriber();
+  // Deliberately not awaited, and it never rejects: the compiled fixtures are already quotable
+  // from the in-process store, so indexing them is what makes them SEARCHABLE and nothing more.
+  // Blocking boot on merchant-api being reachable would trade a working mesh for a nicer one.
+  void indexCompiledFixtures();
 
   if (shouldStartStdio(transportMode)) {
     startMcpServer();

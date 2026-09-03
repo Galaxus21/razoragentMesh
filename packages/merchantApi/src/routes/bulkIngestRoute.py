@@ -16,7 +16,8 @@ from ..schemas.bulkIngestSchema import (
     ErpBatchSyncResult,
     ShopifyWebhookPayload,
 )
-from .dependencies import getRedisClient
+from .catalogRoute import _indexListing
+from .dependencies import getRedisClient, getVectorizer
 
 bulkIngestRouter = APIRouter(prefix="/api/v1/merchant", tags=["bulk-ingest"])
 
@@ -30,6 +31,7 @@ async def ingestCsvBulk(
     merchantDid: str,
     file: UploadFile = File(...),
     redis: Any = Depends(getRedisClient),
+    vectorizer: Any = Depends(getVectorizer),
 ) -> CsvIngestResult:
     """Reads CSV file upload, validates catalog rows, and indexes valid SKUs into Redis."""
     rawBytes = await file.read()
@@ -38,6 +40,10 @@ async def ingestCsvBulk(
     listings, result = ingestCsvContent(csvText, merchantDid)
     for listing in listings:
         await catalogManager.upsertListing(redis, listing)
+        # Without this a bulk-ingested SKU is quotable by id but invisible to search_catalog,
+        # which is the same defect the compiled fixtures had. Best effort, as on the single-SKU
+        # route: the listing is already written and published.
+        await _indexListing(vectorizer, listing)
 
     return result
 
@@ -50,11 +56,13 @@ async def shopifyWebhookSync(
     merchantDid: str,
     payload: ShopifyWebhookPayload,
     redis: Any = Depends(getRedisClient),
+    vectorizer: Any = Depends(getVectorizer),
 ) -> dict[str, Any]:
     """Ingests Shopify product payload across all variants into merchant catalog."""
     listings = processShopifyWebhook(payload, merchantDid)
     for listing in listings:
         await catalogManager.upsertListing(redis, listing)
+        await _indexListing(vectorizer, listing)
 
     return {
         "status": "synchronized",
