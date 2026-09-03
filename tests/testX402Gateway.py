@@ -3,6 +3,8 @@
 from typing import Optional
 import time
 import pytest
+
+from razoragentMesh.tests.mockInfraHelpers import MockRedisAsync, seedNegotiableMerchant
 from httpx import ASGITransport, AsyncClient
 
 from razoragentMesh.packages.x402Gateway.src.compiler.astContractCompiler import (
@@ -215,6 +217,17 @@ async def _testGatewayNegotiationStep(client: AsyncClient, challengeToken: str, 
 @pytest.mark.asyncio
 async def testGatewayAppEndpoints() -> None:
     """Integration test for FastAPI gateway application endpoints."""
+    # Negotiation is opt-in per merchant, so the SKU below has to be listed and its merchant has
+    # to have switched it on before the route will hold a turn at all.
+    gatewayRedis = MockRedisAsync()
+    await seedNegotiableMerchant(
+        gatewayRedis,
+        skuId="SKU-CHAIR-001",
+        merchantDid="did:agent:app_merchant",
+        listPricePaise=350000,
+        marginFloorBps=1000,
+    )
+    app.state.redis = gatewayRedis
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         respHealth = await client.get("/api/v1/mesh/health")
@@ -248,19 +261,36 @@ class MockPolicyRedis:
 
 @pytest.mark.asyncio
 async def testMerchantPolicyFloorLookup() -> None:
-    """Verifies that merchant policy floor is retrieved from Redis when available."""
-    import json
-    from razoragentMesh.packages.x402Gateway.src.routes.negotiateRoute import lookupMerchantFloorPolicy
+    """Verifies the merchant's negotiation band is read from Redis, and refused when absent.
 
+    Replaces a test of `lookupMerchantFloorPolicy`, which returned a bare number that was either
+    basis points or paise depending on which key happened to be present, leaving the caller to
+    guess. The resolver returns a decided band plus whether the merchant consented at all.
+    """
+    import json
+    from razoragentMesh.packages.x402Gateway.src.negotiation.merchantTerms import (
+        resolveMerchantNegotiationTerms,
+    )
+
+    merchantDid = "did:agent:nexus_merchant"
     mockRedis = MockPolicyRedis({
-        "mesh:merchant:policy:did:agent:nexus_merchant": json.dumps({"marginFloorBps": 1200})
+        "mesh:catalog:SKU-NEXUS-001": json.dumps({
+            "skuId": "SKU-NEXUS-001",
+            "merchantDid": merchantDid,
+            "baseUnitPricePaise": 200000,
+        }),
+        "mesh:merchant:policy:" + merchantDid: json.dumps({
+            "merchantDid": merchantDid,
+            "negotiationEnabled": True,
+            "marginFloorBps": 1200,
+        }),
     })
 
-    floorBps = await lookupMerchantFloorPolicy("did:agent:nexus_merchant", redisClient=mockRedis)
-    assert floorBps == 1200
+    terms = await resolveMerchantNegotiationTerms("SKU-NEXUS-001", mockRedis)
+    assert terms.negotiationEnabled is True
+    assert terms.merchantDid == merchantDid
+    assert terms.floorPricePaise == 176000  # 200000 * (10000 - 1200) / 10000
 
-    missingFloor = await lookupMerchantFloorPolicy("did:agent:unknown", redisClient=mockRedis)
-    assert missingFloor is None
-
-    noMerchant = await lookupMerchantFloorPolicy(None, redisClient=mockRedis)
-    assert noMerchant is None
+    unlisted = await resolveMerchantNegotiationTerms("SKU-UNKNOWN", mockRedis)
+    assert unlisted.negotiationEnabled is False
+    assert unlisted.floorPricePaise is None

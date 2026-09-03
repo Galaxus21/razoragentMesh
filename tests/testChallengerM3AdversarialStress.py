@@ -5,6 +5,7 @@ HMAC-SHA256 webhook verification with corrupted payloads, dynamic PoW difficulty
 and nonce exhaustion under strict integer paise invariants.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -60,11 +61,14 @@ from razoragentMesh.packages.x402Gateway.src.negotiation.marginEvaluator import 
     computeSellerCounterAsk,
     evaluateMargin,
 )
+from razoragentMesh.packages.x402Gateway.src.negotiation.merchantTerms import (
+    computeFloorPricePaise,
+    resolveMerchantNegotiationTerms,
+)
 from razoragentMesh.packages.x402Gateway.src.routes.negotiateRoute import (
-    _resolveSellerCostFloor,
     activeNegotiators,
 )
-from razoragentMesh.tests.mockInfraHelpers import MockRedisAsync
+from razoragentMesh.tests.mockInfraHelpers import MockRedisAsync, seedNegotiableMerchant
 
 # Constants in strict camelCase
 testSkuIdProduct: str = "SKU-PREMIUM-CHAIR-001"
@@ -149,18 +153,27 @@ def testNegotiationMaxTurnsExhaustion() -> None:
 
 @pytest.mark.asyncio
 async def testSellerCostFloorResolutionLogic() -> None:
-    """Verifies merchant policy floor calculation from Redis margin BPS and absolute paise."""
+    """Verifies the merchant's floor is anchored to their LIST price, not to the buyer's ask.
+
+    This test used to assert the opposite. `_resolveSellerCostFloor` derived the floor from the
+    `sellerAskPaise` in the buyer's own request body, so a buyer that declared a low ask also
+    lowered the floor meant to constrain it -- the floor moved with the thing it was bounding.
+    The floor now comes from the merchant's listing, which no buyer can write.
+    """
     mockRedis = MockRedisAsync()
-    didBps = "did:mesh:merchant_bps"
-    didPaise = "did:mesh:merchant_paise"
-    await mockRedis.set(f"mesh:merchant:policy:{didBps}", json.dumps({"marginFloorBps": 1000}))
-    await mockRedis.set(f"mesh:merchant:policy:{didPaise}", json.dumps({"sellerCostFloorPaise": 75000}))
+    await seedNegotiableMerchant(
+        mockRedis,
+        skuId=testSkuIdProduct,
+        merchantDid=testMerchantDid,
+        listPricePaise=100000,
+        marginFloorBps=1000,
+    )
 
-    floorFromBps = await _resolveSellerCostFloor(didBps, sellerAskPaise=100000, redisClient=mockRedis)
-    assert floorFromBps == 90000  # 100000 * (10000 - 1000) / 10000
+    terms = await resolveMerchantNegotiationTerms(testSkuIdProduct, mockRedis)
+    assert terms.floorPricePaise == 90000  # 100000 * (10000 - 1000) / 10000
 
-    floorFromPaise = await _resolveSellerCostFloor(didPaise, sellerAskPaise=100000, redisClient=mockRedis)
-    assert floorFromPaise == 75000
+    # The same policy against a buyer claiming any ask it likes yields the same floor.
+    assert computeFloorPricePaise(terms.listPricePaise or 0, 1000) == 90000
 
 
 def testWebhookHmacVerificationValidAndCorruptedPayloads() -> None:
@@ -247,8 +260,23 @@ def testPowSolvingVerificationReplayAndExpiry() -> None:
 
 
 def testNegotiateRouteEndToEndWithTestClient() -> None:
-    """Verifies end-to-end FastAPI negotiate route error codes and convergence AST compilation."""
+    """Verifies end-to-end FastAPI negotiate route error codes and convergence AST compilation.
+
+    The seeded merchant is what makes this reachable at all: negotiation is opt-in, so without a
+    listing and an enabled policy in Redis the route answers 403 before any turn is held.
+    """
+    mockRedis = MockRedisAsync()
+    asyncio.run(
+        seedNegotiableMerchant(
+            mockRedis,
+            skuId=testSkuIdProduct,
+            merchantDid=testMerchantDid,
+            listPricePaise=100000,
+            marginFloorBps=1000,
+        )
+    )
     app = createGatewayApp()
+    app.state.redis = mockRedis
     client = TestClient(app)
 
     challengeResp = client.get("/api/v1/mesh/challenge")
@@ -283,5 +311,8 @@ def testNegotiateRouteEndToEndWithTestClient() -> None:
     assert turnResp.status_code == 200
     data = turnResp.json()
     assert data["stepResult"]["isConverged"] is True
+    # 95000 is inside the merchant's band [90000, 100000], so it survives the clamp untouched.
+    assert data["stepResult"]["sellerAskPaise"] == 95000
     assert data["contractAst"] is not None
     assert data["contractAstHash"] is not None
+    assert data["contractAst"]["merchantDid"] == testMerchantDid

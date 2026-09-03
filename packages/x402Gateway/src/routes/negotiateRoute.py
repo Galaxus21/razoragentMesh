@@ -1,6 +1,13 @@
-"""Negotiation and PoW challenge API routes for Layer 2 x402-INR gateway."""
+"""Negotiation and PoW challenge API routes for Layer 2 x402-INR gateway.
 
-import json
+There is no merchant-side agent in this mesh. The merchant is represented here by their stored
+policy, and `negotiateTurn` will not run at all unless that policy exists and says
+`negotiationEnabled` -- negotiation is opt-in per merchant. Everything about the seller's side of
+the bargain (who the merchant is, what the item lists at, how far below list they will go) comes
+from `resolveMerchantNegotiationTerms`, which reads merchant-written Redis records. The request
+body's `sellerAskPaise` and `merchantDid` are treated as a buyer's *proposal*, never as fact.
+"""
+
 import logging
 import time
 from typing import Any, Dict, Optional, Tuple
@@ -9,7 +16,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from ..compiler.astContractCompiler import compileCommercialContractAst
 from ..config import getGatewaySettings
 from ..constants.gatewayConstants import (
-    basisPointsDivisor, httpStatusBadRequest, httpStatusConflict,
+    httpStatusBadRequest, httpStatusConflict,
     httpStatusForbidden, httpStatusPaymentRequired,
 )
 from ..constants.negotiationConstants import (
@@ -37,6 +44,11 @@ from ..middleware.proofOfWorkMiddleware import (
 from ..negotiation.bidStateMachine import (
     RubinsteinStahlNegotiator,
 )
+from ..negotiation.merchantTerms import (
+    MerchantNegotiationTerms,
+    clampSellerAskPaise,
+    resolveMerchantNegotiationTerms,
+)
 from ..schemas.bidRequestSchema import (
     NegotiateTurnRequest,
     NegotiateTurnResponse,
@@ -46,7 +58,6 @@ from ..schemas.contractAstSchema import CommercialContractAst
 
 logger = logging.getLogger(__name__)
 
-merchantPolicyRedisKeyPrefix: str = "mesh:merchant:policy:"
 defaultMerchantFallbackDid: str = "did:agent:merchant_default"
 activeNegotiators: Dict[str, RubinsteinStahlNegotiator] = {}
 
@@ -74,6 +85,22 @@ async def negotiateTurn(
     escrowClient: EscrowClient = Depends(getEscrowClient),
 ) -> NegotiateTurnResponse:
     """Processes single negotiation turn under PoW and micro-escrow verification."""
+    _requireX402Headers(powChallenge, powSolution, escrowToken)
+
+    # Resolved BEFORE the escrow debit. A buyer must not be charged the per-turn micro-fee for a
+    # negotiation the merchant never agreed to hold.
+    terms = await resolveMerchantNegotiationTerms(payload.skuId, redisClient)
+    if not terms.negotiationEnabled:
+        raise HTTPException(status_code=httpStatusForbidden, detail=terms.refusalReason)
+    if payload.turnNumber > terms.maxTurns:
+        raise HTTPException(
+            status_code=httpStatusConflict,
+            detail=(
+                f"This merchant allows {terms.maxTurns} negotiation turns; turn "
+                f"{payload.turnNumber} is past that. Accept the last ask or buy at list price."
+            ),
+        )
+
     debitReceipt = await verifyPoWAndDebitEscrow(
         powChallenge,
         powSolution,
@@ -83,37 +110,40 @@ async def negotiateTurn(
         escrowClient=escrowClient,
     )
     sessionKey = f"{payload.buyerAgentDid}:{payload.skuId}"
-    sellerCostFloor = await _resolveSellerCostFloor(
-        payload.merchantDid, payload.sellerAskPaise, redisClient=redisClient
-    )
     negotiator = getOrCreateNegotiator(
         sessionKey,
         payload.skuId,
         payload.quantity,
         debitReceipt.remainingBalancePaise,
-        sellerCostFloorPaise=sellerCostFloor,
+        sellerCostFloorPaise=terms.floorPricePaise,
     )
+    # The buyer proposed both sides of this turn. Only its own bid survives verbatim; the ask is
+    # pulled back into the merchant's band, so a bid at or above the merchant's floor converges
+    # and one below it does not -- which is what makes this a negotiation rather than a form the
+    # buyer fills in on the seller's behalf.
+    effectiveSellerAskPaise = clampSellerAskPaise(payload.sellerAskPaise, terms)
     step = _executeNegotiationRound(
-        negotiator, payload.turnNumber, payload.buyerBidPaise, payload.sellerAskPaise
+        negotiator, payload.turnNumber, payload.buyerBidPaise, effectiveSellerAskPaise
     )
-    contractAst, astHash = compileContractIfConverged(step, payload, sessionKey)
+    contractAst, astHash = compileContractIfConverged(step, payload, sessionKey, terms)
     return _buildNegotiateTurnResponse(step, debitReceipt, contractAst, astHash)
 
 
-async def _resolveSellerCostFloor(
-    merchantDid: Optional[str],
-    sellerAskPaise: int,
-    redisClient: Optional[Any] = None,
-) -> Optional[int]:
-    """Resolves seller cost floor in paise from merchant policy or margin BPS."""
-    if not merchantDid:
-        return None
-    policyValue = await lookupMerchantFloorPolicy(merchantDid, redisClient=redisClient)
-    if policyValue is None:
-        return None
-    if policyValue <= basisPointsDivisor and sellerAskPaise > 0:
-        return (sellerAskPaise * (basisPointsDivisor - policyValue)) // basisPointsDivisor
-    return policyValue
+def _requireX402Headers(
+    powChallenge: Optional[str],
+    powSolution: Optional[str],
+    escrowToken: Optional[str],
+) -> None:
+    """Refuses a turn that arrives without the x402 headers, before any other work.
+
+    Split out of verifyPoWAndDebitEscrow so the route can run this gate first and the policy gate
+    second, and still not debit the escrow until both have passed.
+    """
+    if not powChallenge or not powSolution or not escrowToken:
+        raise HTTPException(
+            status_code=httpStatusPaymentRequired,
+            detail="x402-INR authentication required: PoW solution and escrow token missing",
+        )
 
 
 def _executeNegotiationRound(
@@ -150,35 +180,6 @@ def _buildNegotiateTurnResponse(
     )
 
 
-async def lookupMerchantFloorPolicy(
-    merchantDid: Optional[str],
-    redisClient: Optional[Any] = None,
-) -> Optional[int]:
-    """Queries Redis for merchant dynamic pricing policy and margin floor in paise/bps."""
-    if not merchantDid:
-        return None
-    client = redisClient if redisClient is not None else await getGatewayRedisClient()
-    if client is None:
-        return None
-    try:
-        policyKey = f"{merchantPolicyRedisKeyPrefix}{merchantDid}"
-        rawPolicy = await client.get(policyKey)
-        if not rawPolicy:
-            return None
-        policyData = json.loads(rawPolicy) if isinstance(rawPolicy, (str, bytes)) else rawPolicy
-        if isinstance(policyData, dict):
-            if "marginFloorBps" in policyData:
-                return int(policyData["marginFloorBps"])
-            if "sellerCostFloorPaise" in policyData:
-                return int(policyData["sellerCostFloorPaise"])
-            if "costFloorPaise" in policyData:
-                return int(policyData["costFloorPaise"])
-        return None
-    except Exception as err:
-        logger.warning("Policy lookup failed for merchant %s: %s", merchantDid, err)
-        return None
-
-
 async def verifyPoWAndDebitEscrow(
     powChallenge: Optional[str],
     powSolution: Optional[str],
@@ -188,11 +189,7 @@ async def verifyPoWAndDebitEscrow(
     escrowClient: Optional[EscrowClient] = None,
 ) -> DebitReceipt:
     """Verifies PoW headers and debits turn fee from active escrow session."""
-    if not powChallenge or not powSolution or not escrowToken:
-        raise HTTPException(
-            status_code=httpStatusPaymentRequired,
-            detail="x402-INR authentication required: PoW solution and escrow token missing",
-        )
+    _requireX402Headers(powChallenge, powSolution, escrowToken)
     activeShield = antiSpamShield if antiSpamShield is not None else defaultAntiSpamShield
     activeEscrow = escrowClient if escrowClient is not None else defaultEscrowClient
     try:
@@ -234,16 +231,23 @@ def compileContractIfConverged(
     step: NegotiationStepResult,
     payload: NegotiateTurnRequest,
     sessionKey: str,
+    terms: MerchantNegotiationTerms,
 ) -> Tuple[Optional[CommercialContractAst], Optional[str]]:
-    """Compiles immutable AST if negotiation has reached convergence."""
+    """Compiles immutable AST if negotiation has reached convergence.
+
+    Both commercially meaningful values come from `terms` and `step`, not from `payload`. The
+    merchant is whoever the SKU listing says owns the item, and the agreed price is the ask the
+    route clamped into that merchant's band -- so the hash a buyer walks away with commits the
+    merchant only to a price their own policy allowed.
+    """
     if not step.isConverged:
         return None, None
     now = int(time.time())
-    merchantDid = payload.merchantDid or defaultMerchantFallbackDid
+    merchantDid = terms.merchantDid or defaultMerchantFallbackDid
     contractAst, astHash = compileCommercialContractAst(
         skuId=payload.skuId,
         quantity=payload.quantity,
-        agreedUnitPrice=payload.sellerAskPaise,
+        agreedUnitPrice=step.sellerAskPaise,
         turns=payload.turnNumber,
         buyerDid=payload.buyerAgentDid,
         merchantDid=merchantDid,
@@ -281,7 +285,6 @@ __all__ = [
     "getOrCreateNegotiator",
     "getPolicyRedisClient",
     "getPowChallenge",
-    "lookupMerchantFloorPolicy",
     "negotiateRouter",
     "negotiateTurn",
     "verifyPoWAndDebitEscrow",

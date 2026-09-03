@@ -1,3 +1,4 @@
+import json
 import math
 import time
 from typing import Any, Dict, List, Optional
@@ -292,3 +293,48 @@ class MockRazorpayRouteClient:
         }
         self.paymentsCaptured.append(captureRecord)
         return captureRecord
+
+
+async def seedNegotiableMerchant(
+    redisClient: Any,
+    skuId: str,
+    merchantDid: str,
+    listPricePaise: int,
+    marginFloorBps: int = 1000,
+    negotiationEnabled: bool = True,
+    maxNegotiationTurns: int = 5,
+) -> None:
+    """Writes the two merchant-owned records the x402 gateway needs to allow a negotiation.
+
+    Negotiation is opt-in: `resolveMerchantNegotiationTerms` refuses unless BOTH the SKU listing
+    (which supplies the authoritative list price and owning merchant) and a policy with
+    `negotiationEnabled` are present. Seeding only one of the two is the most likely way to write
+    a test that fails for the wrong reason, so both live in one helper.
+    """
+    await redisClient.set(
+        f"mesh:catalog:{skuId}",
+        json.dumps(
+            {
+                "skuId": skuId,
+                "merchantDid": merchantDid,
+                "title": "Seeded Negotiable SKU",
+                "baseUnitPricePaise": listPricePaise,
+                "availableStock": 100,
+            }
+        ),
+    )
+    await redisClient.set(
+        f"mesh:merchant:policy:{merchantDid}",
+        json.dumps(
+            {
+                "merchantDid": merchantDid,
+                "negotiationEnabled": negotiationEnabled,
+                "marginFloorBps": marginFloorBps,
+                "minimumOrderQuantity": 1,
+                "autoAcceptSpreadPaise": 0,
+                "maxNegotiationTurns": maxNegotiationTurns,
+                "createdAtTimestamp": 1788400000,
+                "updatedAtTimestamp": 1788400000,
+            }
+        ),
+    )
