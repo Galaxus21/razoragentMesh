@@ -123,6 +123,16 @@ export const errorQuoteExpired = (lapsedSecondsAgo: number, validitySeconds: num
   "The parameters reconciled exactly -- only the clock moved. Call get_live_sku_quote again " +
   "and retry create_cart_mandate with the fresh quote_hash.";
 export const errorLockSignatureInvalid = "lock_signature is not a signature this mesh produced";
+
+/**
+ * A custodial delegation buys exactly once: execute_settlement discards the session buyer key so
+ * its lifetime is the purchase rather than the delegation's full validity. Without this refusal a
+ * second purchase reached the SDK's key guard and died on "Invalid secret key hex string", which
+ * says nothing about the protocol rule being enforced.
+ */
+export const errorDelegationAlreadySettled =
+  "this delegation has already been settled; call establish_agent_delegation again for another " +
+  "purchase.";
 export const errorNoCartForDelegation = "No cart mandate has been created for this delegation";
 export const errorNoExecutionPayload = "No execution payload has been issued for this delegation";
 export const errorExecutionIdMismatch = "execution_id does not match the payload issued for this delegation";

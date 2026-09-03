@@ -16,6 +16,10 @@ import { executeSkuQuote } from "../src/tools/skuQuoter.js";
 import { defaultCatalogStore } from "../src/catalog/catalogStore.js";
 import { signLockPayload } from "../src/crypto/lockSignatureGenerator.js";
 import { computeQuoteHash } from "../src/crypto/quoteHashSigner.js";
+import {
+  loadDelegationSession,
+  saveDelegationSession
+} from "../src/session/delegationSessionStore.js";
 import { millisPerSecond } from "../src/constants/protocolConstants.js";
 import {
   custodyAgentHeld,
@@ -380,6 +384,95 @@ describe("sign_execution_mandate", () => {
       () => signExecutionMandateForDelegation({ delegation_id: String(delegation.delegation_id) }),
       /No cart mandate/
     );
+  });
+});
+
+describe("delegation reuse after settlement", () => {
+  /** Drives one custodial purchase all the way through a stubbed engine. */
+  async function settleCustodialPurchase(): Promise<string> {
+    const delegation = await establishCustodialDelegation();
+    const delegationId = String(delegation.delegation_id);
+    await createCartMandateForDelegation(
+      buildCartRequest(delegationId, String(delegation.delegated_agent_did))
+    );
+    const signed = await signExecutionMandateForDelegation({ delegation_id: delegationId });
+
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ status: "captured" })
+    })) as unknown as typeof globalThis.fetch;
+    try {
+      await executeSettlementForDelegation({
+        delegation_id: delegationId,
+        execution_id: signed.execution_id
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    return delegationId;
+  }
+
+  it("refuses a second cart on a settled delegation with the protocol rule, not a crypto error", async () => {
+    const delegationId = await settleCustodialPurchase();
+    const session = await loadDelegationSession(delegationId);
+    assert.equal(session?.settled, true, "settlement must mark the session settled");
+
+    await assert.rejects(
+      () => createCartMandateForDelegation(buildCartRequest(delegationId, String(session?.buyerAgentDid))),
+      /already been settled; call establish_agent_delegation again/
+    );
+  });
+
+  it("refuses to sign again on a settled delegation instead of failing on the discarded key", async () => {
+    const delegationId = await settleCustodialPurchase();
+    // Previously this reached AgentKeyManager.fromSecretKey("") and surfaced
+    // "Invalid secret key hex string: expected 128 valid hex characters".
+    await assert.rejects(
+      () => signExecutionMandateForDelegation({ delegation_id: delegationId }),
+      /already been settled; call establish_agent_delegation again/
+    );
+  });
+
+  it("does not carry a signed execution mandate forward onto a new cart", async () => {
+    const delegation = await establishCustodialDelegation();
+    const delegationId = String(delegation.delegation_id);
+    const buyerAgentDid = String(delegation.delegated_agent_did);
+    await createCartMandateForDelegation(buildCartRequest(delegationId, buyerAgentDid));
+
+    // A lingering bundle from an earlier purchase. settlementExecutor prefers it over building
+    // a fresh mandate, so carrying it onto a new cart would settle the previous purchase.
+    const withStaleBundle = await loadDelegationSession(delegationId);
+    assert.ok(withStaleBundle);
+    await saveDelegationSession({
+      ...withStaleBundle,
+      signedExecutionMandate: { nonce: "stale-bundle-under-test" }
+    });
+
+    await createCartMandateForDelegation(buildCartRequest(delegationId, buyerAgentDid));
+    const rebuilt = await loadDelegationSession(delegationId);
+    assert.equal(rebuilt?.signedExecutionMandate, undefined);
+    assert.equal(rebuilt?.settled, undefined);
+  });
+
+  it("clears a superseded signed bundle when it issues a fresh execution payload", async () => {
+    const delegation = await establishCustodialDelegation();
+    const delegationId = String(delegation.delegation_id);
+    await createCartMandateForDelegation(
+      buildCartRequest(delegationId, String(delegation.delegated_agent_did))
+    );
+
+    const beforeSigning = await loadDelegationSession(delegationId);
+    assert.ok(beforeSigning);
+    await saveDelegationSession({
+      ...beforeSigning,
+      signedExecutionMandate: { nonce: "stale-bundle-under-test" }
+    });
+
+    await signExecutionMandateForDelegation({ delegation_id: delegationId });
+    const afterSigning = await loadDelegationSession(delegationId);
+    assert.equal(afterSigning?.signedExecutionMandate, undefined);
   });
 });
 

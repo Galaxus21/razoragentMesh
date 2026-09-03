@@ -14,6 +14,7 @@ import {
   defaultMerchantAccount,
   demoMerchantGstin,
   demoMerchantStateCode,
+  errorDelegationAlreadySettled,
   errorLockSignatureInvalid,
   errorQuoteExpired,
   errorQuoteMismatch,
@@ -140,6 +141,12 @@ export async function createCartMandateForDelegation(
   if (!session) {
     throw new Error(errorUnknownDelegation);
   }
+  // Before reconcileQuote, so a spent delegation costs the agent one refusal rather than a quote
+  // and a cart. The inventory lock is taken one tool earlier by reserve_inventory_lock, which
+  // carries no delegation_id, so that reservation is still held until its TTL sweeps it.
+  if (session.settled) {
+    throw new Error(errorDelegationAlreadySettled);
+  }
 
   const quote = reconcileQuote(request, session.buyerAgentDid);
   reconcileLock(request);
@@ -214,8 +221,20 @@ async function _signAndStoreCart(params: SignCartParams): Promise<Record<string,
   );
 
   const cartMandateHash = computeMandateHash(cartMandate as unknown as Record<string, unknown>);
+  // Drop any settled-purchase state rather than spreading it onto the new cart. Carrying
+  // `settled` forward would re-arm the guard above against a session that is starting a fresh
+  // purchase; carrying `signedExecutionMandate` forward is worse, because settlementExecutor
+  // prefers a stored signed bundle over building one, and its execution_id guard inspects
+  // unsignedExecutionPayload -- which IS refreshed -- so a stale mandate would pass that check
+  // and settle the PREVIOUS purchase against this new cart. The guard above makes this
+  // unreachable today; this keeps it unreachable if the guard ever moves.
+  const {
+    settled: _settled,
+    signedExecutionMandate: _signedExecutionMandate,
+    ...carriedForward
+  } = session;
   await saveDelegationSession(
-    { ...session, cartMandate, cartMandateHash, merchantAccount: request.merchant_account },
+    { ...carriedForward, cartMandate, cartMandateHash, merchantAccount: request.merchant_account },
     params.options
   );
 

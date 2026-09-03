@@ -20,6 +20,7 @@ import {
 import {
   custodyAgentHeld,
   custodyDisclosureCustodial,
+  errorDelegationAlreadySettled,
   errorNoCartForDelegation,
   errorUnknownDelegation,
   executionSigningWindowSeconds
@@ -48,6 +49,12 @@ export async function signExecutionMandateForDelegation(
   if (!session) {
     throw new Error(errorUnknownDelegation);
   }
+  // Without this the custodial path reaches AgentKeyManager.fromSecretKey("") -- the key was
+  // discarded at settlement -- and the agent is told "Invalid secret key hex string: expected 128
+  // valid hex characters", which reads as an SDK defect rather than the single-purchase rule.
+  if (session.settled) {
+    throw new Error(errorDelegationAlreadySettled);
+  }
   if (!session.cartMandate) {
     throw new Error(errorNoCartForDelegation);
   }
@@ -63,8 +70,16 @@ export async function signExecutionMandateForDelegation(
   );
 
   const canonicalJson = canonicalizeJsonString(unsignedPayload);
+  // Clear any previously signed bundle: it belongs to the payload just superseded. execute_settlement
+  // prefers session.signedExecutionMandate over building one, so leaving a stale bundle here would
+  // settle the earlier mandate against this newly issued execution_id.
+  const { signedExecutionMandate: _supersededBundle, ...carriedForward } = session;
   await saveDelegationSession(
-    { ...session, unsignedExecutionPayload: unsignedPayload, executionCanonicalJson: canonicalJson },
+    {
+      ...carriedForward,
+      unsignedExecutionPayload: unsignedPayload,
+      executionCanonicalJson: canonicalJson
+    },
     options
   );
 

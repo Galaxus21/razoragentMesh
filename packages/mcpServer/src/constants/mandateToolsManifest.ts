@@ -39,7 +39,11 @@ export const mandateToolsManifest = [
       "and returns the private key to you, because a custodial demo that hands you the key " +
       "cannot be mistaken for a security boundary; in that mode the mesh can sign purchases " +
       "with no human approval and the budget ceiling does not bind the mesh. " +
-      "authorized_categories IS enforced at settlement against the merchant-signed cart.",
+      "authorized_categories IS enforced at settlement against the merchant-signed cart. " +
+      `In ${custodyMeshDemoCustodial} a delegation authorises a SINGLE purchase: the mesh ` +
+      "discards the session buyer key once that purchase settles, so its lifetime is the " +
+      "purchase and not validity_seconds. Call this tool again for each further purchase -- " +
+      "reusing a settled delegation is refused, whatever budget it has left.",
     inputSchema: {
       type: "object",
       required: ["key_custody", "max_budget_paise", "single_transaction_limit_paise"],
