@@ -153,11 +153,11 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
-| Python backend + Python Buyer SDK | 1365 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
+| Python backend + Python Buyer SDK | 1370 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
 | MCP discovery server | 243 | `cd packages/mcpServer && npm test` |
 | TypeScript Buyer SDK | 98 | `cd packages/buyerSdkTs && npm test` |
 | Telemetry dashboard + SKU Studio | 347 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **2,053** | `python scripts/countTests.py` |
+| **Total** | **2,058** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 
@@ -315,10 +315,28 @@ who may claim a negotiated price, which is a design question, not a missing line
 across replicas. Fine for a single-container demo; the tool's description says so rather than
 implying durability.
 
-**The merchant cost floor is looked up and then ignored.** `_resolveSellerCostFloor` reads a
-margin policy from Redis and passes it into `RubinsteinStahlNegotiator`, which forwards it to
-`computeSellerCounterAsk` -- a method the route never calls, because the route takes the seller's
-ask from the request instead. Outside tests, the policy influences no outcome.
+**A determined buyer converges at the merchant's floor, not at a midpoint.** The gateway clamps
+the seller's ask into `[floor, listPrice]` from the merchant's own policy, so a buyer cannot name
+its own price -- but a buyer that proposes an absurd ask and bids at or above the floor converges
+there on turn one rather than being walked down a concession ladder. The merchant never sells
+below the price they declared acceptable, which is what a floor means; what is missing is the
+merchant conceding *gradually* from list toward it. `computeSellerCounterAsk`
+(`negotiation/marginEvaluator.py`) exists for that and the route does not call it, because its
+ladder is a flat ₹5 per turn -- 0.25% of a four-figure item over a whole negotiation, which never
+meets any realistic bid. A proportional ladder is the fix and is a behaviour change to every
+negotiation, so it is named here rather than rushed in.
+
+**There is no merchant-side agent; the merchant is represented by their policy.** Nothing
+autonomously argues the seller's case. `resolveMerchantNegotiationTerms` reads the two records
+only a merchant can write -- the SKU listing and `mesh:merchant:policy:{did}` -- and the gateway
+holds the ask inside that band. Negotiation is opt-in and off by default, so a merchant who has
+configured nothing answers HTTP 403 and `negotiate_price` reports `DECLINED`.
+
+> This replaced a real hole rather than a cosmetic one. Until 2026-09-03 the route took
+> `sellerAskPaise` and `merchantDid` straight from the buyer's request body and checked only
+> intra-session monotonicity, which is vacuous on turn one. Measured against the running stack: a
+> buyer declared the seller's ask at 1 paise on a SKU listed at 420000 paise, converged
+> immediately, and received a compiled, hashed contract AST naming the merchant at that price.
 
 **Six states resolve to the wrong tax code at two-digit pincode granularity.** `pincodePrefixStateMap`
 keys on the first two digits, which cannot separate Goa (403xxx, resolved as Maharashtra --

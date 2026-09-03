@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from typing import Any, Dict, List, Optional
 
 # Constants
@@ -17,6 +18,39 @@ defaultQdrantPort = 6333
 defaultCollectionName = "razoragent_catalog"
 fixturesDir = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures")
 catalogFilePath = os.path.join(fixturesDir, "catalogFixtures.json")
+
+# The merchant these seeded SKUs are published as. The fixture JSON carries no merchantDid of its
+# own, and mcpServer/src/catalog/fixtureIndexer.ts publishes the compiled office fixtures under
+# this same DID -- so the whole demo catalog has one owner and one negotiation policy governs it.
+#
+# This is load-bearing, not cosmetic. The x402 gateway resolves a SKU's owning merchant from its
+# listing and refuses to negotiate for a SKU that names none, so without this every seeded SKU
+# would be permanently non-negotiable no matter what policy the merchant saved.
+seedMerchantDid = "did:mesh:merchant_razoragent_demo_01"
+
+
+def _buildDemoNegotiationPolicy() -> Dict[str, Any]:
+    """The demo merchant's opt-in, seeded as data rather than defaulted in code.
+
+    Negotiation is off for every merchant until a policy says otherwise, so without this a fresh
+    `docker compose up` would answer DECLINED to every bid and the negotiation feature would look
+    broken rather than declined. Seeding it here keeps the gateway's default honest -- it is still
+    opt-in, this merchant has simply opted in -- and the Studio's Negotiation Policy panel can
+    switch it back off live, which is the more interesting thing to show.
+
+    The 12% margin floor means the demo merchant will go down to 88% of list and no further.
+    """
+    now = int(time.time())
+    return {
+        "merchantDid": seedMerchantDid,
+        "negotiationEnabled": True,
+        "marginFloorBps": 1200,
+        "minimumOrderQuantity": 1,
+        "autoAcceptSpreadPaise": 0,
+        "maxNegotiationTurns": 5,
+        "createdAtTimestamp": now,
+        "updatedAtTimestamp": now,
+    }
 
 
 def loadCatalogFixtures() -> List[Dict[str, Any]]:
@@ -39,11 +73,16 @@ async def seedRedisStore(catalogData: List[Dict[str, Any]], redisUrl: str) -> in
         for item in catalogData:
             skuId = item["skuId"]
             stock = item.get("availableStock", 100)
+            record = {"merchantDid": seedMerchantDid, **item}
             pipe.set(f"inventory:stock:{skuId}", str(stock))
-            pipe.set(f"mesh:catalog:{skuId}", json.dumps(item))
+            pipe.set(f"mesh:catalog:{skuId}", json.dumps(record))
+        pipe.set(
+            f"mesh:merchant:policy:{seedMerchantDid}",
+            json.dumps(_buildDemoNegotiationPolicy()),
+        )
         await pipe.execute()
         await redisConnection.aclose()
-        print(f"Successfully seeded {len(catalogData)} SKUs into Redis store.")
+        print(f"Successfully seeded {len(catalogData)} SKUs and 1 negotiation policy into Redis store.")
         return len(catalogData)
     except Exception as redisError:
         # Not "skipped": failed. docker-compose gates mcp-server and merchant-api on this
