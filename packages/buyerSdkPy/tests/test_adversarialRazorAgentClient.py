@@ -147,9 +147,12 @@ async def testEscrowAndChallengeEndpoints(agentKeyManager: AgentKeyManager) -> N
         if request.url.path == "/api/v1/mesh/challenge":
             return httpx.Response(200, json={"statusCode": 402, "wwwAuthenticate": "x402-INR", "challengeToken": "c_tok_99", "tokenCostPaise": 50, "powDifficultyZeros": 4})
         if request.url.path == "/api/v1/mesh/escrow":
-            return httpx.Response(200, json={"sessionToken": "esc_tok_99", "buyerAgentDid": agentKeyManager.getAgentDid(), "balancePaise": 5000, "expiresAtUnix": 1700000300})
+            # 201 Created and the gateway's real field set. This mock used to answer 200 with an
+            # invented four-field body, so it asserted a contract the gateway has never spoken --
+            # see tests/testBuyerSdkEscrowIntegration.py, which mounts the app itself.
+            return httpx.Response(201, json={"sessionToken": "esc_tok_99", "buyerAgentDid": agentKeyManager.getAgentDid(), "initialHoldPaise": 5000, "remainingBalancePaise": 5000, "debitedTotalPaise": 0, "totalTurnsDebited": 0, "createdAtUnix": 1700000000, "expiresAtUnix": 1700000300, "isReleased": False})
         if request.url.path == "/api/v1/mesh/escrow/release":
-            return httpx.Response(200, json={"sessionToken": "esc_tok_99", "refundAmountPaise": 4500, "status": "refunded"})
+            return httpx.Response(200, json={"sessionToken": "esc_tok_99", "totalDebitedPaise": 500, "refundedBalancePaise": 4500, "timestamp": 1700000300})
         return httpx.Response(404)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(endpointHandler), base_url="http://testserver") as httpCli:
@@ -161,8 +164,9 @@ async def testEscrowAndChallengeEndpoints(agentKeyManager: AgentKeyManager) -> N
 
         escrow = await client.createEscrowSession(initialHoldPaise=5000)
         assert escrow.sessionToken == "esc_tok_99"
-        assert escrow.balancePaise == 5000
+        assert escrow.remainingBalancePaise == 5000
+        assert escrow.isReleased is False
 
         refund = await client.releaseEscrow("esc_tok_99")
-        assert refund.refundAmountPaise == 4500
-        assert refund.status == "refunded"
+        assert refund.refundedBalancePaise == 4500
+        assert refund.totalDebitedPaise == 500

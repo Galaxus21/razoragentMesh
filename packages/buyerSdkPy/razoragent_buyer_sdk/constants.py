@@ -9,6 +9,10 @@ utf8Encoding: str = "utf-8"
 # Currency & Financial Constants
 defaultCurrency: str = "INR"
 defaultInitialEscrowHoldPaise: int = 5000
+# POST /api/v1/mesh/escrow answers 201 Created, not 200. Both are accepted so a gateway
+# that ever relaxes to 200 does not break the client, and so that treating the documented
+# success code as a failure -- which is what this client used to do -- cannot recur.
+escrowCreateSuccessStatuses: frozenset = frozenset({200, 201})
 
 # Temporal & Validity Windows
 defaultIntentValiditySeconds: int = 86400
@@ -44,6 +48,7 @@ defaultConnectTimeoutSeconds: float = 10.0
 __all__ = [
     "defaultCurrency",
     "defaultInitialEscrowHoldPaise",
+    "escrowCreateSuccessStatuses",
     "defaultIntentValiditySeconds",
     "defaultLockTtlSeconds",
     "defaultPowDifficulty",

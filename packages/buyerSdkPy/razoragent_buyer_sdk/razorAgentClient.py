@@ -6,7 +6,6 @@ import httpx
 from .agentKeyManager import AgentKeyManager
 from .agentMandateBuilder import validateMandateInvariants
 from .constants import (
-    defaultCurrency,
     defaultInitialEscrowHoldPaise,
     defaultLockTtlSeconds,
     defaultPowDifficulty,
@@ -19,9 +18,11 @@ from .constants import (
     endpointMeshNegotiate,
     endpointPriceDropAlerts,
     endpointSettlementExecute,
+    escrowCreateSuccessStatuses,
     headerAccept,
     headerBuyerAgentDid,
     headerContentType,
+    headerEscrowToken,
     headerPowChallenge,
     headerPowSolution,
     mimeTypeJson,
@@ -293,19 +294,27 @@ class RazorAgentClient:
     async def createEscrowSession(
         self, initialHoldPaise: int = defaultInitialEscrowHoldPaise
     ) -> EscrowSession:
-        """Creates a new Layer 2 micro-escrow session."""
+        """Creates a new micro-escrow session on the x402-INR gateway."""
         client = self._getClient()
-        pld = {"buyerAgentDid": self.getAgentDid(), "initialHoldPaise": initialHoldPaise, "currency": defaultCurrency}
+        # EscrowCreateRequest is extra="forbid" and declares exactly these two fields, so a third
+        # key -- this used to send `currency` -- is rejected by the route as a 422.
+        pld = {"buyerAgentDid": self.getAgentDid(), "initialHoldPaise": initialHoldPaise}
         resp = await client.post(self._resolveUrl(endpointMeshEscrow), json=pld)
-        if resp.status_code != 200:
+        # The route declares status_code=HTTP_201_CREATED. Accepting only 200 turned every
+        # SUCCESSFUL escrow creation into a NetworkClientError.
+        if resp.status_code not in escrowCreateSuccessStatuses:
             raise NetworkClientError(f"Escrow creation failed ({resp.status_code}): {resp.text}", resp.status_code)
         return EscrowSession.model_validate(resp.json())
 
     async def releaseEscrow(self, sessionToken: str) -> EscrowRefundReceipt:
         """Releases and refunds unused micro-escrow balance."""
         client = self._getClient()
+        # The token travels as a request HEADER, not in the body: escrowRoute.releaseEscrow takes
+        # `sessionToken: str = Header(..., alias=headerEscrowToken)` and has no body model at all,
+        # so posting {"sessionToken": ...} was answered with a 422 every time.
         resp = await client.post(
-            self._resolveUrl(endpointMeshEscrowRelease), json={"sessionToken": sessionToken}
+            self._resolveUrl(endpointMeshEscrowRelease),
+            headers={headerEscrowToken: sessionToken},
         )
         if resp.status_code != 200:
             raise NetworkClientError(f"Escrow release failed ({resp.status_code}): {resp.text}", resp.status_code)

@@ -277,24 +277,42 @@ class PriceDropAlertCancelResponse(BaseModel):
 
 
 class EscrowSession(BaseModel):
-    """Active micro-escrow session on Layer 2 Gateway."""
+    """Active micro-escrow session, mirroring what POST /api/v1/mesh/escrow returns.
+
+    Field-for-field with `x402Gateway/src/escrow/escrowSessionManager.EscrowSession`, because
+    both models are extra="forbid" and this one parses that one's output. It previously declared
+    `balancePaise` and `expiresAtUnix` alone, a shape the gateway has never emitted -- so every
+    real response failed validation on six unexpected keys and one missing one. Nothing caught it:
+    the only test of this path mocked the transport and fed back the invented shape.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     sessionToken: str = Field(min_length=1)
-    buyerAgentDid: str = Field(pattern=r"^did:agent:[0-9a-f]{64}$")
-    balancePaise: int = Field(ge=0)
+    buyerAgentDid: str = Field(min_length=1)
+    initialHoldPaise: int = Field(gt=0)
+    remainingBalancePaise: int = Field(ge=0)
+    debitedTotalPaise: int = Field(ge=0)
+    totalTurnsDebited: int = Field(ge=0)
+    createdAtUnix: int = Field(gt=0)
     expiresAtUnix: int = Field(gt=0)
+    isReleased: bool = False
 
 
 class EscrowRefundReceipt(BaseModel):
-    """Receipt for released escrow funds."""
+    """Receipt for released escrow funds, mirroring POST /api/v1/mesh/escrow/release.
+
+    Same correction as EscrowSession above: `refundAmountPaise`/`status` were never the wire
+    shape. The gateway reports the debited and refunded halves separately, which is what lets a
+    caller check that they still sum to the original hold.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     sessionToken: str = Field(min_length=1)
-    refundAmountPaise: int = Field(ge=0)
-    status: str = Field(default="refunded")
+    totalDebitedPaise: int = Field(ge=0)
+    refundedBalancePaise: int = Field(ge=0)
+    timestamp: int = Field(gt=0)
 
 
 class MeshSlaConfig(BaseModel):
