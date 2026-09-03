@@ -2,6 +2,25 @@
   "entryPoint": "C:\\Users\\verma\\Projects\\RazorpayBuildathon\\razoragentMesh\\packages\\mcpServer\\src\\schemas\\index.ts",
   "schemas": [
     {
+      "schemaName": "BrowseCatalog",
+      "requestFields": [
+        "brand",
+        "category",
+        "hsn_code",
+        "limit",
+        "min_stock",
+        "offset"
+      ],
+      "responseFields": [
+        "categories_available",
+        "items",
+        "offset",
+        "price_disclaimer",
+        "returned",
+        "total_matching"
+      ]
+    },
+    {
       "schemaName": "CatalogSearch",
       "requestFields": [
         "limit",

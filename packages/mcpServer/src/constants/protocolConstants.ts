@@ -10,6 +10,9 @@ export const toolVerifyShippingSla = "verify_shipping_sla";
 // Discovery. Without this an agent can only quote a SKU id it was already given,
 // so a third-party agent had no way to begin a purchase on its own.
 export const toolSearchCatalog = "search_catalog";
+// Enumeration, as distinct from search. An agent that cannot phrase a good semantic query still
+// needs to find out what the mesh sells at all.
+export const toolBrowseCatalog = "browse_catalog";
 
 // The purchase half of the protocol. Discovery, quoting and locking let an agent price a cart;
 // these four let it actually buy, by producing the three AP2 mandates and settling them. Each

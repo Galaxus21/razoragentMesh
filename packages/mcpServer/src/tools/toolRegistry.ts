@@ -14,6 +14,7 @@ import {
   toolExecuteSettlement,
   toolGetLiveSkuQuote,
   toolReserveInventoryLock,
+  toolBrowseCatalog,
   toolSearchCatalog,
   toolSignExecutionMandate,
   toolVerifyShippingSla
@@ -22,6 +23,7 @@ import { executeSkuQuote } from "./skuQuoter.js";
 import { reserveInventoryLock } from "./inventoryLocker.js";
 import { verifyShippingSla } from "./slaVerifier.js";
 import { searchCatalog } from "./catalogSearcher.js";
+import { browseCatalog } from "./catalogBrowser.js";
 import { establishAgentDelegation } from "./delegationEstablisher.js";
 import { createCartMandateForDelegation } from "./cartMandateCreator.js";
 import { signExecutionMandateForDelegation } from "./executionMandateSigner.js";
@@ -45,6 +47,9 @@ export async function executeTool(toolName: string, toolArguments: unknown): Pro
   }
   if (toolName === toolSearchCatalog) {
     return await searchCatalog(toolArguments);
+  }
+  if (toolName === toolBrowseCatalog) {
+    return browseCatalog(toolArguments, defaultCatalogStore);
   }
   if (toolName === toolEstablishAgentDelegation) {
     return await establishAgentDelegation(toolArguments);

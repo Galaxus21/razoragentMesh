@@ -10,6 +10,7 @@ import {
   toolExecuteSettlement,
   toolGetLiveSkuQuote,
   toolReserveInventoryLock,
+  toolBrowseCatalog,
   toolSearchCatalog,
   toolSignExecutionMandate,
   toolVerifyShippingSla
@@ -52,11 +53,12 @@ describe("McpServerMain JSON-RPC Dispatcher", () => {
     });
 
     const result = response.result as { tools: Array<{ name: string }> };
-    assert.equal(result.tools.length, 8);
+    assert.equal(result.tools.length, 9);
     const names = result.tools.map((t) => t.name);
     // search_catalog is the entry point: without it an agent can only quote SKU ids someone
     // already handed it, so a tools/list that omits it leaves the mesh undiscoverable.
     assert.ok(names.includes(toolSearchCatalog));
+    assert.ok(names.includes(toolBrowseCatalog));
     assert.ok(names.includes(toolGetLiveSkuQuote));
     assert.ok(names.includes(toolReserveInventoryLock));
     assert.ok(names.includes(toolVerifyShippingSla));

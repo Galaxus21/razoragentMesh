@@ -9,3 +9,4 @@ export * from "./createCartMandateSchema.js";
 export * from "./signExecutionMandateSchema.js";
 export * from "./executeSettlementSchema.js";
 export * from "./catalogSearchSchema.js";
+export * from "./catalogBrowseSchema.js";

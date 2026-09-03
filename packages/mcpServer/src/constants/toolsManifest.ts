@@ -4,6 +4,7 @@
 // This is pure data with no behaviour, so it belongs beside the other protocol constants.
 
 import {
+  toolBrowseCatalog,
   toolEstablishAgentDelegation,
   toolGetLiveSkuQuote,
   toolReserveInventoryLock,
@@ -46,6 +47,33 @@ const discoveryToolsManifest = [
         }
       },
       required: ["query_text"]
+    }
+  },
+
+  {
+    name: toolBrowseCatalog,
+    description:
+      "Lists what the mesh actually sells, with optional category, brand, HSN and stock filters. " +
+      "Use this when search_catalog returns nothing useful, or when you want to see the range " +
+      "before choosing -- it enumerates the live catalog directly rather than ranking it, so a " +
+      "product missing from the semantic index still appears here. Returns total_matching so you " +
+      "can page with offset, and categories_available so you can widen a filter that matched " +
+      "nothing. Prices are list prices: call get_live_sku_quote for a binding number.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category: { type: "string", minLength: 1, description: "Exact category, case-insensitive." },
+        brand: { type: "string", minLength: 1, description: "Exact brand, case-insensitive." },
+        hsn_code: { type: "string", minLength: 1 },
+        min_stock: {
+          type: "integer",
+          minimum: 0,
+          default: 1,
+          description: "Defaults to 1, so only orderable stock is listed. Pass 0 to include out-of-stock."
+        },
+        limit: { type: "integer", minimum: 1, maximum: 100, default: 25 },
+        offset: { type: "integer", minimum: 0, default: 0 }
+      }
     }
   },
 
