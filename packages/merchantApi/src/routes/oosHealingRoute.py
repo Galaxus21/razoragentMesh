@@ -187,7 +187,14 @@ async def _loadCatalogStore(redis: Any) -> List[Dict[str, Any]]:
         logger.warning("Could not enumerate catalog for substitution: %s", loadError)
         return []
 
+    # One glob, four value shapes. redisCatalogHashKeyPrefix, redisCatalogKeyPrefix and
+    # redisMerchantCatalogPrefix are all the identical string "mesh:catalog:", so this scan also
+    # returns the `{merchantDid}:{skuId}` duplicate of a listing and the bare `:stock` integer.
+    # json.loads("25") is a valid parse returning 25, so before this guard an int entered a list
+    # of dicts and the caller's `entry.get("skuId")` raised AttributeError outside every try --
+    # a hard 500 on every request, from the first merchant publish onwards.
     listings: List[Dict[str, Any]] = []
+    seenSkuIds: set[str] = set()
     for key in keys:
         try:
             raw = await redis.get(key)
@@ -197,9 +204,20 @@ async def _loadCatalogStore(redis: Any) -> List[Dict[str, Any]]:
             continue
         rawText = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
         try:
-            listings.append(json.loads(rawText))
+            parsed = json.loads(rawText)
         except json.JSONDecodeError:
             continue
+        if not isinstance(parsed, dict):
+            continue
+        # Deduplicate by skuId: the `{merchantDid}:{skuId}` record is a legitimate dict holding
+        # the same listing, so without this every merchant-published SKU is handed to
+        # OosInterceptor twice, skewing both the candidate set and the price bound.
+        skuId = parsed.get("skuId")
+        if isinstance(skuId, str):
+            if skuId in seenSkuIds:
+                continue
+            seenSkuIds.add(skuId)
+        listings.append(parsed)
     return listings
 
 

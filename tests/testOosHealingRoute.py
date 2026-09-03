@@ -195,3 +195,52 @@ def testADeadTelemetryBusDoesNotFailTheHeal(
     )
     assert response.status_code == 200, response.text
     assert response.json()["healed"] is True
+
+
+def testHealingSurvivesABareStockIntegerInTheCatalogKeyspace(
+    healingClient: TestClient,
+) -> None:
+    """A `:stock` counter under the same prefix must not take the endpoint down.
+
+    `redisCatalogHashKeyPrefix`, `redisCatalogKeyPrefix` and `redisMerchantCatalogPrefix` are all
+    the identical string "mesh:catalog:", so one SCAN glob matches four value shapes. Publishing a
+    SKU from the Studio writes a bare integer at `mesh:catalog:{skuId}:stock`; `json.loads("25")`
+    parses to 25, an int then entered a `List[Dict[str, Any]]`, and `entry.get("skuId")` raised
+    AttributeError outside every `try` -- a hard 500 on every request from the first publish on.
+    """
+    redis = healingClient.app.state.redis
+    redis.store["mesh:catalog:SKU-101:stock"] = "25"
+    redis.store["mesh:catalog:SKU-104:stock"] = "40"
+
+    response = healingClient.post(
+        healEndpoint, json={"failedSkuId": "SKU-101", "requestedQuantity": 1}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["healed"] is True, response.text
+
+
+@pytest.mark.asyncio
+async def testCatalogLoaderSkipsNonDictsAndDeduplicatesBySkuId() -> None:
+    """The loader returns one dict per SKU, whatever shapes share the prefix.
+
+    The `{merchantDid}:{skuId}` record is a legitimate dict holding the same listing, so without
+    the dedupe every merchant-published SKU is handed to OosInterceptor twice, skewing both the
+    candidate set and the price bound it derives from them.
+    """
+    from razoragentMesh.packages.merchantApi.src.routes.oosHealingRoute import (
+        _loadCatalogStore,
+    )
+    from razoragentMesh.tests.mockInfraHelpers import MockRedisAsync
+
+    listing = {"skuId": "SKU-101", "title": "Chair", "activePricePaise": 100000}
+    redis = MockRedisAsync()
+    redis.store["mesh:catalog:SKU-101"] = json.dumps(listing)
+    # The duplicate the merchant publish path writes alongside the listing.
+    redis.store["mesh:catalog:did:merchant:demo:SKU-101"] = json.dumps(listing)
+    # The bare integer that used to crash the route.
+    redis.store["mesh:catalog:SKU-101:stock"] = "25"
+
+    loaded = await _loadCatalogStore(redis)
+
+    assert [entry["skuId"] for entry in loaded] == ["SKU-101"], loaded
+    assert all(isinstance(entry, dict) for entry in loaded)
