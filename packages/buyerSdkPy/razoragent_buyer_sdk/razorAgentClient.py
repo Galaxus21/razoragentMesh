@@ -7,6 +7,7 @@ from .agentKeyManager import AgentKeyManager
 from .agentMandateBuilder import validateMandateInvariants
 from .constants import (
     defaultCurrency,
+    defaultInitialEscrowHoldPaise,
     defaultLockTtlSeconds,
     defaultPowDifficulty,
     defaultRequestTimeoutSeconds,
@@ -15,6 +16,7 @@ from .constants import (
     endpointMeshChallenge,
     endpointMeshEscrow,
     endpointMeshEscrowRelease,
+    endpointMeshNegotiate,
     endpointPriceDropAlerts,
     endpointSettlementExecute,
     headerAccept,
@@ -66,11 +68,7 @@ class RazorAgentClient:
 
     async def __aenter__(self) -> "RazorAgentClient":
         if self._httpClient is None:
-            self._httpClient = httpx.AsyncClient(
-                base_url=self._config.gatewayBaseUrl,
-                timeout=httpx.Timeout(self._config.timeoutSeconds),
-                headers={headerAccept: mimeTypeJson, headerContentType: mimeTypeJson},
-            )
+            self._httpClient = self._buildClient()
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -78,16 +76,63 @@ class RazorAgentClient:
             await self._httpClient.aclose()
             self._httpClient = None
 
+    def _buildClient(self) -> httpx.AsyncClient:
+        """Builds the shared transport.
+
+        Deliberately carries no `base_url`. Every endpoint this client calls is resolved to an
+        absolute URL by `_resolveUrl`, because the four routes below are served by three
+        different services -- binding one base URL here is what made seven of eight calls 404.
+        """
+        return httpx.AsyncClient(
+            timeout=httpx.Timeout(self._config.timeoutSeconds),
+            headers={headerAccept: mimeTypeJson, headerContentType: mimeTypeJson},
+        )
+
     def _getClient(self) -> httpx.AsyncClient:
         """Returns initialized or active httpx AsyncClient instance."""
         if self._httpClient is not None:
             return self._httpClient
-        self._httpClient = httpx.AsyncClient(
-            base_url=self._config.gatewayBaseUrl,
-            timeout=httpx.Timeout(self._config.timeoutSeconds),
-            headers={headerAccept: mimeTypeJson, headerContentType: mimeTypeJson},
-        )
+        self._httpClient = self._buildClient()
         return self._httpClient
+
+    def _resolveUrl(self, endpoint: str) -> str:
+        """Resolves an endpoint constant to an absolute URL on the service that serves it.
+
+        The TypeScript client (`packages/buyerSdkTs/src/razorAgentClient.ts`) has always kept
+        `_mandateEngineUrl`, `_mcpServerUrl` and `_x402GatewayUrl` apart and picked per call.
+        This is the same rule, expressed as one table instead of three fields, so that a reader
+        can check the caller/host pairing in one place. `MeshSlaConfig` declared all four base
+        URLs from the start; only `gatewayBaseUrl` was ever read.
+        """
+        for prefix, baseUrl in self._serviceRoutingTable():
+            if endpoint.startswith(prefix):
+                return f"{baseUrl.rstrip('/')}{endpoint}"
+        # An endpoint with no entry is a routing bug, not a fallback case: silently sending it to
+        # the mandate engine is precisely the defect this method exists to prevent.
+        raise NetworkClientError(
+            f"No service is configured for endpoint '{endpoint}'. Add it to the routing table in "
+            "RazorAgentClient._serviceRoutingTable.",
+            None,
+        )
+
+    def _serviceRoutingTable(self) -> tuple:
+        """Maps each route prefix to the base URL of the service that serves it.
+
+        Ordered longest-prefix-first so a more specific route cannot be shadowed by a shorter one.
+        """
+        config = self._config
+        mcpBaseUrl = config.mcpBaseUrl or config.gatewayBaseUrl
+        x402BaseUrl = config.x402GatewayBaseUrl or config.gatewayBaseUrl
+        return (
+            (endpointSettlementExecute, config.gatewayBaseUrl),
+            (endpointMeshEscrowRelease, x402BaseUrl),
+            (endpointMeshEscrow, x402BaseUrl),
+            (endpointMeshChallenge, x402BaseUrl),
+            (endpointMeshNegotiate, x402BaseUrl),
+            (endpointPriceDropAlerts, x402BaseUrl),
+            (endpointLiveSkuQuote, mcpBaseUrl),
+            (endpointInventoryLock, mcpBaseUrl),
+        )
 
     def getKeyManager(self) -> AgentKeyManager:
         """Returns the configured AgentKeyManager instance."""
@@ -119,7 +164,7 @@ class RazorAgentClient:
         }
         if promoCode:
             queryParameters["promoCode"] = promoCode
-        resp = await client.get(endpointLiveSkuQuote, params=queryParameters)
+        resp = await client.get(self._resolveUrl(endpointLiveSkuQuote), params=queryParameters)
         if resp.status_code != 200:
             raise NetworkClientError(f"Quote failed with status {resp.status_code}: {resp.text}", resp.status_code)
         return SkuQuote.model_validate(resp.json())
@@ -136,7 +181,9 @@ class RazorAgentClient:
             headerPowSolution: str(nonce),
             headerBuyerAgentDid: agentDid,
         }
-        return await client.post(endpointInventoryLock, json=reqPayload, headers=headers)
+        return await client.post(
+            self._resolveUrl(endpointInventoryLock), json=reqPayload, headers=headers
+        )
 
     async def reserveInventoryLock(
         self,
@@ -155,7 +202,7 @@ class RazorAgentClient:
             buyer_agent_id=agentDid, quote_hash=quoteHash or "default_quote_hash",
         ).model_dump()
 
-        resp = await client.post(endpointInventoryLock, json=reqPayload)
+        resp = await client.post(self._resolveUrl(endpointInventoryLock), json=reqPayload)
         shouldAutoSolve = self._config.autoSolvePow if autoSolvePow is None else autoSolvePow
 
         if resp.status_code == 402 and shouldAutoSolve:
@@ -192,7 +239,7 @@ class RazorAgentClient:
             metadata=metadata or {},
         ).model_dump()
 
-        resp = await client.post(endpointSettlementExecute, json=reqPayload)
+        resp = await client.post(self._resolveUrl(endpointSettlementExecute), json=reqPayload)
         if resp.status_code != 200:
             raise SettlementError(
                 f"Settlement saga rejected with status {resp.status_code}: {resp.text}",
@@ -220,7 +267,7 @@ class RazorAgentClient:
             expiresAtUnix=expiresAtUnix,
         ).model_dump()
 
-        resp = await client.post(endpointPriceDropAlerts, json=reqPayload)
+        resp = await client.post(self._resolveUrl(endpointPriceDropAlerts), json=reqPayload)
         if resp.status_code != 200:
             raise NetworkClientError(f"Alert registration failed ({resp.status_code}): {resp.text}", resp.status_code)
         return PriceDropAlertResponse.model_validate(resp.json())
@@ -230,7 +277,7 @@ class RazorAgentClient:
     async def cancelPriceDropAlert(self, alertId: str) -> PriceDropAlertCancelResponse:
         """Cancels an active price drop alert subscription."""
         client = self._getClient()
-        resp = await client.delete(f"{endpointPriceDropAlerts}/{alertId}")
+        resp = await client.delete(self._resolveUrl(f"{endpointPriceDropAlerts}/{alertId}"))
         if resp.status_code != 200:
             raise NetworkClientError(f"Alert cancellation failed ({resp.status_code}): {resp.text}", resp.status_code)
         return PriceDropAlertCancelResponse.model_validate(resp.json())
@@ -238,16 +285,18 @@ class RazorAgentClient:
     async def getPowChallenge(self) -> PoWChallenge:
         """Requests a fresh PoW challenge token from Layer 2 Gateway."""
         client = self._getClient()
-        resp = await client.get(endpointMeshChallenge)
+        resp = await client.get(self._resolveUrl(endpointMeshChallenge))
         if resp.status_code != 200:
             raise NetworkClientError(f"Challenge request failed ({resp.status_code}): {resp.text}", resp.status_code)
         return PoWChallenge.model_validate(resp.json())
 
-    async def createEscrowSession(self, initialHoldPaise: int = 5000) -> EscrowSession:
+    async def createEscrowSession(
+        self, initialHoldPaise: int = defaultInitialEscrowHoldPaise
+    ) -> EscrowSession:
         """Creates a new Layer 2 micro-escrow session."""
         client = self._getClient()
         pld = {"buyerAgentDid": self.getAgentDid(), "initialHoldPaise": initialHoldPaise, "currency": defaultCurrency}
-        resp = await client.post(endpointMeshEscrow, json=pld)
+        resp = await client.post(self._resolveUrl(endpointMeshEscrow), json=pld)
         if resp.status_code != 200:
             raise NetworkClientError(f"Escrow creation failed ({resp.status_code}): {resp.text}", resp.status_code)
         return EscrowSession.model_validate(resp.json())
@@ -255,7 +304,9 @@ class RazorAgentClient:
     async def releaseEscrow(self, sessionToken: str) -> EscrowRefundReceipt:
         """Releases and refunds unused micro-escrow balance."""
         client = self._getClient()
-        resp = await client.post(endpointMeshEscrowRelease, json={"sessionToken": sessionToken})
+        resp = await client.post(
+            self._resolveUrl(endpointMeshEscrowRelease), json={"sessionToken": sessionToken}
+        )
         if resp.status_code != 200:
             raise NetworkClientError(f"Escrow release failed ({resp.status_code}): {resp.text}", resp.status_code)
         return EscrowRefundReceipt.model_validate(resp.json())

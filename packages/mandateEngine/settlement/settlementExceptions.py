@@ -95,3 +95,7 @@ class WebhookSignatureVerificationException(MandateEngineException):
 
 class InvalidPincodeException(MandateEngineException):
     """Raised when postal pincode is invalid or cannot map to a GST state code."""
+
+
+class TaxHeadMismatchException(MandateEngineException):
+    """Raised when a cart's declared CGST/SGST/IGST split contradicts its place of supply."""

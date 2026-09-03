@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AddressInfo } from "node:net";
 import { createMcpHttpServer } from "../src/http/httpAdapter.js";
-import { handleJsonRpcMessage, mcpToolsManifest } from "../src/mcpServerMain.js";
+import { dispatchToolCall, handleJsonRpcMessage, mcpToolsManifest } from "../src/mcpServerMain.js";
 import { handleQuoteRequest } from "../src/http/routeHandlers.js";
 import type { JsonRpcRequest } from "../src/types/mcpToolTypes.js";
 
@@ -14,7 +14,8 @@ const ephemeralPort = 0;
 function startTestServer(): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const server = createMcpHttpServer({
     jsonRpcHandler: (message: unknown) => handleJsonRpcMessage(message as JsonRpcRequest),
-    toolsManifest: mcpToolsManifest
+    toolsManifest: mcpToolsManifest,
+    toolDispatcher: dispatchToolCall
   });
   return new Promise((resolve) => {
     server.listen(ephemeralPort, "127.0.0.1", () => {
@@ -27,14 +28,23 @@ function startTestServer(): Promise<{ baseUrl: string; close: () => Promise<void
   });
 }
 
-test("health route reports both transports", async () => {
+// The payload previously claimed "stdio" as well. Reaching /health proves only that the HTTP
+// listener is up -- and since MCP_TRANSPORT=http can disable stdio entirely, that claim could be
+// false while the check passed. It now reports what this port actually serves.
+test("health route reports the transports this port actually serves", async () => {
   const { baseUrl, close } = await startTestServer();
   try {
     const response = await fetch(`${baseUrl}/health`);
     assert.equal(response.status, 200);
-    const body = await response.json() as { status: string; transports: string[] };
+    const body = await response.json() as {
+      status: string;
+      transports: string[];
+      mcpEndpoint: string;
+    };
     assert.equal(body.status, "ok");
-    assert.deepEqual(body.transports, ["stdio", "http"]);
+    assert.deepEqual(body.transports, ["http", "mcp-streamable-http"]);
+    assert.ok(!body.transports.includes("stdio"), "stdio is not served over this port");
+    assert.equal(body.mcpEndpoint, "/mcp");
   } finally {
     await close();
   }

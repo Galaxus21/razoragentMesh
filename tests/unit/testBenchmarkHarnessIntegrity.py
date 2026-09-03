@@ -1,15 +1,15 @@
-"""Guards the benchmark harness against tests that assert their own reimplementations.
+"""Guards the benchmark harness against tests that reimplements their subjects.
 
-A test that defines the class it is named after, then exercises that definition, passes whatever the
-production code does -- including when the production code is deleted. Three files in the harness do
-exactly this today: they import no production module at all and simulate the subsystem from scratch,
-so their green ticks say nothing about `packages/`.
+Each benchmark is named after a scenario (TC-01, TC-02, ...) and must import the production module
+its scenario actually exercises. This guard verifies each benchmark imports the module it claims to
+benchmark, rather than just checking that some production code appears somewhere in the file.
 
-They are listed rather than hidden, and the list is a ratchet. Adding a fourth self-contained
-benchmark fails here; repairing one of the three also fails here, so the entry gets removed with the
-fix rather than outliving it.
+Three benchmarks legitimately define their own implementations (TC-05, TC-06, TC-09) and are
+listed as known self-contained. Adding a fourth fails here; repairing one of the three also fails,
+so the entry gets removed with the fix.
 
-Filed as Phase 6.6.
+The expected-import map is keyed by file name and lists the production module(s) that must be
+imported. Each benchmark's actual imports are checked against this map.
 """
 
 import re
@@ -20,17 +20,32 @@ import pytest
 repositoryRoot = Path(__file__).resolve().parents[2]
 benchmarkDirectory = repositoryRoot / "tests" / "benchmarkHarness"
 
-# An import of anything the mesh actually ships.
+# Pattern to detect any production import from the mesh.
 productionImportPattern = re.compile(
     r"^\s*(?:from|import)\s+(?:packages|razoragent_buyer_sdk|razoragentMesh)\b", re.MULTILINE
 )
 
-# Verified on 2026-08-31: each of these imports nothing from packages/ and defines its own copy of
+# Verified on 2026-09-02: each of these imports nothing from packages/ and defines its own copy of
 # the subsystem it claims to benchmark.
 knownSelfContainedBenchmarks = {
     "testTc05NegativeConstraint.py",
     "testTc06AntiSpamSybil.py",
     "testTc09ConcurrencyDoubleLock.py",
+}
+
+# Per-file expected-import map: each benchmark must import the module(s) its scenario names.
+# TC-XX scenarios are named after the subsystem they exercise.
+expectedBenchmarkImports = {
+    "testTc01NominalSettlement.py": r"(?:packages\.mandateEngine\.settlement|mandateEngine.*settlement)",
+    "testTc02B2bNegotiation.py": r"packages\.mandateEngine\.verification",
+    "testTc03BudgetBreach.py": r"packages\.mandateEngine(?:\.verification\.budgetGate)?",
+    "testTc04OosSelfHealing.py": r"packages\.vectorHealer.*(?:oosInterceptor|OosInterceptor)",
+    "testTc05NegativeConstraint.py": None,  # Self-contained benchmark
+    "testTc06AntiSpamSybil.py": None,  # Self-contained benchmark
+    "testTc07NonceReplay.py": r"packages\.mandateEngine\.nonce",
+    "testTc08FloatMathDrift.py": r"packages\.mandateEngine\.verification",
+    "testTc09ConcurrencyDoubleLock.py": None,  # Self-contained benchmark
+    "testTc10RouteRollback2Pc.py": r"packages\.mandateEngine\.settlement",
 }
 
 
@@ -43,17 +58,31 @@ def testBenchmarkDirectoryIsNotEmpty() -> None:
     assert len(_benchmarkFiles()) > 5
 
 
-def testNoNewSelfContainedBenchmarkAppears() -> None:
-    """Every benchmark except the three known ones exercises real production code."""
-    offenders = {
-        path.name
-        for path in _benchmarkFiles()
-        if not productionImportPattern.search(path.read_text(encoding="utf-8"))
-    }
-    unexpected = offenders - knownSelfContainedBenchmarks
-    assert not unexpected, (
-        f"These benchmarks import no production code, so they assert only themselves: "
-        f"{sorted(unexpected)}"
+def testEachBenchmarkImportsItsSubject() -> None:
+    """Each benchmark must import the production module its scenario names."""
+    offenders = {}
+    for path in _benchmarkFiles():
+        fileName = path.name
+        if fileName not in expectedBenchmarkImports:
+            offenders[fileName] = f"No expected import defined for {fileName}"
+            continue
+
+        expectedPattern = expectedBenchmarkImports[fileName]
+        if expectedPattern is None:
+            # Self-contained benchmark; verify it has NO production imports.
+            content = path.read_text(encoding="utf-8")
+            if productionImportPattern.search(content):
+                offenders[fileName] = "Expected to be self-contained, but imports production code"
+            continue
+
+        content = path.read_text(encoding="utf-8")
+        expectedRegex = re.compile(expectedPattern)
+        if not expectedRegex.search(content):
+            offenders[fileName] = f"Missing expected import matching: {expectedPattern}"
+
+    assert not offenders, (
+        f"These benchmarks do not import their expected modules:\n"
+        + "\n".join(f"  {name}: {reason}" for name, reason in sorted(offenders.items()))
     )
 
 

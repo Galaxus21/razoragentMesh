@@ -219,6 +219,13 @@
       "constructorParameters": []
     },
     {
+      "name": "buildUnsignedExecutionPayload",
+      "kind": "function",
+      "signature": "(params: CreateExecutionMandateParams, buyerAgentDid: string) => UnsignedExecutionPayload",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
       "name": "canonicalizeAndHash",
       "kind": "function",
       "signature": "(payload: unknown) => { readonly canonicalBytes: Uint8Array<ArrayBufferLike>; readonly digest: string; }",
@@ -244,6 +251,10 @@
       "kind": "interface",
       "signature": "CartItem",
       "members": [
+        {
+          "name": "category",
+          "signature": "string | undefined"
+        },
         {
           "name": "gstRatePercent",
           "signature": "number"
@@ -665,14 +676,7 @@
     {
       "name": "defaultLockTtlSeconds",
       "kind": "variable",
-      "signature": "120",
-      "members": [],
-      "constructorParameters": []
-    },
-    {
-      "name": "defaultLogisticsAccount",
-      "kind": "variable",
-      "signature": "\"acc_logistics_delivery\"",
+      "signature": "60",
       "members": [],
       "constructorParameters": []
     },
@@ -771,13 +775,6 @@
       "name": "endpointSla",
       "kind": "variable",
       "signature": "\"/api/v1/sla\"",
-      "members": [],
-      "constructorParameters": []
-    },
-    {
-      "name": "escalatedPowDifficultyZeros",
-      "kind": "variable",
-      "signature": "5",
       "members": [],
       "constructorParameters": []
     },
@@ -935,13 +932,6 @@
           "signature": "number"
         }
       ],
-      "constructorParameters": []
-    },
-    {
-      "name": "headerAuthenticate",
-      "kind": "variable",
-      "signature": "\"WWW-Authenticate\"",
-      "members": [],
       "constructorParameters": []
     },
     {
@@ -1606,13 +1596,6 @@
       "constructorParameters": []
     },
     {
-      "name": "sha256Algorithm",
-      "kind": "variable",
-      "signature": "\"sha256\"",
-      "members": [],
-      "constructorParameters": []
-    },
-    {
       "name": "signatureFieldKeys",
       "kind": "variable",
       "signature": "readonly [\"userSignature\", \"merchantSignature\", \"agentSignature\"]",
@@ -1888,6 +1871,57 @@
         {
           "name": "totalTaxPaise",
           "signature": "number"
+        }
+      ],
+      "constructorParameters": []
+    },
+    {
+      "name": "uncategorizedCartItemCategory",
+      "kind": "variable",
+      "signature": "\"uncategorized\"",
+      "members": [],
+      "constructorParameters": []
+    },
+    {
+      "name": "UnsignedExecutionPayload",
+      "kind": "type",
+      "signature": "UnsignedExecutionPayload",
+      "members": [
+        {
+          "name": "buyerAgentDid",
+          "signature": "string"
+        },
+        {
+          "name": "cartMandateHash",
+          "signature": "string"
+        },
+        {
+          "name": "currency",
+          "signature": "\"INR\""
+        },
+        {
+          "name": "executionId",
+          "signature": "string"
+        },
+        {
+          "name": "intentMandateHash",
+          "signature": "string"
+        },
+        {
+          "name": "nonce",
+          "signature": "string"
+        },
+        {
+          "name": "settlementAmountPaise",
+          "signature": "number"
+        },
+        {
+          "name": "timestamp",
+          "signature": "number"
+        },
+        {
+          "name": "upiCircleToken",
+          "signature": "string"
         }
       ],
       "constructorParameters": []

@@ -10,9 +10,9 @@ import {
 } from "../src/components/appSidebar.js";
 import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 
-describe("Sidebar Accordion & 5-Category Taxonomy", () => {
-  it("should categorize all 17 routes into exactly 5 specific domain groupings", () => {
-    assert.equal(navigationCategories.length, 5);
+describe("Sidebar Accordion & 6-Category Taxonomy", () => {
+  it("should categorize all 20 routes into exactly 6 specific domain groupings", () => {
+    assert.equal(navigationCategories.length, 6);
 
     const categoryMap = new Map<string, ReadonlyArray<string>>();
     for (const cat of navigationCategories) {
@@ -21,15 +21,23 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
 
     assert.deepEqual(categoryMap.get("platformOps"), [
       "/overview",
-      "/protocol",
       "/self-healing",
       "/infrastructure",
     ]);
 
-    assert.deepEqual(categoryMap.get("aiBuyerAgents"), [
+    // The protocol review surfaces are one section rather than being split across Platform Ops
+    // and AI Buyer Agents, so a reviewer can read a layer and exercise it without switching
+    // category. AI Buyer Agents keeps only the agent-behaviour views.
+    assert.deepEqual(categoryMap.get("protocolPlayground"), [
+      "/protocol",
+      "/playground/layers",
       "/playground",
       "/playground/adversarial",
+      "/playground/live-agent",
       "/sdk-console",
+    ]);
+
+    assert.deepEqual(categoryMap.get("aiBuyerAgents"), [
       "/agent-observability",
       "/negotiation-hub",
     ]);
@@ -44,6 +52,7 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
 
     assert.deepEqual(categoryMap.get("documentation"), [
       "/docs/setup",
+  "/docs/agent-quickstart",
       "/docs/onboarding",
       "/docs/buyer-sdk",
       "/docs/merchant-guide",
@@ -52,8 +61,8 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
     ]);
   });
 
-  it("should preserve flat navigationItems array containing all 17 routes", () => {
-    assert.equal(navigationItems.length, 17);
+  it("should preserve flat navigationItems array containing all 20 routes", () => {
+    assert.equal(navigationItems.length, 20);
     const flattenedRoutes = navigationCategories.flatMap((c) => c.children.map((ch) => ch.route));
     assert.deepEqual(navigationItems.map((i) => i.route), flattenedRoutes);
   });
@@ -61,6 +70,7 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
   it("should simulate independent accordion toggle state logic", () => {
     let expandedCategories: Record<string, boolean> = {
       platformOps: true,
+      protocolPlayground: true,
       aiBuyerAgents: true,
       cfosAuditors: true,
       merchants: true,
@@ -77,6 +87,7 @@ describe("Sidebar Accordion & 5-Category Taxonomy", () => {
     // Toggle platformOps closed
     toggleCategory("platformOps");
     assert.equal(expandedCategories.platformOps, false);
+    assert.equal(expandedCategories.protocolPlayground, true);
     assert.equal(expandedCategories.aiBuyerAgents, true);
 
     // Toggle documentation closed

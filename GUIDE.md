@@ -100,8 +100,11 @@ flowchart LR
 ---
 
 ### 3.2 Layer 1: Deterministic Discovery (Anthropic MCP JSON-RPC 2.0)
-Merchants expose standard Model Context Protocol (MCP) JSON-RPC 2.0 endpoints (`packages/mcpServer`). AI agents discover inventory deterministically without web scraping:
+Merchants expose standard Model Context Protocol (MCP) JSON-RPC 2.0 endpoints (`packages/mcpServer`) over both stdio and Streamable HTTP at `POST /mcp`. A third-party agent -- Claude Desktop, Claude Code, Cursor -- connects directly and drives a purchase end to end; see the [Agent Quickstart](packages/telemetryDashboard/docs/agent-quickstart.mdx). AI agents discover inventory deterministically without web scraping:
 
+0. **Tool 0: `search_catalog`**
+   - Ranks listings against a natural-language query using `all-MiniLM-L6-v2` embeddings over Qdrant.
+   - Reports `embedding_mode` on every response, so a caller is told when a ranking came from a character-hash fallback rather than the language model and therefore carries no semantic meaning.
 1. **Tool 1: `get_live_sku_quote`**
    - Resolves live unit prices, 4-step auto-discount stacks (Volume Tier $\to$ Festive Campaign $\to$ UPI Rail Cashback $\to$ Corporate Promo), and exact statutory GST.
    - Computes HMAC-SHA256 `quote_hash` and signals `upcoming_promotions`.
@@ -110,6 +113,19 @@ Merchants expose standard Model Context Protocol (MCP) JSON-RPC 2.0 endpoints (`
    - Returns a monotonic fencing token and detached Ed25519 signature to guarantee single-use reservation and prevent double-spend races.
 3. **Tool 3: `verify_shipping_sla`**
    - Resolves zonal courier SLAs (Zone A Intra-city, Zone B Intra-state, Zone C National) with weight surcharges (₹10/500g above base).
+
+Four further tools carry an external agent from delegation to settled payment:
+
+4. **Tool 4: `establish_agent_delegation`**
+   - Pairs the agent and issues a signed IntentMandate delegating a bounded spending authority to its DID.
+   - `key_custody` has no default. Under `agent_held` the agent proves possession of its Ed25519 key and the mesh never holds buyer authority; under `mesh_demo_custodial` the mesh mints and holds that key -- and returns it -- so the custodial nature is self-evident.
+5. **Tool 5: `create_cart_mandate`**
+   - Re-derives every price from the mesh's own pricing and shipping engines and compares the result against the caller's `quote_hash`, so the merchant signature attests only to numbers the merchant produced.
+6. **Tool 6: `sign_execution_mandate`**
+   - Hash-binds the intent and cart mandates. Returns the exact RFC 8785 canonical bytes and no signature under `agent_held`; signs with the session key under `mesh_demo_custodial`.
+7. **Tool 7: `execute_settlement`**
+   - Runs the 2PC settlement saga and returns the capture, the Route split and the statutory GSTR-1 invoice.
+   - A refusal arrives as a tool result with `isError` set, not as a JSON-RPC error: a refusal means the protocol worked.
 
 ---
 
@@ -312,11 +328,11 @@ The Telemetry Dashboard (`packages/telemetryDashboard`) has been completely rede
 ```
 
 #### 1. Route `/overview` (System Mission Control)
-- **KPI Metrics Bar:** Real-time displays of **Settlement Success Rate** (99.8%), **Average Latency** (142ms), **Self-Healing Recovery Rate** (100%), and **Active 24h Volume** (₹14,82,400).
+- **KPI Metrics Bar:** Real-time displays of **Settlement Success Rate**, **Average Latency**, **Self-Healing Recovery Rate** and **Active 24h Volume**. The figures shown in a local run are computed from whatever `scripts/seedTelemetryStream.py` has emitted, so they are demo data rather than production measurements.
 - **Composite Dashboard:** Highlights recent agent tool executions, active negotiations, cryptographic mandate chains, and self-healing vector diffs in a unified grid.
 
 #### 2. Route `/agent-observability` (Agent Trace Terminal)
-- **Live Event Stream:** Streams real-time tool calls (`get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`) with caller agent DID, target SKU, and millisecond execution timers.
+- **Live Event Stream:** Streams real-time tool calls across all eight MCP tools -- discovery (`search_catalog`), commerce (`get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`) and purchase (`establish_agent_delegation`, `create_cart_mandate`, `sign_execution_mandate`, `execute_settlement`) -- with caller agent DID, target SKU, and millisecond execution timers.
 - **Interactive JSON Inspector:** Click on any trace event to inspect input parameters, returned GST breakdowns, and cryptographic quote signatures.
 
 #### 3. Route `/negotiation-hub` (Rubinstein-Ståhl Bargaining Hub)
@@ -332,7 +348,7 @@ The Telemetry Dashboard (`packages/telemetryDashboard`) has been completely rede
 
 #### 5. Route `/self-healing` (Vector Diff & AST Checklist Viewer)
 - **Side-by-Side SKU Comparison:** Visual comparison between the Out-of-Stock SKU (e.g. SKU-101) and Healed Vector Substitute (e.g. SKU-104).
-- **Vector Match Telemetry:** Cosine similarity score (e.g. `0.924`), price delta (e.g. `+₹50.00`), and execution latency (e.g. `214ms < 300ms`).
+- **Vector Match Telemetry:** Cosine similarity score (e.g. `0.924`), price delta (e.g. `+₹50.00`), and the heal latency measured by that run against the 300ms SLA.
 - **Negative Constraint AST Checklist:** Interactive pass/fail badges for Allergens, Brand Blacklists, Dietary Rules (`isVeg: true`), and SLA Courier Deadlines.
 - **Dual-Signed Mandate Diff:** Displays the amended cart hash and dual signatures.
 
@@ -409,17 +425,17 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
-| Python backend + Python Buyer SDK | 1252 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
-| MCP discovery server | 133 | `cd packages/mcpServer && npm test` |
-| TypeScript Buyer SDK | 94 | `cd packages/buyerSdkTs && npm test` |
-| Telemetry dashboard + SKU Studio | 258 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **1,737** | `python scripts/countTests.py` |
+| Python backend + Python Buyer SDK | 1292 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
+| MCP discovery server | 169 | `cd packages/mcpServer && npm test` |
+| TypeScript Buyer SDK | 98 | `cd packages/buyerSdkTs && npm test` |
+| Telemetry dashboard + SKU Studio | 282 | `cd packages/telemetryDashboard && npm test` |
+| **Total** | **1,841** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 
-The table above is generated by `python scripts/countTests.py`. CI runs it with `--check`,
-so a hand-edited count fails the build (rule V-01). Counts are inventory, not evidence --
-see §8.3 Q6 for why this guide no longer leads with the total.
+The table above is generated by `python scripts/countTests.py`, and `--check` reports any
+hand-edited count as drift (rule V-01). Counts are inventory, not evidence -- see §8.3 Q6
+for why this guide no longer leads with the total.
 
 ---
 
@@ -438,7 +454,7 @@ python -m pytest tests/benchmarkHarness/ -v
 │ TC01 │ Nominal A2A Settlement Handshake          │ Full Discovery -> 60s Lock -> AP2 Settlement (200 OK)  │
 │ TC02 │ B2B Multi-Turn Dynamic Negotiation        │ 3-turn Rubinstein-Ståhl bargaining, ₹1.50 micro-fee    │
 │ TC03 │ Budget Breach Defense (The Bar)           │ AP2 Budget Gate halts execution; ₹0 charged            │
-│ TC04 │ OOS Vector Self-Healing (<300ms)          │ FastEmbed + Qdrant auto-substitutes SKU-104 (214ms)    │
+│ TC04 │ OOS Vector Self-Healing (<300ms)          │ Vector match auto-substitutes SKU-101 -> SKU-104       │
 │ TC05 │ Negative Constraint AST Filtering         │ Peanut allergen blacklist rejects SKU-201 -> SKU-205   │
 │ TC06 │ Anti-Spam Sybil PoW Shield                │ 100 spam requests: 1 challenged, 99 rejected (402)     │
 │ TC07 │ Nonce Replay & Signature Tampering        │ Replaying consumed nonce raises 409 Conflict           │
@@ -555,20 +571,20 @@ console.log(`Payment Captured: ${settlement.paymentId}`);
 - **Visual:** Split screen showing the Google Stitch Telemetry Dashboard (`localhost:3000`) on `/overview` and dual-agent terminal output.
 - **Script:** *"Let's watch an autonomous Buyer Agent instructed to: **'Procure 50 Ergonomic Chairs under a hard budget of ₹2,00,000'**.
   In Layer 1, the agent connects to the Merchant's Razorpay MCP Server via JSON-RPC, querying `get_live_sku_quote`. The quote returns ₹4,200 + 18% GST (Total: ₹2,47,800)—which is over budget.
-  In Layer 2, the Buyer Agent initiates dynamic negotiation. Notice the gateway challenges with HTTP 402-INR. The buyer solves the Proof-of-Work and settles a ₹0.50 micro-fee in 15ms. The Merchant Sales Agent evaluates its private margin floor and counters with ₹3,350. The contract compiles to ₹1,97,650 with GST—within budget! The deal is struck in 1.4 seconds."*
+  In Layer 2, the Buyer Agent initiates dynamic negotiation. Notice the gateway challenges with HTTP 402-INR. The buyer solves the Proof-of-Work and settles a ₹0.50 micro-fee. The Merchant Sales Agent evaluates its private margin floor and counters with ₹3,350. The contract compiles to ₹1,97,650 with GST—within budget, and the whole exchange completes in the time you just watched it take."*
 
 #### Scene 3: The Crucible Test — Graceful Failures `[2:00 - 3:15]`
 - **Visual:** Navigate to `/self-healing` and `/security-audit` on the dashboard while triggering failure benchmarks.
 - **Script:** *"Razorpay leadership emphasizes: **'Show how your system handles failure.'**
-  First, watch Out-of-Stock Self-Healing: As stock locks, SKU-101 goes out of stock. Standard checkouts abort. RazorAgent Mesh's Layer 3 Vector Engine matches SKU-104 in 214ms, verifies the buyer's Negative Constraint Manifest (zero allergen/brand conflicts), and auto-amends the mandate with dual signatures.
+  First, watch Out-of-Stock Self-Healing: As stock locks, SKU-101 goes out of stock. Standard checkouts abort. RazorAgent Mesh's Layer 3 Vector Engine matches SKU-104 well inside its 300ms SLA, verifies the buyer's Negative Constraint Manifest (zero allergen/brand conflicts), and auto-amends the mandate with dual signatures.
   Second, watch Bounded Agency: When forced to attempt an out-of-budget ₹2,10,000 purchase against a ₹2,00,000 cap, the deterministic backend engine intercepts the payload, raises a `BoundedAgencyViolationException`, and halts execution. Exactly ₹0 moves."*
 
 #### Scene 4: Cryptographic Mandates & NPCI UPI Circle `[3:15 - 4:15]`
 - **Visual:** Navigate to `/security-audit` showing the 4-phase mandate chain with green Ed25519 badges and `/infrastructure` showing Razorpay Route 3-way split transfers.
-- **Script:** *"To comply with RBI guidelines without manual OTPs for every turn, we implement Google AP2 over NPCI UPI Circle Mode 2. The human authorizes a delegated spending cap; the merchant signs a Cart Mandate; the buyer agent signs an Execution Mandate with Ed25519 keys. The settlement executes over Razorpay Route, instantly capturing payment, executing 3-way splits, and generating GSTR-compliant invoice breakdowns in under 800ms."*
+- **Script:** *"To comply with RBI guidelines without manual OTPs for every turn, we implement Google AP2 over NPCI UPI Circle Mode 2. The human authorizes a delegated spending cap; the merchant signs a Cart Mandate; the buyer agent signs an Execution Mandate with Ed25519 keys. The settlement executes over Razorpay Route, capturing payment, executing 3-way splits, and generating GSTR-compliant invoice breakdowns."*
 
 #### Scene 5: Hiring Pitch & Close `[4:15 - 5:00]`
-- **Visual:** Candidate webcam with the green CI run and the INV-01..INV-07 invariant table (§4) alongside the architecture blueprint.
+- **Visual:** Candidate webcam with the INV-01..INV-07 invariant table (§4) alongside the architecture blueprint.
 - **Script:** *"RazorAgent Mesh directly expands Merchant GMV, lifts checkout conversion, and captures Agentic Payment Volume on Razorpay rails. Built with strict typing, integer-paise determinism, and seven money-and-crypto invariants each pinned by its own adversarial benchmark -- including twelve golden GST vectors that the Python enclave and the TypeScript pricing engine must both reproduce byte for byte. I am Shubham Verma, and I'm ready on Day 1 to help Razorpay pioneer the agentic economy. Thank you!"*
 
 ---
@@ -599,7 +615,22 @@ Every one of those layers is pinned by an adversarial benchmark: ten failure sce
 > **Answer:** *"We implement a **Two-Phase Commit (2PC) Saga Coordinator** with **Last-In First-Out (LIFO) Compensation Rollback**. When splitting a transaction into Merchant Net, Protocol Fee, and Logistics, if the 3rd transfer fails, the saga catches the exception and immediately invokes `reverseTransfer()` on transfers 2 and 1 in reverse order. The transaction is marked `VOID`, all funds are returned, and the error is published to the Redis DLQ and Telemetry Dashboard."*
 
 #### Q5: "How fast is Vector Self-Healing and how do you prevent bad substitutions?"
-> **Answer:** *"Vector self-healing completes in **$< 300\text{ms}$** (averaging 214ms). We achieve this using local FastEmbed ONNX embeddings (`all-MiniLM-L6-v2`) and Qdrant in-memory ANN vector search. To prevent bad substitutions, we enforce 4 hard pre-filters: exact HSN code match, stock availability, price delta $\le \pm 5\%$, and cosine similarity $\ge 0.85$. Then, a Boolean AST evaluator verifies the buyer's Negative Constraint Manifest (allergens, brand blacklists, prescription flags, veg requirements, and SLA delivery deadline). If any constraint fails, the candidate is discarded."*
+> **Answer:** *"The design target is **$< 300\text{ms}$**, and I want to be precise about what
+> I have actually measured versus what I have only designed for. TC-04 times the substitution
+> policy, the constraint AST and the mandate amendment, and prints that measurement when you
+> run it with `-s`. But it runs against a mock vector store with pre-computed embeddings, so
+> it comes back in well under a millisecond -- and that figure is worthless as a latency claim,
+> because the two expensive things, FastEmbed ONNX inference and the Qdrant ANN search, are not
+> in that test. An end-to-end number needs the Docker stack, and I would rather measure it in
+> front of you than quote one I cannot reproduce.*
+>
+> *What the benchmark does pin is correctness, which is the part that decides whether a
+> substitution is safe to make at all: 4 hard pre-filters -- exact HSN code match, stock
+> availability, price delta $\le \pm 5\%$, cosine similarity $\ge 0.85$ -- and then a Boolean
+> AST evaluator over the buyer's Negative Constraint Manifest (allergens, brand blacklists,
+> prescription flags, veg requirements, SLA delivery deadline). If any constraint fails, the
+> candidate is discarded. The architecture is local FastEmbed embeddings (`all-MiniLM-L6-v2`)
+> over Qdrant in-memory ANN search."*
 
 #### Q6: "You have over a thousand tests. How do you know they mean anything?"
 > **Answer:** *"I don't lead with the count, because in this repository the count was
@@ -617,7 +648,7 @@ Every one of those layers is pinned by an adversarial benchmark: ten failure sce
 > `testGstCrossLanguageEquivalence` runs 12 GST vectors through the Python enclave and
 > through the real TypeScript pricing engine in a node subprocess, and both must match the
 > fixture exactly. And every published number carries the command that produced it --
-> `scripts/countTests.py --check` fails CI if any document drifts from measurement.
+> `scripts/countTests.py --check` reports any document that has drifted from measurement.
 >
 > So the evidence I'd point at is 10 adversarial failure scenarios covering INV-01 to
 > INV-07, 30 property-based invariants under Hypothesis, and those cross-language vectors.
@@ -628,7 +659,7 @@ Every one of those layers is pinned by an adversarial benchmark: ten failure sce
 ## 🏆 Summary Checklist for Demo & Submission
 - [x] Docker Compose stack verified (`docker compose up --build`)
 - [x] 10 / 10 adversarial benchmark scenarios green (`testTc01` to `testTc10`, 19 tests), 30 / 30 Hypothesis property invariants, 12 / 12 cross-language GST vectors
-- [x] Full matrix green across all 4 test runners; counts generated by `python scripts/countTests.py` and enforced in CI with `--check`
+- [x] Full matrix green across all 4 test runners; counts generated by `python scripts/countTests.py` and re-checkable with `--check`
 - [x] Google Stitch Telemetry Dashboard verified across all 7 routes
 - [x] Merchant SKU Studio tested with volume tiers, bullion formulas, and 4 vertical facets
 - [x] All 7 mathematical and cryptographic invariants (INV-01 to INV-07) strictly enforced

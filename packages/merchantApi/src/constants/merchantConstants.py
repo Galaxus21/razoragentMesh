@@ -64,10 +64,33 @@ catalogUpdateActionUpdated: str = "CATALOG_ITEM_UPDATED"
 catalogUpdateActionRemoved: str = "CATALOG_ITEM_REMOVED"
 
 # Vector Search & Embedding Configuration
-defaultCollectionName: str = "merchant_products"
+#
+# This MUST match the collection scripts/seedCatalog.py writes to. It previously read
+# "merchant_products" while the seeder used "razoragent_catalog" -- the only collection that
+# exists on a running mesh. Nothing noticed, because no request path ever called the
+# vectorizer. Wiring it in with the old value would have put newly published products in a
+# second, empty collection where a search over the seeded catalog could never find them.
+defaultCollectionName: str = "razoragent_catalog"
 defaultVectorDimension: int = 384
-modelNameMiniLm: str = "all-MiniLM-L6-v2"
+# Must be the fully-qualified fastembed name. The bare "all-MiniLM-L6-v2" is rejected by
+# fastembed 0.8.0 ("not supported in TextEmbedding"), which the engine caught and silently
+# downgraded to character-hash vectors -- so "office chair" ranked an optocoupler first.
+# packages/vectorHealer already used the qualified form; only this copy was wrong.
+modelNameMiniLm: str = "sentence-transformers/all-MiniLM-L6-v2"
 modelNameBgeSmall: str = "BAAI/bge-small-en-v1.5"
+
+# Which producer made an embedding. Cosine over a character hash is meaningless for language,
+# so every search response reports this rather than presenting the two as equivalent.
+embeddingModeModel: str = "model"
+embeddingModeHash: str = "hash"
+
+# Qdrant connection, used to build the client the catalog routes vectorise through.
+qdrantHostEnvVar: str = "QDRANT_HOST"
+qdrantPortEnvVar: str = "QDRANT_PORT"
+defaultQdrantHost: str = "localhost"
+defaultQdrantPort: int = 6333
+defaultSearchLimit: int = 5
+maxSearchLimit: int = 50
 
 # Financial Unit Divisors & Rate Limits
 paisePerRupee: int = 100
@@ -85,6 +108,14 @@ __all__ = [
     "defaultApiTitle",
     "defaultApiVersion",
     "defaultCollectionName",
+    "defaultQdrantHost",
+    "defaultQdrantPort",
+    "defaultSearchLimit",
+    "embeddingModeHash",
+    "embeddingModeModel",
+    "maxSearchLimit",
+    "qdrantHostEnvVar",
+    "qdrantPortEnvVar",
     "defaultCurrency",
     "defaultGstRatePercent",
     "defaultHsnCode",

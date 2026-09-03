@@ -13,6 +13,7 @@ from ..constants.merchantConstants import (
     defaultVerticalPharma,
 )
 from ..schemas.bulkIngestSchema import ShopifyWebhookPayload
+from ..catalog.ingressSanitizer import sanitizeListingText
 from ..schemas.universalProductSchema import (
     ApparelFacet,
     FmcgFacet,
@@ -68,7 +69,10 @@ def mapShopifyVariantToSku(
     apparelFacet, fmcgFacet, jewelryFacet, pharmaFacet, category = _buildFacets(product, variant, allergens)
     promotions = _extractShopifyPromotions(product.tags)
 
-    return UniversalProductListing(
+    # Shopify's body_html is raw merchant HTML and reached the catalog with no scrub at all --
+    # not even the .strip() the CSV path applied. sanitizeListingText strips the markup, the
+    # hidden characters and the ANSI escapes, and normalizes to NFC.
+    return sanitizeListingText(UniversalProductListing(
         skuId=skuId,
         merchantDid=merchantDid,
         title=product.title,
@@ -84,7 +88,7 @@ def mapShopifyVariantToSku(
         fmcgFacet=fmcgFacet,
         jewelryFacet=jewelryFacet,
         pharmaFacet=pharmaFacet,
-    )
+    ))
 
 
 def _extractShopifyPromotions(tags: Optional[str]) -> list[ScheduledPromotionSchema]:

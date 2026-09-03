@@ -10,7 +10,6 @@ import {
   Loader2,
   RotateCcw,
   Send,
-  WifiOff,
 } from "lucide-react";
 import {
   CatalogSubmissionResult,
@@ -97,16 +96,11 @@ export function CatalogJsonPreview({
           className={`flex items-start gap-2.5 rounded-lg border p-3 text-xs ${
             submissionResult.status === "success"
               ? "border-statusSuccess/30 bg-statusSuccess/10 text-statusSuccess"
-              : submissionResult.status === "offline"
-              ? "border-statusWarning/30 bg-statusWarning/10 text-statusWarning"
               : "border-statusError/30 bg-statusError/10 text-statusError"
           }`}
         >
           {submissionResult.status === "success" && (
             <CheckCircle2 className="h-4 w-4 shrink-0 text-statusSuccess mt-0.5" />
-          )}
-          {submissionResult.status === "offline" && (
-            <WifiOff className="h-4 w-4 shrink-0 text-statusWarning mt-0.5" />
           )}
           {submissionResult.status === "error" && (
             <AlertCircle className="h-4 w-4 shrink-0 text-statusError mt-0.5" />
@@ -123,7 +117,7 @@ export function CatalogJsonPreview({
       {/* Action Footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
         <div className="text-xs text-textMuted">
-          Publishes to <code className="font-mono text-statusInfo">POST /api/v1/merchant/:merchantDid/catalog</code>
+          Publishes to <code className="font-mono text-statusInfo">POST /api/mesh/catalog</code>
         </div>
 
         <button

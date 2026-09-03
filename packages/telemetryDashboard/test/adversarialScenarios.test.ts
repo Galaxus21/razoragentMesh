@@ -12,6 +12,8 @@ import {
 } from "@razorpay/agent-buyer-sdk";
 import { scenarioSummaries } from "../src/constants/scenarioCatalog.js";
 import { describeScenarioSteps } from "../src/server/protocolDriver/runScenario.js";
+import { stepReplaySettlement } from "../src/server/protocolDriver/adversarialSteps.js";
+import type { RunContext } from "../src/server/protocolDriver/stepContext.js";
 
 // The adversarial grid is only worth showing if each attack is actually refused, and refused for
 // the stated reason. Running the driver end to end needs the mesh up, so this asserts the half
@@ -162,5 +164,73 @@ describe("The catalog and the driver agree on the grid", () => {
         `${summary.scenarioId} ends on '${lastStep.stepId}', which cannot refuse anything`
       );
     }
+  });
+});
+
+// The test above asserts replaySettlement is a step that *can* refuse. It could not: the nonce
+// ledger lives in the engine, so its rejection arrives as a thrown HTTP error rather than a
+// returned verifier result, and the driver's generic catch recorded it as FAILED. The run then
+// read "a real failure, not a protocol refusal" over the one attack the ledger actually stopped.
+describe("Replay defence records the ledger's rejection as a refusal", () => {
+  const replayRejectedStatusCode = 409;
+  const nonceConsumedMessage =
+    "Settlement failed: [HTTP 409] Replay attack detected (409): nonce 'abc' has already been consumed";
+
+  function buildReplayContext(thrown: Error): RunContext {
+    const presentMandate = {} as never;
+    return {
+      client: {
+        executeSettlement: async () => {
+          throw thrown;
+        },
+      },
+      userSigner: {},
+      merchantSigner: {},
+      parameters: {},
+      state: {
+        intentMandate: presentMandate,
+        cartMandate: presentMandate,
+        executionMandate: presentMandate,
+      },
+    } as unknown as RunContext;
+  }
+
+  function buildHttpError(statusCode: number, message: string): Error & { statusCode: number } {
+    const error = new Error(message) as Error & { statusCode: number };
+    error.name = "ClientRequestError";
+    error.statusCode = statusCode;
+    return error;
+  }
+
+  it("records a 409 from the nonce ledger as REFUSED against INV-05", async () => {
+    const context = buildReplayContext(
+      buildHttpError(replayRejectedStatusCode, nonceConsumedMessage)
+    );
+    const outcome = await stepReplaySettlement.execute(context);
+
+    assert.equal(outcome.status, "REFUSED", "a stopped replay is the defence working, not a crash");
+    assert.equal(outcome.refusal?.invariantViolated, "INV-05");
+    assert.equal(outcome.refusal?.statusCode, replayRejectedStatusCode);
+  });
+
+  it("rethrows a non-409 error so a genuine fault is still recorded as FAILED", async () => {
+    const context = buildReplayContext(buildHttpError(500, "Settlement failed: [HTTP 500] boom"));
+    await assert.rejects(() => stepReplaySettlement.execute(context), /HTTP 500/);
+  });
+
+  it("reports SUCCEEDED when the ledger wrongly accepts the replay, so the grid goes red", async () => {
+    // An accepted replay is a double charge. The run summary treats an unrefused adversarial
+    // scenario as UNEXPECTED, so this must NOT be dressed up as a refusal.
+    const context = {
+      client: { executeSettlement: async () => ({ settled: true }) },
+      state: {
+        intentMandate: {} as never,
+        cartMandate: {} as never,
+        executionMandate: {} as never,
+      },
+    } as unknown as RunContext;
+    const outcome = await stepReplaySettlement.execute(context);
+    assert.equal(outcome.status, "SUCCEEDED");
+    assert.equal(outcome.resultSummary?.replayAccepted, true);
   });
 });

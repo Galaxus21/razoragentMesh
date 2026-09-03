@@ -10,7 +10,9 @@ export interface FormActionBarProps {
 export function FormActionBar({
   isSubmitting,
   onPublish,
-  apiEndpointDescription = "POST /api/v1/merchant/:merchantDid/catalog",
+  // The route the form actually calls. It previously advertised the merchant API path
+  // directly, which the browser never reached -- the hop is server-side.
+  apiEndpointDescription = "POST /api/mesh/catalog",
 }: FormActionBarProps): React.JSX.Element {
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">

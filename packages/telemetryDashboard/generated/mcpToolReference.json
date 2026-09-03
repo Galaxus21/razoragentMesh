@@ -2,6 +2,99 @@
   "entryPoint": "C:\\Users\\verma\\Projects\\RazorpayBuildathon\\razoragentMesh\\packages\\mcpServer\\src\\schemas\\index.ts",
   "schemas": [
     {
+      "schemaName": "CatalogSearch",
+      "requestFields": [
+        "limit",
+        "queryText"
+      ],
+      "responseFields": [
+        "embedding_mode",
+        "index_available",
+        "query_text",
+        "ranking_quality",
+        "result_count",
+        "results"
+      ]
+    },
+    {
+      "schemaName": "CreateCartMandate",
+      "requestFields": [
+        "delegation_id",
+        "delivery_pincode",
+        "delivery_state_code",
+        "fencing_token",
+        "lock_expires_at_unix_ms",
+        "lock_signature",
+        "lock_token",
+        "merchant_account",
+        "package_weight_grams",
+        "promo_code",
+        "quantity",
+        "quote_hash",
+        "sku_id"
+      ],
+      "responseFields": [
+        "cart_mandate",
+        "cart_mandate_hash",
+        "discount_paise",
+        "discount_rationale",
+        "inventory_lock_expires_at",
+        "inventory_lock_expires_at_unit",
+        "merchant_did",
+        "price_reconciled",
+        "shipping_fee_paise",
+        "tax_breakdown",
+        "taxable_subtotal_paise",
+        "total_paise"
+      ]
+    },
+    {
+      "schemaName": "EstablishDelegation",
+      "requestFields": [
+        "authorized_categories",
+        "buyer_agent_id",
+        "key_custody",
+        "max_budget_paise",
+        "proof_nonce",
+        "proof_signature",
+        "proof_timestamp",
+        "single_transaction_limit_paise",
+        "validity_seconds"
+      ],
+      "responseFields": [
+        "buyer_private_key_hex",
+        "category_enforcement",
+        "category_enforcement_note",
+        "custody_disclosure",
+        "delegated_agent_did",
+        "delegation_id",
+        "intent_mandate",
+        "key_custody",
+        "max_budget_paise",
+        "session_store",
+        "single_transaction_limit_paise",
+        "user_did",
+        "valid_until_timestamp"
+      ]
+    },
+    {
+      "schemaName": "ExecuteSettlement",
+      "requestFields": [
+        "agent_signature",
+        "delegation_id",
+        "execution_id",
+        "merchant_account"
+      ],
+      "responseFields": [
+        "amountPaise",
+        "invoice",
+        "paymentId",
+        "settledAt",
+        "status",
+        "transfers"
+      ]
+    },
+    {
       "schemaName": "InventoryLock",
       "requestFields": [
         "buyer_agent_id",
@@ -36,6 +129,34 @@
       ]
     },
     {
+      "schemaName": "SignExecutionMandate",
+      "requestFields": [
+        "cart_mandate_hash",
+        "delegation_id"
+      ],
+      "responseFields": [
+        "agent_signature",
+        "buyer_agent_did",
+        "cart_mandate_hash",
+        "currency",
+        "custody_disclosure",
+        "execution_id",
+        "execution_mandate",
+        "intent_mandate_hash",
+        "nonce",
+        "settle_before_timestamp",
+        "settlement_amount_paise",
+        "signed_by",
+        "signing_digest_sha256",
+        "signing_instructions",
+        "signing_payload_canonical_json",
+        "signing_window_seconds",
+        "timestamp",
+        "unsigned_payload",
+        "upi_circle_token"
+      ]
+    },
+    {
       "schemaName": "SkuQuote",
       "requestFields": [
         "buyer_agent_id",
@@ -48,6 +169,7 @@
         "applied_discounts",
         "available_stock",
         "base_unit_price_paise",
+        "category",
         "currency",
         "gst_rate_percent",
         "hsn_code",

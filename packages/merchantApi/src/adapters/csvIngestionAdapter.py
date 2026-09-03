@@ -12,6 +12,7 @@ from ..constants.merchantConstants import (
     defaultVerticalGeneral, maxCsvRowsPerBatch,
 )
 from ..schemas.bulkIngestSchema import CsvIngestResult
+from ..catalog.ingressSanitizer import sanitizeListingText
 from ..schemas.universalProductSchema import (
     ApparelFacet, FmcgFacet, JewelryFacet, PharmaFacet,
     ScheduledPromotionSchema, UniversalProductListing, VolumeTier,
@@ -63,19 +64,23 @@ def parseCsvRow(
         if not skuId or not title or pricePaise is None:
             return None
 
+        # The ingress shield runs on the assembled listing below, not on these raw strings,
+        # so that all three ingestion paths scrub through one definition rather than three.
         meta = _extractRowMetadata(row, title)
         tiers = _extractVolumeTiers(row.get("volumeTiersJson"), merchantDid, rowIdx)
         promos = _extractPromotions(row.get("promotionsJson") or row.get("promotions"))
         apFacet, fmFacet, jwFacet, phFacet = _extractFacets(row, merchantDid, rowIdx)
 
-        return UniversalProductListing(
-            skuId=skuId, merchantDid=merchantDid, title=title,
-            description=meta["description"], category=meta["category"],
-            hsnCode=meta["hsnCode"], gstRatePercent=meta["gstRate"],
-            baseUnitPricePaise=pricePaise, availableStock=meta["stock"],
-            originPincode=meta["originPincode"], volumeTiers=tiers,
-            promotions=promos, apparelFacet=apFacet, fmcgFacet=fmFacet,
-            jewelryFacet=jwFacet, pharmaFacet=phFacet,
+        return sanitizeListingText(
+            UniversalProductListing(
+                skuId=skuId, merchantDid=merchantDid, title=title,
+                description=meta["description"], category=meta["category"],
+                hsnCode=meta["hsnCode"], gstRatePercent=meta["gstRate"],
+                baseUnitPricePaise=pricePaise, availableStock=meta["stock"],
+                originPincode=meta["originPincode"], volumeTiers=tiers,
+                promotions=promos, apparelFacet=apFacet, fmcgFacet=fmFacet,
+                jewelryFacet=jwFacet, pharmaFacet=phFacet,
+            )
         )
     except Exception as err:
         logger.warning(

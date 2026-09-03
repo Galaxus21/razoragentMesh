@@ -10,7 +10,12 @@ from razoragentMesh.packages.catalogSanitizer import (
     cleanAndTruncateText,
     sanitizeMerchantSkuQuote,
 )
-from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
+# The sanitizer's own drift exception, not the mandate engine's same-named one. These used to be
+# the same object inside the monorepo, because ingressShieldExceptions.py imported the engine's
+# class when it could and defined its own when it could not -- so the class identity depended on
+# sys.path and this import happened to work. It no longer does; catalogSanitizer always defines
+# its own, and a test of the sanitizer asserts against the sanitizer's exception.
+from razoragentMesh.packages.catalogSanitizer.ingressShieldExceptions import (
     ArithmeticDriftException,
 )
 from razoragentMesh.packages.merchantApi.src.adapters.csvIngestionAdapter import (

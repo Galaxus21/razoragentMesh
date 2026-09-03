@@ -19,13 +19,14 @@ import InfrastructurePage from "../src/app/(dashboard)/infrastructure/page.js";
 import MerchantStudioPage from "../src/app/(dashboard)/merchant-studio/page.js";
 import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 
-const expectedCategoryCount = 5;
-const expectedTotalRoutesCount = 17;
-const expectedDocsRoutesCount = 6;
-const expectedTelemetryRoutesCount = 11;
+const expectedCategoryCount = 6;
+const expectedTotalRoutesCount = 20;
+const expectedDocsRoutesCount = 7;
+const expectedTelemetryRoutesCount = 13;
 
 const requiredDocsRouteUrls: ReadonlyArray<string> = [
   "/docs/setup",
+  "/docs/agent-quickstart",
   "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
@@ -35,11 +36,13 @@ const requiredDocsRouteUrls: ReadonlyArray<string> = [
 
 const requiredTelemetryRouteUrls: ReadonlyArray<string> = [
   "/overview",
-  "/protocol",
   "/self-healing",
   "/infrastructure",
+  "/protocol",
+  "/playground/layers",
   "/playground",
   "/playground/adversarial",
+  "/playground/live-agent",
   "/sdk-console",
   "/agent-observability",
   "/negotiation-hub",
@@ -94,7 +97,7 @@ describe("Empirical Challenger 2 — Link Integrity & Route Configuration Invari
     }
   });
 
-  it("should verify all 17 navigation items have valid URI paths and non-empty metadata", () => {
+  it("should verify all 20 navigation items have valid URI paths and non-empty metadata", () => {
     assert.equal(navigationItems.length, expectedTotalRoutesCount);
 
     const seenRoutes = new Set<string>();

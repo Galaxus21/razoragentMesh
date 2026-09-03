@@ -57,9 +57,12 @@ def _buildCartAndExecution(
 ) -> tuple[CartMandate, ExecutionMandate]:
     subtotal = itemUnitPrice * itemQuantity
     tb = computeGstBreakdown(subtotal, taxPercent, isIntraState=True)
+    # Inside the fixture's authorizedCategories, so these carts exercise the budget and
+    # arithmetic branches rather than being turned away at the category gate first.
     item = CartItemSchema(
         skuId="SKU-STRESS-01", quantity=itemQuantity, unitPricePaise=itemUnitPrice,
         hsnCode="8471", gstRatePercent=taxPercent, lineTotalPaise=subtotal,
+        category="electronics",
     )
     tbSchema = TaxBreakdownSchema(
         cgstPaise=tb.cgstPaise, sgstPaise=tb.sgstPaise,
@@ -116,14 +119,20 @@ class TestBudgetGateBreachDefense:
             ctx["merchantSigner"], ctx["buyerSigner"], ctx["intentMandate"],
             500000, 1, 0, 0, 0, 500000, 500000, ctx["currentTime"],
         )
-        assert validateBudgetGate(ctx["intentMandate"], cart, execM, ctx["currentTime"]) is True
+        assert validateBudgetGate(
+            ctx["intentMandate"], cart, execM, ctx["currentTime"],
+            skuCategories=[item.category for item in cart.items],
+        ) is True
 
         cartOver, execOver = _buildCartAndExecution(
             ctx["merchantSigner"], ctx["buyerSigner"], ctx["intentMandate"],
             500001, 1, 0, 0, 0, 500001, 500001, ctx["currentTime"],
         )
         with pytest.raises(SingleTransactionLimitExceededException):
-            validateBudgetGate(ctx["intentMandate"], cartOver, execOver, ctx["currentTime"])
+            validateBudgetGate(
+                ctx["intentMandate"], cartOver, execOver, ctx["currentTime"],
+                skuCategories=[item.category for item in cartOver.items],
+            )
 
     def testArithmeticDriftMismatchedCartAndExecutionTotals(self, setupMandates: Dict[str, Any]) -> None:
         """Tests detection of arithmetic tampering in cart or execution amounts."""
@@ -133,7 +142,10 @@ class TestBudgetGateBreachDefense:
             100000, 1, 0, 0, 0, 90000, 90000, ctx["currentTime"],
         )
         with pytest.raises(ArithmeticEnclaveMismatchException):
-            validateBudgetGate(ctx["intentMandate"], cartTampered, execTampered, ctx["currentTime"])
+            validateBudgetGate(
+                ctx["intentMandate"], cartTampered, execTampered, ctx["currentTime"],
+                skuCategories=[item.category for item in cartTampered.items],
+            )
 
     def testMandateExpirationBoundary(self, setupMandates: Dict[str, Any]) -> None:
         """Tests exact expiration boundary."""
@@ -143,9 +155,15 @@ class TestBudgetGateBreachDefense:
             ctx["merchantSigner"], ctx["buyerSigner"], ctx["intentMandate"],
             100000, 1, 0, 0, 0, 100000, 100000, validUntil,
         )
-        assert validateBudgetGate(ctx["intentMandate"], cart, execM, currentTimestamp=validUntil) is True
+        assert validateBudgetGate(
+            ctx["intentMandate"], cart, execM, currentTimestamp=validUntil,
+            skuCategories=[item.category for item in cart.items],
+        ) is True
         with pytest.raises(MandateExpiredException):
-            validateBudgetGate(ctx["intentMandate"], cart, execM, currentTimestamp=validUntil + 1)
+            validateBudgetGate(
+                ctx["intentMandate"], cart, execM, currentTimestamp=validUntil + 1,
+                skuCategories=[item.category for item in cart.items],
+            )
 
     def testUnauthorizedCategoryRejection(self, setupMandates: Dict[str, Any]) -> None:
         """Tests rejection when unauthorized categories are present."""

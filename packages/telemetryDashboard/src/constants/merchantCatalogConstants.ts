@@ -176,3 +176,9 @@ export const defaultCatalogFormState: MerchantCatalogFormData = {
     fssaiNumber: "",
   },
 };
+
+// Server-side proxy for catalog writes. The browser cannot reach the merchant API
+// directly: inside Docker it is addressable only by compose service name, and a relative
+// path resolves against the dashboard origin, which serves no such route -- that is why
+// every publish 404ed before this existed. See src/app/api/mesh/catalog/route.ts.
+export const meshCatalogProxyEndpoint = "/api/mesh/catalog";

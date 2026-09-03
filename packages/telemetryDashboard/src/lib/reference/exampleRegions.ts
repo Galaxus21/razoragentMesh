@@ -1,7 +1,8 @@
 // Cuts named regions out of the runnable examples so prose can quote code it cannot invalidate.
 //
 // A fence pasted into a guide is a copy, and copies drift -- that is the whole reason the checker
-// in this directory exists. A region is not a copy: `examples/` is compiled and executed in CI,
+// in this directory exists. A region is not a copy: `examples/` is compiled and executed by
+// `python scripts/verifyExamples.py`,
 // and the guide renders whatever that file currently says. The failure mode inverts, too. A
 // pasted fence that names a deleted method renders happily and misleads the reader; a region that
 // no longer exists throws here, at build time, naming the file and the region.

@@ -49,19 +49,14 @@ from .escrow import (
     MicroEscrowClient,
 )
 from .gatewayApp import (
-    GatewayState,
     app,
     createGatewayApp,
-    gatewayState,
 )
 from .gatewayExceptions import (
-    AstCompilationException,
     EscrowSessionNotFoundException,
     GatewayBaseException,
     InsufficientEscrowBalanceException,
-    InvalidBidPayloadException,
     InvalidProofOfWorkException,
-    MicroEscrowDebitException,
     NegotiationExhaustedException,
     NonMonotonicConcessionViolation,
     PowChallengeExpiredException,
@@ -71,7 +66,6 @@ from .middleware import (
     Http402ChallengeResponse,
     IngressAntiSpamShield,
     PowVerificationResult,
-    X402ChallengeMiddleware,
     solvePoWChallenge,
 )
 from .negotiation import (
@@ -79,7 +73,6 @@ from .negotiation import (
     NegotiationStepResult,
     RubinsteinStahlNegotiator,
     checkConvergence,
-    computeMinimumMarginFloor,
     computeSellerCounterAsk,
     computeSpread,
     evaluateMargin,
@@ -98,7 +91,6 @@ from .schemas import (
 )
 
 __all__ = [
-    "AstCompilationException",
     "CommercialContractAst",
     "DebitReceipt",
     "EscrowCreateRequest",
@@ -107,14 +99,11 @@ __all__ = [
     "EscrowSessionManager",
     "EscrowSessionNotFoundException",
     "GatewayBaseException",
-    "GatewayState",
     "Http402ChallengeResponse",
     "IngressAntiSpamShield",
     "InsufficientEscrowBalanceException",
-    "InvalidBidPayloadException",
     "InvalidProofOfWorkException",
     "MicroEscrowClient",
-    "MicroEscrowDebitException",
     "NegotiateTurnRequest",
     "NegotiateTurnResponse",
     "NegotiationExhaustedException",
@@ -132,14 +121,12 @@ __all__ = [
     "PriceDropDispatchResult",
     "PriceDropWebhookPayload",
     "RubinsteinStahlNegotiator",
-    "X402ChallengeMiddleware",
     "alertsRouter",
     "app",
     "basisPointsDivisor",
     "canonicalizeJson",
     "checkConvergence",
     "compileCommercialContractAst",
-    "computeMinimumMarginFloor",
     "computeSellerCounterAsk",
     "computeSha256Digest",
     "computeSpread",
@@ -157,7 +144,6 @@ __all__ = [
     "endpointNegotiate",
     "escrowRouter",
     "evaluateMargin",
-    "gatewayState",
     "headerAuthenticate",
     "headerBuyerAgentDid",
     "headerEscrowToken",

@@ -6,12 +6,10 @@ from .proofOfWorkMiddleware import (
     PowVerificationResult,
     solvePoWChallenge,
 )
-from .x402ChallengeMiddleware import X402ChallengeMiddleware
 
 __all__ = [
     "Http402ChallengeResponse",
     "IngressAntiSpamShield",
     "PowVerificationResult",
-    "X402ChallengeMiddleware",
     "solvePoWChallenge",
 ]

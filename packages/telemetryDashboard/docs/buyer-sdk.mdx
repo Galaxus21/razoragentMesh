@@ -3,7 +3,7 @@ title: "AI Buyer Agent SDK & AP2 Protocol Guide"
 description: "Explains how to use the buyer agent SDK for mandate signing, live SKU quoting, inventory locking, and 2PC settlement execution."
 navLabel: "Buyer SDK"
 navDescription: "TypeScript & Python SDK Guide"
-order: 3
+order: 4
 icon: "Bot"
 audience: "developer"
 ---
@@ -12,8 +12,10 @@ A developer guide for integrating autonomous AI buyer agents with Ed25519 mandat
 discount stacking, and fenced inventory reservation.
 
 Every snippet on this page is checked against the SDK's generated symbol table by
-`npm run docs:verify`, which runs in CI. A method, constructor argument or service port named
-here that the SDK does not have fails the build.
+`npm run docs:verify`, run locally -- this repository has no CI by design, so the checks are
+commands a person runs. A method, constructor argument or service port named here that the SDK
+does not have fails that command. Link targets are checked separately by
+`python scripts/verifyDocLinks.py --check`, because `docs:verify` reads snippets and not links.
 
 ---
 
@@ -397,3 +399,9 @@ wrong path as though that were the contract.
 
 `test/sdkEndpointParity.test.ts` in the dashboard now compares every endpoint constant in both SDKs
 against the routes the servers declare, reading both sides from source and mocking nothing.
+
+### Defaults that match
+
+Both SDKs share `defaultLockTtlSeconds = 60`, matching the MCP server's own default
+(`packages/mcpServer/src/constants/protocolConstants.ts:53`). This is the hold window for inventory
+locks; both SDKs call the same `/api/v1/lock` endpoint, so the duration must agree.

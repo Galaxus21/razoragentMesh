@@ -99,7 +99,7 @@ function MdxTable({ children }: { readonly children?: React.ReactNode }): React.
 //   <ApiEndpoint service=".." path=".." />  -- host and port from meshServiceRegistry
 //   <RunStep scenario=".." step=".." />     -- the step definition the driver executes
 //   <EventCatalog />                        -- the whole TelemetryEventType union
-//   <Snippet file=".." region=".." />       -- a region of a program CI compiles and runs
+//   <Snippet file=".." region=".." />       -- a region of a real, runnable program
 export const mdxComponents = {
   pre: MdxPre,
   a: MdxAnchor,

@@ -26,6 +26,14 @@
       "operations": [
         {
           "method": "POST",
+          "path": "/api/v1/catalog/heal-oos"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/catalog/search"
+        },
+        {
+          "method": "POST",
           "path": "/api/v1/merchant/register"
         },
         {

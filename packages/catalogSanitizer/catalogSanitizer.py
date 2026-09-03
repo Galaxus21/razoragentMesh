@@ -1,6 +1,7 @@
 """Ingress Security Shield: merchant catalog sanitizer and normalizer."""
 
 import re
+import unicodedata
 from typing import Any
 from pydantic import ValidationError
 
@@ -18,6 +19,10 @@ from .sanitizerConstants import (
     maxDescriptionLength,
     maxTitleLength,
     skuIdRegexPattern,
+    unicodeFormatCategory,
+    unicodeNormalizationForm,
+    unicodeTagBlockEnd,
+    unicodeTagBlockStart,
     zeroWidthCodePoints,
 )
 from .sanitizedSkuQuoteSchema import (
@@ -64,26 +69,70 @@ def sanitizeMerchantSkuQuote(rawQuote: dict[str, Any]) -> SanitizedSkuQuote:
 
 
 def cleanAndTruncateText(rawText: str, maxLength: int) -> str:
-    """Applies zero-width, ANSI, and markup stripping, then normalizes whitespace."""
+    """Strips hidden characters, ANSI escapes and markup, then normalizes to NFC.
+
+    NFC is not decoration in a catalog. Two SKU titles that render identically but differ in
+    Unicode composition hash differently, sort differently, and embed to different vectors -- so
+    "cafe" + U+0301 and "caf\u00e9" become two products. GUIDE.md has always claimed this module
+    produced "strict UTF-8 NFC text"; until this line existed, it did not.
+
+    Order matters. Normalization runs last so that it also composes any sequence left behind by
+    the stripping passes.
+    """
     if not rawText:
         return ""
     cleaned = stripZeroWidthCharacters(rawText)
     cleaned = stripAnsiEscapes(cleaned)
     cleaned = stripMarkdownAndHtml(cleaned)
     normalized = " ".join(cleaned.split())
+    normalized = unicodedata.normalize(unicodeNormalizationForm, normalized)
     if len(normalized) <= maxLength:
         return normalized
     return normalized[:maxLength].rstrip()
 
 
 def stripZeroWidthCharacters(inputString: str) -> str:
-    """Removes hidden zero-width and directional override Unicode code points."""
+    """Removes invisible formatting characters, including the Unicode Tags block.
+
+    Tested by category rather than against a list of code points. The previous eleven-point
+    denylist (U+200B-200F, U+202A-202E, U+FEFF) covered the 2001-era invisibles and missed the
+    ones an agent mesh actually faces:
+
+      * U+E0000-E007F  Unicode Tags -- the canonical channel for smuggling instructions that are
+                       invisible to a human reviewing the catalog and legible to a model reading
+                       it. This is the one that matters here: the text this function guards is
+                       what reaches an embedding model and an agent's context.
+      * U+2066-2069    directional isolates, Unicode 6.3's replacements for the U+202A-202E
+                       embeddings the old list did cover
+      * U+2060         word joiner, zero-width, same class as the U+200B that was covered
+      * U+00AD         soft hyphen, invisible until line-break
+      * U+180E         Mongolian vowel separator, zero-width since Unicode 6.3
+
+    Category `Cf` (format) covers every one of those except the tag block, which is `Cf` in
+    recent Unicode but was not always, so it is named explicitly and the two are unioned. A
+    denylist has to be extended each time Unicode adds to the class; this does not.
+
+    Note what is deliberately NOT stripped: `Cc` (control) characters other than those handled by
+    the ANSI pass, and ordinary whitespace, which the caller collapses.
+    """
     if not inputString:
         return ""
     filteredChars = [
-        char for char in inputString if ord(char) not in zeroWidthCodePoints
+        char
+        for char in inputString
+        if not _isInvisibleFormattingCharacter(char)
     ]
     return "".join(filteredChars)
+
+
+def _isInvisibleFormattingCharacter(char: str) -> bool:
+    """True for Unicode format characters and anything in the Tags block."""
+    codePoint = ord(char)
+    if unicodeTagBlockStart <= codePoint <= unicodeTagBlockEnd:
+        return True
+    if codePoint in zeroWidthCodePoints:
+        return True
+    return unicodedata.category(char) == unicodeFormatCategory
 
 
 def stripAnsiEscapes(inputString: str) -> str:
@@ -130,9 +179,13 @@ def _buildTaxBreakdown(rawTax: Any) -> TaxBreakdownSchema:
     igst = _extractFieldValue(rawTax, "igstPaise", "igst_paise")
     total = _extractFieldValue(rawTax, "totalTaxPaise", "total_tax_paise")
 
-    cgstPaise = _validateStrictInteger(cgst or 0, "cgstPaise")
-    sgstPaise = _validateStrictInteger(sgst or 0, "sgstPaise")
-    igstPaise = _validateStrictInteger(igst or 0, "igstPaise")
+    # `or 0` here would coerce every falsy value -- 0.0, False, "" -- to int 0 *before* the guard
+    # ran, so the one check that exists to keep floats and booleans out of a financial payload
+    # never saw them. Absent keys are handled explicitly instead, matching the shape totalTaxPaise
+    # already used four lines below.
+    cgstPaise = _validateStrictInteger(cgst if cgst is not None else 0, "cgstPaise")
+    sgstPaise = _validateStrictInteger(sgst if sgst is not None else 0, "sgstPaise")
+    igstPaise = _validateStrictInteger(igst if igst is not None else 0, "igstPaise")
     computedTotalTaxPaise = cgstPaise + sgstPaise + igstPaise
     totalTaxPaise = _validateStrictInteger(
         total if total is not None else computedTotalTaxPaise,

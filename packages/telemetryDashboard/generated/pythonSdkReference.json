@@ -281,6 +281,7 @@
     },
     {
       "constructorParameters": [
+        "category",
         "gstRatePercent",
         "hsnCode",
         "lineTotalPaise",
@@ -293,6 +294,10 @@
       ],
       "kind": "class",
       "members": [
+        {
+          "name": "category",
+          "signature": "<class 'str'>"
+        },
         {
           "name": "gstRatePercent",
           "signature": "<class 'int'>"
@@ -319,7 +324,7 @@
         }
       ],
       "name": "CartItemSchema",
-      "signature": "CartItemSchema(*, skuId: Annotated[str, MinLen(min_length=1)], quantity: Annotated[int, Gt(gt=0)], unitPricePaise: Annotated[int, Gt(gt=0)], hsnCode: Annotated[str, _PydanticGeneralMetadata(pattern='^[0-9]{4,8}$')], gstRatePercent: Annotated[int, Ge(ge=0), Le(le=28)], lineTotalPaise: Annotated[int, Gt(gt=0)]) -> None"
+      "signature": "CartItemSchema(*, skuId: Annotated[str, MinLen(min_length=1)], quantity: Annotated[int, Gt(gt=0)], unitPricePaise: Annotated[int, Gt(gt=0)], hsnCode: Annotated[str, _PydanticGeneralMetadata(pattern='^[0-9]{4,8}$')], gstRatePercent: Annotated[int, Ge(ge=0), Le(le=28)], lineTotalPaise: Annotated[int, Gt(gt=0)], category: Annotated[str, MinLen(min_length=1)] = 'uncategorized') -> None"
     },
     {
       "constructorParameters": [

@@ -93,7 +93,13 @@ def _verifyMandateIntegrity(
 ) -> None:
     """Validates cryptographic hash chaining and AP2 budget gating across mandates."""
     assert verifyMandateHashChain(intentM, cartM, execM) is True
-    assert validateBudgetGate(intentM, cartM, execM, currentTime) is True
+    # Categories are read off the merchant-signed cart, the same way `twoPhaseCommitSaga`
+    # does it. Calling the gate without them leaves `authorizedCategories` unenforced, which
+    # is precisely the hole this assertion used to walk straight past.
+    assert validateBudgetGate(
+        intentM, cartM, execM, currentTime,
+        skuCategories=[item.category for item in cartM.items],
+    ) is True
 
 
 def _verifySettlementInvariants(
@@ -128,10 +134,12 @@ def _buildMultiItemCartMandate(
     itemOne = CartItemSchema(
         skuId=targetSkuId, quantity=orderQuantity, unitPricePaise=offeredUnitPricePaise,
         hsnCode=defaultHsnCode, gstRatePercent=gstRate, lineTotalPaise=subtotalOne,
+        category=defaultCategory,
     )
     itemTwo = CartItemSchema(
         skuId=secondarySkuId, quantity=secondaryQuantity, unitPricePaise=secondaryUnitPricePaise,
         hsnCode=defaultHsnCode, gstRatePercent=gstRate, lineTotalPaise=subtotalTwo,
+        category=defaultCategory,
     )
     taxBreakdown = TaxBreakdownSchema(
         cgstPaise=totalCgst, sgstPaise=totalSgst, igstPaise=0, totalTaxPaise=totalTax,

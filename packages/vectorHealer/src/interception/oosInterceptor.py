@@ -48,8 +48,16 @@ class OosInterceptor:
         failedSkuId: str,
         requestedQuantity: int,
         manifest: Optional[NegativeConstraintManifest],
+        scoreThreshold: Optional[float] = None,
+        maxPriceDeltaPct: Optional[float] = None,
     ) -> tuple[Dict[str, Any], float]:
-        """Queries vector index and applies negative constraint AST evaluator."""
+        """Queries vector index and applies negative constraint AST evaluator.
+
+        The two thresholds are parameters rather than the module constants they used to be read
+        from directly. A caller that accepts a similarity floor or a price tolerance from its own
+        API has to be able to pass it down; hardcoding them here meant such a caller would
+        advertise knobs that silently did nothing.
+        """
         if failedSkuId not in self.catalog:
             raise NoSubstituteFoundException(f"Failed SKU '{failedSkuId}' not found in catalog store")
 
@@ -64,8 +72,10 @@ class OosInterceptor:
             originalPricePaise=origPrice,
             requestedQuantity=requestedQuantity,
             excludeSkuId=failedSkuId,
-            scoreThreshold=minCosineSimilarity,
-            maxPriceDeltaPct=maxPriceDeltaPercent,
+            scoreThreshold=minCosineSimilarity if scoreThreshold is None else scoreThreshold,
+            maxPriceDeltaPct=(
+                maxPriceDeltaPercent if maxPriceDeltaPct is None else maxPriceDeltaPct
+            ),
         )
 
         filterEngine = NegativeConstraintFilter(manifest) if manifest else None
@@ -78,6 +88,39 @@ class OosInterceptor:
             return cand.payload, cand.score
 
         raise NoSubstituteFoundException(f"No valid substitute found for OOS SKU '{failedSkuId}'")
+
+    def findSubstitute(
+        self,
+        failedSkuId: str,
+        requestedQuantity: int,
+        constraintManifest: Optional[NegativeConstraintManifest] = None,
+        scoreThreshold: Optional[float] = None,
+        maxPriceDeltaPct: Optional[float] = None,
+    ) -> tuple[Dict[str, Any], float, float]:
+        """Runs the substitution search alone, without patching or signing anything.
+
+        `healOutOfStock` below needs a buyer signer AND a merchant signer, because it produces a
+        dual-signed AmendmentMandate. No service holds both: the buyer key belongs to the agent.
+        That made the whole class unconstructable outside tests, which is why Layer 3 shipped as
+        a library nothing built.
+
+        This is the half that needs no keys -- the Qdrant ANN query and the negative-constraint
+        AST -- so it can run in the Merchant API, next to the vector index. The MCP server, which
+        does hold the merchant key, signs the amendment afterwards.
+
+        The returned duration is measured over exactly this work, which is what the "sub-300ms
+        Qdrant ANN cosine similarity" claim is about. Mandate signing is deliberately not in it.
+        """
+        startTime = time.perf_counter()
+        substitutePayload, cosineScore = self._findViableSubstitute(
+            failedSkuId=failedSkuId,
+            requestedQuantity=requestedQuantity,
+            manifest=constraintManifest,
+            scoreThreshold=scoreThreshold,
+            maxPriceDeltaPct=maxPriceDeltaPct,
+        )
+        durationMs = (time.perf_counter() - startTime) * millisecondsPerSecond
+        return substitutePayload, cosineScore, durationMs
 
     def healOutOfStock(
         self,

@@ -5,8 +5,13 @@ import {
   mcpToolsManifest
 } from "../src/mcpServerMain.js";
 import {
+  toolCreateCartMandate,
+  toolEstablishAgentDelegation,
+  toolExecuteSettlement,
   toolGetLiveSkuQuote,
   toolReserveInventoryLock,
+  toolSearchCatalog,
+  toolSignExecutionMandate,
   toolVerifyShippingSla
 } from "../src/constants/protocolConstants.js";
 
@@ -25,7 +30,7 @@ describe("McpServerMain JSON-RPC Dispatcher", () => {
     assert.equal(result.serverInfo.name, "razoragent-mesh-mcp");
   });
 
-  it("should return tools list with all 3 tools defined", async () => {
+  it("should advertise every tool an external agent needs, discovery first", async () => {
     const response = await handleJsonRpcMessage({
       jsonrpc: "2.0",
       id: 2,
@@ -33,11 +38,20 @@ describe("McpServerMain JSON-RPC Dispatcher", () => {
     });
 
     const result = response.result as { tools: Array<{ name: string }> };
-    assert.equal(result.tools.length, 3);
+    assert.equal(result.tools.length, 8);
     const names = result.tools.map((t) => t.name);
+    // search_catalog is the entry point: without it an agent can only quote SKU ids someone
+    // already handed it, so a tools/list that omits it leaves the mesh undiscoverable.
+    assert.ok(names.includes(toolSearchCatalog));
     assert.ok(names.includes(toolGetLiveSkuQuote));
     assert.ok(names.includes(toolReserveInventoryLock));
     assert.ok(names.includes(toolVerifyShippingSla));
+    // The purchase half. Quoting and locking only let an agent price a cart; without these
+    // four an external agent still cannot buy, which is the claim the mesh exists to make.
+    assert.ok(names.includes(toolEstablishAgentDelegation));
+    assert.ok(names.includes(toolCreateCartMandate));
+    assert.ok(names.includes(toolSignExecutionMandate));
+    assert.ok(names.includes(toolExecuteSettlement));
   });
 
   it("should execute tools/call for get_live_sku_quote", async () => {

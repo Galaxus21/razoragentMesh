@@ -27,14 +27,14 @@ export const docsSearchIndex: readonly DocSearchEntry[] = [
     "docTitle": "System Setup & Environment Architecture Guide",
     "headingText": "2. Monorepo Package Topology & Localhost Ports",
     "snippet": "When running the mesh locally (via Docker Compose or native processes), each microservice listens on a dedicated localhost port: Localhost Port Microservice...",
-    "searchText": "2. monorepo package topology & localhost ports system setup & environment architecture guide when running the mesh locally (via docker compose or native processes), each microservice listens on a dedicated localhost port: localhost port microservice protocol / layer responsibility & role key endpoints --- --- --- --- --- localhost:8000 mandate engine rest / sse (layer 4 & 5) ap2 cryptographic mandate verification (ed25519), 2-phase commit (2pc) multi-party settlement sagas, statutory gstr-1 tax invoicing, and live server-sent events (sse) telemetry stream. get /health post /api/v1/settlement/execute get /api/v1/telemetry/stream localhost:4002 merchant api rest (layer 1) merchant did registration, autonomous negotiation policy configuration, multi-channel catalog ingestion (rest, csv, shopify, erp), domain facets, and dynamic mcx bullion pricing. get /health post /api/v1/merchant/register post /api/v1/merchant/{merchantdid}/catalog localhost:4003 x402 gateway rest (layer 0 & 2) dynamic http 402 negotiation gateway, sha-256 proof-of-work (pow) sybil/anti-spam shield, rubinstein-ståhl bilateral bargaining engine, and ast contract compilation. get /api/v1/mesh/health post /api/v1/mesh/negotiate get /api/v1/mesh/challenge localhost:4001 mcp server json-rpc 2.0 (layer 1) model context protocol tool discovery server for autonomous ai buyer agents ( get live sku quote , reserve inventory lock , verify shipping sla ). post /rpc stdio pipe localhost:3000 telemetry dashboard web / http (layer 5) real-time next.js 15 web inspector, visual audit trail, dynamic markdown documentation viewer, and universal sku studio. get / get /overview get /docs/setup localhost:6333 qdrant vector db rest / grpc (layer 3) high-speed vector search engine providing approximate nearest neighbor (ann) cosine similarity search and sub-300ms out-of-stock vector cart healing. get /healthz post /collections/merchant catalog/points/search localhost:6379 redis state store tcp (layer 0–4) distributed in-memory cache, atomic lua inventory locking with monotonic fencing tokens, pub/sub event bus, and single-use anti-replay nonce ledger. ping (via redis-cli) ---"
+    "searchText": "2. monorepo package topology & localhost ports system setup & environment architecture guide when running the mesh locally (via docker compose or native processes), each microservice listens on a dedicated localhost port: localhost port microservice protocol / layer responsibility & role key endpoints --- --- --- --- --- localhost:8000 mandate engine rest / sse (layer 4 & 5) ap2 cryptographic mandate verification (ed25519), 2-phase commit (2pc) multi-party settlement sagas, statutory gstr-1 tax invoicing, and live server-sent events (sse) telemetry stream. get /health post /api/v1/settlement/execute get /api/v1/telemetry/stream localhost:4002 merchant api rest (layer 1) merchant did registration, autonomous negotiation policy configuration, multi-channel catalog ingestion (rest, csv, shopify, erp), domain facets, and dynamic mcx bullion pricing. get /health post /api/v1/merchant/register post /api/v1/merchant/{merchantdid}/catalog localhost:4003 x402 gateway rest (layer 0 & 2) dynamic http 402 negotiation gateway, sha-256 proof-of-work (pow) sybil/anti-spam shield, rubinstein-ståhl bilateral bargaining engine, and ast contract compilation. get /api/v1/mesh/health post /api/v1/mesh/negotiate get /api/v1/mesh/challenge localhost:4001 mcp server json-rpc 2.0 (layer 1) model context protocol server exposing eight tools to autonomous ai buyer agents: discovery ( search catalog ), commerce ( get live sku quote , reserve inventory lock , verify shipping sla ) and purchase ( establish agent delegation , create cart mandate , sign execution mandate , execute settlement ). post /mcp (streamable http) post /rpc stdio pipe localhost:3000 telemetry dashboard web / http (layer 5) real-time next.js 15 web inspector, visual audit trail, dynamic markdown documentation viewer, and universal sku studio. get / get /overview get /docs/setup localhost:6333 qdrant vector db rest / grpc (layer 3) high-speed vector search engine providing approximate nearest neighbor (ann) cosine similarity search and sub-300ms out-of-stock vector cart healing. get /healthz post /collections/merchant catalog/points/search localhost:6379 redis state store tcp (layer 0–4) distributed in-memory cache, atomic lua inventory locking with monotonic fencing tokens, pub/sub event bus, and single-use anti-replay nonce ledger. ping (via redis-cli) ---"
   },
   {
     "route": "/docs/setup#3-environment-configuration-env",
     "docTitle": "System Setup & Environment Architecture Guide",
     "headingText": "3. Environment Configuration (.env)",
     "snippet": "Create your .env file in razoragentMesh/ . It is shorter than you might expect: docker-compose.yml sets each service's port and Redis URL directly, so the only...",
-    "searchText": "3. environment configuration (.env) system setup & environment architecture guide create your .env file in razoragentmesh/ . it is shorter than you might expect: docker-compose.yml sets each service's port and redis url directly, so the only values it interpolates from .env are the two signing keys and the dashboard's stream url. running a service outside docker means supplying what compose would otherwise set: every variable above is read by code. earlier revisions of this guide also listed telemetry port , merchant api port , gateway port , mcp server port , qdrant host , qdrant port , qdrant collection name , razorpay key id , razorpay key secret , razorpay webhook secret , ed25519 private key and ap2 gate daily limit paise . nothing read any of them — setting them had no effect, and ed25519 private key in particular looked like the way to supply a signing key while the code was reading merchant private key hex . they have been removed rather than left to mislead. ---"
+    "searchText": "3. environment configuration (.env) system setup & environment architecture guide create your .env file in razoragentmesh/ . it is shorter than you might expect: docker-compose.yml sets each service's port and redis url directly, so the only values it interpolates from .env are the two signing keys and the dashboard's stream url. running a service outside docker means supplying what compose would otherwise set: every variable above is read by code. earlier revisions of this guide also listed telemetry port , merchant api port , gateway port , mcp server port , qdrant collection name , razorpay webhook secret , ed25519 private key and ap2 gate daily limit paise . nothing reads any of them — setting them has no effect, and ed25519 private key in particular looked like the way to supply a signing key while the code was reading merchant private key hex . they have been removed rather than left to mislead. that list previously also named qdrant host , qdrant port , razorpay key id and razorpay key secret . all four are read by code and are documented above instead: the qdrant pair by the merchant api's auto-vectorizer, the razorpay pair by the mandate engine, where they decide whether settlement runs against the mock ledger or the live route api. ---"
   },
   {
     "route": "/docs/setup#4-bootstrapping-with-docker-compose",
@@ -56,6 +56,118 @@ export const docsSearchIndex: readonly DocSearchEntry[] = [
     "headingText": "5. Local Development Mode",
     "snippet": "To run individual packages on your host machine without Docker:",
     "searchText": "5. local development mode system setup & environment architecture guide to run individual packages on your host machine without docker:"
+  },
+  {
+    "route": "/docs/agent-quickstart",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "",
+    "snippet": "Run the mesh, point your own AI agent at it, and watch a cryptographically signed purchase complete while the dashboard renders each step live. The intended...",
+    "searchText": " connect your own agent — mcp quickstart run the mesh, point your own ai agent at it, and watch a cryptographically signed purchase complete while the dashboard renders each step live. the intended setup is two windows side by side: the dashboard on one , your agent on the other . you publish a product in the dashboard, ask your agent to buy it in plain language, and watch the protocol execute in real time. ---"
+  },
+  {
+    "route": "/docs/agent-quickstart#1-start-the-mesh",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "1. Start the mesh",
+    "snippet": "Seven services. Wait for all of them to report healthy: razoragent catalog seeder showing Exited (0) is correct — it is a one-shot job that loads the fixture...",
+    "searchText": "1. start the mesh connect your own agent — mcp quickstart seven services. wait for all of them to report healthy: razoragent catalog seeder showing exited (0) is correct — it is a one-shot job that loads the fixture catalog and stops. open the dashboard at http://localhost:3000/overview . leave it open; it is one half of the demo. ---"
+  },
+  {
+    "route": "/docs/agent-quickstart#2-connect-your-agent",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "2. Connect your agent",
+    "snippet": "The MCP server speaks two transports. Use whichever your client supports.",
+    "searchText": "2. connect your agent connect your own agent — mcp quickstart the mcp server speaks two transports. use whichever your client supports."
+  },
+  {
+    "route": "/docs/agent-quickstart#streamable-http-recommended",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "Streamable HTTP (recommended)",
+    "snippet": "The mesh is already serving it. Point your client at: For Claude Code:",
+    "searchText": "streamable http (recommended) connect your own agent — mcp quickstart the mesh is already serving it. point your client at: for claude code:"
+  },
+  {
+    "route": "/docs/agent-quickstart#stdio",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "stdio",
+    "snippet": "For clients that spawn a process instead. Build once: Then register this command: MCP TRANSPORT=stdio is required, not optional. Without it the process also...",
+    "searchText": "stdio connect your own agent — mcp quickstart for clients that spawn a process instead. build once: then register this command: mcp transport=stdio is required, not optional. without it the process also tries to bind port 4001, which docker already holds, and the session dies before the first tool call. use absolute paths for cwd if your client does not resolve relative ones."
+  },
+  {
+    "route": "/docs/agent-quickstart#confirm-the-connection",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "Confirm the connection",
+    "snippet": "Ask your agent to list its tools. You should see eight : Tool What it does --- --- search catalog Natural-language product discovery get live sku quote Live...",
+    "searchText": "confirm the connection connect your own agent — mcp quickstart ask your agent to list its tools. you should see eight : tool what it does --- --- search catalog natural-language product discovery get live sku quote live price, tax and discount for a sku reserve inventory lock atomic stock reservation with a fencing token verify shipping sla serviceability and delivery-tier check establish agent delegation pairs your agent, issues a signed intent mandate create cart mandate merchant-signed cart at mesh-derived prices sign execution mandate binds intent and cart into an execution mandate execute settlement runs the 2pc settlement saga ---"
+  },
+  {
+    "route": "/docs/agent-quickstart#3-publish-something-to-buy",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "3. Publish something to buy",
+    "snippet": "In the dashboard, open Merchant Studio and publish a product — give it a title your agent can find in plain language, like Ergonomic Mesh Office Chair with...",
+    "searchText": "3. publish something to buy connect your own agent — mcp quickstart in the dashboard, open merchant studio and publish a product — give it a title your agent can find in plain language, like ergonomic mesh office chair with lumbar support . publishing writes the listing to redis and indexes it in qdrant, so it becomes discoverable to search catalog immediately. the seeded fixtures are industrial parts, so anything you add in a different category is easy to pick out of search results. anything you publish lives in the running containers, not in the fixtures — docker compose down -v removes it. ---"
+  },
+  {
+    "route": "/docs/agent-quickstart#4-ask-your-agent-to-buy-it",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "4. Ask your agent to buy it",
+    "snippet": "Prompt in plain language. The tool descriptions carry the ordering rules, so a capable agent sequences the calls itself: Find me something comfortable to sit...",
+    "searchText": "4. ask your agent to buy it connect your own agent — mcp quickstart prompt in plain language. the tool descriptions carry the ordering rules, so a capable agent sequences the calls itself: find me something comfortable to sit on while working at a desk. establish a delegation with a ₹9,000 budget using mesh demo custodial custody, then buy two of the best match, delivering to pincode 560001, state code 29. the agent will work through: pair → discover → quote → lock → cart → sign → settle. pair first. in custodial mode the mesh mints the buyer did, and every later call must use that did — get live sku quote and reserve inventory lock both take it as buyer agent id . the settlement gate rejects a chain whose execution mandate was signed by a different agent than the intent mandate delegated to. one parameter is easy to miss: reserve inventory lock returns its signature under the key signature , but create cart mandate expects it as lock signature . pass the value through unchanged. a successful settlement returns a capture, the route split, and a statutory gstr-1 invoice: the four transfers sum to the grand total, and the tax is recomputed independently by the settlement enclave rather than trusted from the cart. note that tool inputs are snake case while settlement output is camelcase ; the settlement response is the mandate engine's own schema, passed through unmodified."
+  },
+  {
+    "route": "/docs/agent-quickstart#when-the-mesh-refuses",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "When the mesh refuses",
+    "snippet": "A refusal — replayed nonce, expired inventory lock, budget exceeded, unauthorized category, bad signature — comes back as a tool result with isError set , not...",
+    "searchText": "when the mesh refuses connect your own agent — mcp quickstart a refusal — replayed nonce, expired inventory lock, budget exceeded, unauthorized category, bad signature — comes back as a tool result with iserror set , not as a json-rpc error, carrying a machine-readable reason. that distinction matters: a refusal means the protocol worked. an agent that only inspects the json-rpc error field will read a correct refusal as a success. ---"
+  },
+  {
+    "route": "/docs/agent-quickstart#5-watch-it-live",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "5. Watch it live",
+    "snippet": "Open Protocol Playground - Live Agent ( /playground/live-agent ) in the dashboard window. It groups incoming telemetry by MCP session, so your agent's run...",
+    "searchText": "5. watch it live connect your own agent — mcp quickstart open protocol playground - live agent ( /playground/live-agent ) in the dashboard window. it groups incoming telemetry by mcp session, so your agent's run appears as one pipeline: each stage lands as the call is made, with the package that did the work, the arguments sent and the result returned. two agents connected at once stay in separate sessions. the distinction the page is careful about: a refused stage is the protocol working -- a replayed nonce or an over-budget cart being rejected -- and is rendered in accent, never in error red. failed is reserved for something genuinely breaking, such as a service falling over. every tool call publishes mcp tool call and mcp tool result to the telemetry stream, tagged with the mcp session id, so one agent's run groups into one visible sequence. to watch the raw stream: ---"
+  },
+  {
+    "route": "/docs/agent-quickstart#6-key-custody--read-this-before-believing-the-demo",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "6. Key custody — read this before believing the demo",
+    "snippet": "Signing the Execution Mandate requires the buyer's private key . Whoever holds that key can spend the buyer's money without the buyer. key custody has no...",
+    "searchText": "6. key custody — read this before believing the demo connect your own agent — mcp quickstart signing the execution mandate requires the buyer's private key . whoever holds that key can spend the buyer's money without the buyer. key custody has no default; you must state it."
+  },
+  {
+    "route": "/docs/agent-quickstart#agent_held--non-custodial",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "agent_held — non-custodial",
+    "snippet": "Your agent generates its own Ed25519 keypair and never gives it to the mesh. It proves possession by signing the budget terms at pairing. sign execution...",
+    "searchText": "agent_held — non-custodial connect your own agent — mcp quickstart your agent generates its own ed25519 keypair and never gives it to the mesh. it proves possession by signing the budget terms at pairing. sign execution mandate then returns the exact rfc 8785 canonical json and its sha-256 digest, and no signature — your agent signs those bytes itself and passes 128 lowercase hex to execute settlement . the mesh holds no buyer authority at any point. this is the mode where the mandate chain proves what it appears to prove. settle promptly: the nonce ledger rejects an execution mandate signed outside a 65 second window."
+  },
+  {
+    "route": "/docs/agent-quickstart#mesh_demo_custodial--custodial-demo-only",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "mesh_demo_custodial — custodial, demo only",
+    "snippet": "The mesh mints and holds the buyer key, and returns the private key to you in the pairing response — a custodial demo that hands you the key cannot be mistaken...",
+    "searchText": "mesh_demo_custodial — custodial, demo only connect your own agent — mcp quickstart the mesh mints and holds the buyer key, and returns the private key to you in the pairing response — a custodial demo that hands you the key cannot be mistaken for a security boundary. be precise about the cost. in this mode the mesh can sign execution mandates with no human approval. and because the demo mesh also holds the principal key that signs the intent mandate, it can mint itself a fresh delegation with any budget it likes. every signature still verifies; the budget ceiling constrains your agent, not the mesh. the chain proves internal consistency, not that a human authorized the spend. use it when the driving agent cannot perform detached ed25519 signing. use agent held for any claim about what the protocol guarantees."
+  },
+  {
+    "route": "/docs/agent-quickstart#the-production-path",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "The production path",
+    "snippet": "Split custody: the human's principal key never enters the mesh, the Intent Mandate is signed out-of-band, and the mesh may then hold only an ephemeral session...",
+    "searchText": "the production path connect your own agent — mcp quickstart split custody: the human's principal key never enters the mesh, the intent mandate is signed out-of-band, and the mesh may then hold only an ephemeral session key bounded by a delegation it cannot forge. that is what upi circle actually models. ---"
+  },
+  {
+    "route": "/docs/agent-quickstart#7-what-is-enforced-and-what-is-not",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "7. What is enforced, and what is not",
+    "snippet": "Enforced at settlement, with ₹0 charged on failure: - Budget caps — max budget and single-transaction limit - Delegated agent binding — the execution mandate's...",
+    "searchText": "7. what is enforced, and what is not connect your own agent — mcp quickstart enforced at settlement, with ₹0 charged on failure: - budget caps — max budget and single-transaction limit - delegated agent binding — the execution mandate's signer must be the did the intent delegated to - category authorization — cart lines outside authorized categories abort the settlement - arithmetic enclave — line totals, tax and the settlement amount are recomputed, not trusted - inventory lock expiry — a lapsed reservation refuses to settle - nonce replay and cart replay — single-use, enforced by the ledger - mandate expiry and full ed25519 signature-chain verification known limits, stated plainly: - no money moves. without real razorpay credentials the route client is a mock. the split and the invoice are computed for real; the transfer is simulated. - merchant private key hex falls back to a literal committed in the repo. any deployment that does not set it signs cart mandates with a key anyone can read. docker-compose.yml passes an empty value by default, which takes that fallback. - servertime is a client-controlled clock override on the mandate engine's http surface. these mcp tools deliberately do not expose it, but anything calling the engine directly can. - the cumulative-budget ledger fails open if redis is unavailable, leaving per-transaction checks as the only budget defence. - agent identity is ephemeral. keys are never persisted and do not survive a restart. ---"
+  },
+  {
+    "route": "/docs/agent-quickstart#troubleshooting",
+    "docTitle": "Connect Your Own Agent — MCP Quickstart",
+    "headingText": "Troubleshooting",
+    "snippet": "Symptom-by-symptom fixes — port conflicts, handshake failures, degraded search, dark dashboard panels — are in docs/AGENT SETUP TROUBLESHOOTING.md.",
+    "searchText": "troubleshooting connect your own agent — mcp quickstart symptom-by-symptom fixes — port conflicts, handshake failures, degraded search, dark dashboard panels — are in docs/agent setup troubleshooting.md."
   },
   {
     "route": "/docs/onboarding",
@@ -321,7 +433,7 @@ export const docsSearchIndex: readonly DocSearchEntry[] = [
     "docTitle": "AI Buyer Agent SDK & AP2 Protocol Guide",
     "headingText": "",
     "snippet": "A developer guide for integrating autonomous AI buyer agents with Ed25519 mandate signing, live discount stacking, and fenced inventory reservation. Every...",
-    "searchText": " ai buyer agent sdk & ap2 protocol guide a developer guide for integrating autonomous ai buyer agents with ed25519 mandate signing, live discount stacking, and fenced inventory reservation. every snippet on this page is checked against the sdk's generated symbol table by npm run docs:verify , which runs in ci. a method, constructor argument or service port named here that the sdk does not have fails the build. ---"
+    "searchText": " ai buyer agent sdk & ap2 protocol guide a developer guide for integrating autonomous ai buyer agents with ed25519 mandate signing, live discount stacking, and fenced inventory reservation. every snippet on this page is checked against the sdk's generated symbol table by npm run docs:verify , run locally -- this repository has no ci by design, so the checks are commands a person runs. a method, constructor argument or service port named here that the sdk does not have fails that command. link targets are checked separately by python scripts/verifydoclinks.py --check , because docs:verify reads snippets and not links. ---"
   },
   {
     "route": "/docs/buyer-sdk#1-sdk-installation",
@@ -420,6 +532,13 @@ export const docsSearchIndex: readonly DocSearchEntry[] = [
     "headingText": "The routes both clients call",
     "snippet": "Both SDKs now target the same four MCP routes: /api/v1/quote , /api/v1/lock , /api/v1/sla and /api/v1/settlement/execute . That is worth stating because it was...",
     "searchText": "the routes both clients call ai buyer agent sdk & ap2 protocol guide both sdks now target the same four mcp routes: /api/v1/quote , /api/v1/lock , /api/v1/sla and /api/v1/settlement/execute . that is worth stating because it was not true until recently. the python client asked for /api/v1/quotes/live and /api/v1/inventory/lock , which nothing served, and posted the quote where the adapter expects a get . every such call failed against a running mesh while the sdk's own suite stayed green, because it mocks the transport, and its test asserted the wrong path as though that were the contract. test/sdkendpointparity.test.ts in the dashboard now compares every endpoint constant in both sdks against the routes the servers declare, reading both sides from source and mocking nothing."
+  },
+  {
+    "route": "/docs/buyer-sdk#defaults-that-match",
+    "docTitle": "AI Buyer Agent SDK & AP2 Protocol Guide",
+    "headingText": "Defaults that match",
+    "snippet": "Both SDKs share defaultLockTtlSeconds = 60 , matching the MCP server's own default ( packages/mcpServer/src/constants/protocolConstants.ts:53 ). This is the...",
+    "searchText": "defaults that match ai buyer agent sdk & ap2 protocol guide both sdks share defaultlockttlseconds = 60 , matching the mcp server's own default ( packages/mcpserver/src/constants/protocolconstants.ts:53 ). this is the hold window for inventory locks; both sdks call the same /api/v1/lock endpoint, so the duration must agree."
   },
   {
     "route": "/docs/merchant-guide",
@@ -551,8 +670,8 @@ export const docsSearchIndex: readonly DocSearchEntry[] = [
     "route": "/docs/telemetry#1-mcp_tool_call",
     "docTitle": "RazorAgent Mesh v2.0 — Real-Time Telemetry & Event Streaming Specification",
     "headingText": "1. MCP_TOOL_CALL",
-    "snippet": "Emitted when an autonomous AI buyer agent invokes a merchant Model Context Protocol (MCP) JSON-RPC tool ( get live sku quote , reserve inventory lock , verify...",
-    "searchText": "1. mcp_tool_call razoragent mesh v2.0 — real-time telemetry & event streaming specification emitted when an autonomous ai buyer agent invokes a merchant model context protocol (mcp) json-rpc tool ( get live sku quote , reserve inventory lock , verify shipping sla ). typescript schema json payload ---"
+    "snippet": "Emitted when an autonomous AI buyer agent invokes any of the eight merchant Model Context Protocol (MCP) JSON-RPC tools: search catalog , get live sku quote ,...",
+    "searchText": "1. mcp_tool_call razoragent mesh v2.0 — real-time telemetry & event streaming specification emitted when an autonomous ai buyer agent invokes any of the eight merchant model context protocol (mcp) json-rpc tools: search catalog , get live sku quote , reserve inventory lock , verify shipping sla , establish agent delegation , create cart mandate , sign execution mandate and execute settlement . typescript schema json payload ---"
   },
   {
     "route": "/docs/telemetry#2-mcp_tool_result",

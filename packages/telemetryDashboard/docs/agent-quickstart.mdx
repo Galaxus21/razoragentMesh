@@ -1,0 +1,274 @@
+---
+title: "Connect Your Own Agent — MCP Quickstart"
+description: "Connects an external AI agent (Claude Desktop, Claude Code, Cursor) to the mesh over MCP, publishes inventory from the dashboard, and drives a real signed purchase while the telemetry stream renders it live."
+navLabel: "Agent Quickstart"
+navDescription: "Drive the Mesh From Your Own Agent"
+order: 2
+icon: "Plug"
+audience: "developer"
+---
+
+Run the mesh, point your own AI agent at it, and watch a cryptographically signed purchase
+complete while the dashboard renders each step live.
+
+The intended setup is two windows side by side: the **dashboard on one**, **your agent on the
+other**. You publish a product in the dashboard, ask your agent to buy it in plain language, and
+watch the protocol execute in real time.
+
+---
+
+## 1. Start the mesh
+
+```bash
+docker compose up -d
+```
+
+Seven services. Wait for all of them to report healthy:
+
+```bash
+docker compose ps
+```
+
+`razoragent_catalog_seeder` showing `Exited (0)` is correct — it is a one-shot job that loads the
+fixture catalog and stops.
+
+Open the dashboard at **http://localhost:3000/overview**. Leave it open; it is one half of the demo.
+
+---
+
+## 2. Connect your agent
+
+The MCP server speaks two transports. Use whichever your client supports.
+
+### Streamable HTTP (recommended)
+
+The mesh is already serving it. Point your client at:
+
+```
+http://localhost:4001/mcp
+```
+
+For Claude Code:
+
+```bash
+claude mcp add --transport http razoragent-mesh http://localhost:4001/mcp
+```
+
+### stdio
+
+For clients that spawn a process instead. Build once:
+
+```bash
+cd packages/mcpServer && npm ci && npm run build
+```
+
+Then register this command:
+
+```json
+{
+  "mcpServers": {
+    "razoragent-mesh": {
+      "command": "node",
+      "args": ["dist/mcpServerMain.js"],
+      "cwd": "packages/mcpServer",
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "MANDATE_ENGINE_URL": "http://localhost:8000",
+        "MERCHANT_API_URL": "http://localhost:4002"
+      }
+    }
+  }
+}
+```
+
+`MCP_TRANSPORT=stdio` is required, not optional. Without it the process also tries to bind port
+4001, which Docker already holds, and the session dies before the first tool call.
+
+Use absolute paths for `cwd` if your client does not resolve relative ones.
+
+### Confirm the connection
+
+Ask your agent to list its tools. You should see **eight**:
+
+| Tool | What it does |
+|---|---|
+| `search_catalog` | Natural-language product discovery |
+| `get_live_sku_quote` | Live price, tax and discount for a SKU |
+| `reserve_inventory_lock` | Atomic stock reservation with a fencing token |
+| `verify_shipping_sla` | Serviceability and delivery-tier check |
+| `establish_agent_delegation` | Pairs your agent, issues a signed Intent Mandate |
+| `create_cart_mandate` | Merchant-signed cart at mesh-derived prices |
+| `sign_execution_mandate` | Binds intent and cart into an Execution Mandate |
+| `execute_settlement` | Runs the 2PC settlement saga |
+
+---
+
+## 3. Publish something to buy
+
+In the dashboard, open **Merchant Studio** and publish a product — give it a title your agent can
+find in plain language, like *Ergonomic Mesh Office Chair with Lumbar Support*.
+
+Publishing writes the listing to Redis and indexes it in Qdrant, so it becomes discoverable to
+`search_catalog` immediately. The seeded fixtures are industrial parts, so anything you add in a
+different category is easy to pick out of search results.
+
+Anything you publish lives in the running containers, not in the fixtures — `docker compose down -v`
+removes it.
+
+---
+
+## 4. Ask your agent to buy it
+
+Prompt in plain language. The tool descriptions carry the ordering rules, so a capable agent
+sequences the calls itself:
+
+> Find me something comfortable to sit on while working at a desk. Establish a delegation with a
+> ₹9,000 budget using mesh_demo_custodial custody, then buy two of the best match, delivering to
+> pincode 560001, state code 29.
+
+The agent will work through: pair → discover → quote → lock → cart → sign → settle.
+
+**Pair first.** In custodial mode the mesh mints the buyer DID, and every later call must use that
+DID — `get_live_sku_quote` and `reserve_inventory_lock` both take it as `buyer_agent_id`. The
+settlement gate rejects a chain whose execution mandate was signed by a different agent than the
+intent mandate delegated to.
+
+One parameter is easy to miss: `reserve_inventory_lock` returns its signature under the key
+`signature`, but `create_cart_mandate` expects it as `lock_signature`. Pass the value through
+unchanged.
+
+A successful settlement returns a capture, the Route split, and a statutory GSTR-1 invoice:
+
+```json
+{
+  "status": "captured",
+  "paymentId": "pay_mcp_a7b8c5c85a78",
+  "amountPaise": 82526,
+  "transfers": [
+    { "account": "acc_demoMerchantChairs", "amount": 77148, "status": "processed" },
+    { "account": "acc_protocol_fee",       "amount": 50,    "status": "processed" },
+    { "account": "acc_logistics_delhivery","amount": 5000,  "status": "processed" },
+    { "account": "acc_tcs_withholding",    "amount": 328,   "status": "processed" }
+  ],
+  "invoice": {
+    "invoiceNumber": "INV-225D48F7",
+    "isIntraState": true,
+    "taxableAmountPaise": 65700,
+    "totalCgstPaise": 5913,
+    "totalSgstPaise": 5913,
+    "grandTotalPaise": 82526,
+    "cryptographicAuditHash": "b38f9043506efb2160b4924ce4ff4c99ebbe71a9217d2419e187026867a2383a"
+  }
+}
+```
+
+The four transfers sum to the grand total, and the tax is recomputed independently by the
+settlement enclave rather than trusted from the cart.
+
+Note that tool **inputs** are `snake_case` while settlement **output** is `camelCase`; the
+settlement response is the mandate engine's own schema, passed through unmodified.
+
+### When the mesh refuses
+
+A refusal — replayed nonce, expired inventory lock, budget exceeded, unauthorized category, bad
+signature — comes back as a **tool result with `isError` set**, not as a JSON-RPC error, carrying a
+machine-readable reason.
+
+That distinction matters: a refusal means the protocol worked. An agent that only inspects the
+JSON-RPC error field will read a correct refusal as a success.
+
+---
+
+## 5. Watch it live
+
+Open **Protocol Playground -> Live Agent** (`/playground/live-agent`) in the dashboard window. It
+groups incoming telemetry by MCP session, so your agent's run appears as one pipeline: each stage
+lands as the call is made, with the package that did the work, the arguments sent and the result
+returned. Two agents connected at once stay in separate sessions.
+
+The distinction the page is careful about: a **REFUSED** stage is the protocol working -- a
+replayed nonce or an over-budget cart being rejected -- and is rendered in accent, never in error
+red. **FAILED** is reserved for something genuinely breaking, such as a service falling over.
+
+Every tool call publishes `MCP_TOOL_CALL` and `MCP_TOOL_RESULT` to the telemetry stream, tagged
+with the MCP session id, so one agent's run groups into one visible sequence.
+
+To watch the raw stream:
+
+```bash
+curl -N http://localhost:8000/api/v1/telemetry/stream
+```
+
+---
+
+## 6. Key custody — read this before believing the demo
+
+Signing the Execution Mandate requires the **buyer's private key**. Whoever holds that key can
+spend the buyer's money without the buyer. `key_custody` has no default; you must state it.
+
+### `agent_held` — non-custodial
+
+Your agent generates its own Ed25519 keypair and never gives it to the mesh. It proves possession
+by signing the budget terms at pairing. `sign_execution_mandate` then returns the exact RFC 8785
+canonical JSON and its SHA-256 digest, **and no signature** — your agent signs those bytes itself
+and passes 128 lowercase hex to `execute_settlement`.
+
+The mesh holds no buyer authority at any point. This is the mode where the mandate chain proves
+what it appears to prove.
+
+Settle promptly: the nonce ledger rejects an execution mandate signed outside a ~65 second window.
+
+### `mesh_demo_custodial` — custodial, demo only
+
+The mesh mints and holds the buyer key, and **returns the private key to you in the pairing
+response** — a custodial demo that hands you the key cannot be mistaken for a security boundary.
+
+Be precise about the cost. In this mode the mesh can sign Execution Mandates with no human
+approval. And because the demo mesh also holds the principal key that signs the Intent Mandate, it
+can mint itself a fresh delegation with any budget it likes. Every signature still verifies; the
+budget ceiling constrains your agent, not the mesh. **The chain proves internal consistency, not
+that a human authorized the spend.**
+
+Use it when the driving agent cannot perform detached Ed25519 signing. Use `agent_held` for any
+claim about what the protocol guarantees.
+
+### The production path
+
+Split custody: the human's principal key never enters the mesh, the Intent Mandate is signed
+out-of-band, and the mesh may then hold only an ephemeral session key bounded by a delegation it
+cannot forge. That is what UPI Circle actually models.
+
+---
+
+## 7. What is enforced, and what is not
+
+Enforced at settlement, with ₹0 charged on failure:
+
+- **Budget caps** — max budget and single-transaction limit
+- **Delegated agent binding** — the execution mandate's signer must be the DID the intent delegated to
+- **Category authorization** — cart lines outside `authorized_categories` abort the settlement
+- **Arithmetic enclave** — line totals, tax and the settlement amount are recomputed, not trusted
+- **Inventory lock expiry** — a lapsed reservation refuses to settle
+- **Nonce replay and cart replay** — single-use, enforced by the ledger
+- **Mandate expiry** and full Ed25519 signature-chain verification
+
+Known limits, stated plainly:
+
+- **No money moves.** Without real Razorpay credentials the Route client is a mock. The split and
+  the invoice are computed for real; the transfer is simulated.
+- **`MERCHANT_PRIVATE_KEY_HEX` falls back to a literal committed in the repo.** Any deployment that
+  does not set it signs Cart Mandates with a key anyone can read. `docker-compose.yml` passes an
+  empty value by default, which takes that fallback.
+- **`serverTime` is a client-controlled clock override** on the mandate engine's HTTP surface. These
+  MCP tools deliberately do not expose it, but anything calling the engine directly can.
+- **The cumulative-budget ledger fails open** if Redis is unavailable, leaving per-transaction
+  checks as the only budget defence.
+- **Agent identity is ephemeral.** Keys are never persisted and do not survive a restart.
+
+---
+
+## Troubleshooting
+
+Symptom-by-symptom fixes — port conflicts, handshake failures, degraded search, dark dashboard
+panels — are in [docs/AGENT_SETUP_TROUBLESHOOTING.md](../../../docs/AGENT_SETUP_TROUBLESHOOTING.md).

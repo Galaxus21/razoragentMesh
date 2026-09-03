@@ -4,6 +4,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..tax.gstinValidator import validateGstin
 
+# The category a merchant asserts when it does not classify the SKU. It is a real value rather
+# than None on purpose: the JCS canonicalizer preserves nulls and the TypeScript SDK omits
+# undefined keys entirely, so an absent category would make the same cart canonicalize to
+# different bytes in the two SDKs and every cross-SDK signature would fail. Every cart item
+# therefore always carries this key. `_verifyCategoryAuthorization` treats the sentinel as
+# unproven, not as permitted -- a delegation restricted to named categories rejects it.
+# Kept in step with razoragent_buyer_sdk/mandateModels.py and buyerSdkTs/src/sdkConstants.ts;
+# test_crossCompatibilityMesh.py pins the three spellings equal.
+uncategorizedCartItemCategory: str = "uncategorized"
+
 
 class CartItemSchema(BaseModel):
     """Line item within a cart mandate."""
@@ -16,6 +26,11 @@ class CartItemSchema(BaseModel):
     hsnCode: str = Field(pattern=r"^[0-9]{4,8}$", description="HSN tax classification code")
     gstRatePercent: int = Field(ge=0, le=28, description="GST rate percentage")
     lineTotalPaise: int = Field(gt=0, description="Total line amount before tax in paise")
+    category: str = Field(
+        default=uncategorizedCartItemCategory,
+        min_length=1,
+        description="Merchant-asserted product category, checked against the intent whitelist",
+    )
 
 
 class TaxBreakdownSchema(BaseModel):

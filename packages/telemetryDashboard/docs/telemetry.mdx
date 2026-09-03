@@ -3,7 +3,7 @@ title: "RazorAgent Mesh v2.0 — Real-Time Telemetry & Event Streaming Specifica
 description: "Defines the real-time SSE telemetry architecture, event streaming endpoints, canonical event schemas, metric algorithms, and testing procedures."
 navLabel: "Telemetry & SSE"
 navDescription: "Observability Event Streams"
-order: 5
+order: 6
 icon: "Activity"
 audience: "operator"
 ---
@@ -220,12 +220,21 @@ export interface BaseTelemetryEvent<TType extends TelemetryEventType, TPayload> 
 ---
 
 ### 1. `MCP_TOOL_CALL`
-Emitted when an autonomous AI buyer agent invokes a merchant Model Context Protocol (MCP) JSON-RPC tool (`get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`).
+Emitted when an autonomous AI buyer agent invokes any of the eight merchant Model Context Protocol (MCP) JSON-RPC tools: `search_catalog`, `get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`, `establish_agent_delegation`, `create_cart_mandate`, `sign_execution_mandate` and `execute_settlement`.
 
 #### TypeScript Schema
 ```typescript
 export interface McpToolCallPayload {
-  readonly toolName: "get_live_sku_quote" | "reserve_inventory_lock" | "verify_shipping_sla" | string;
+  readonly toolName:
+    | "search_catalog"
+    | "get_live_sku_quote"
+    | "reserve_inventory_lock"
+    | "verify_shipping_sla"
+    | "establish_agent_delegation"
+    | "create_cart_mandate"
+    | "sign_execution_mandate"
+    | "execute_settlement"
+    | string;
   readonly callId: string;
   readonly callerAgentId: string;
   readonly parameters: Record<string, unknown>;

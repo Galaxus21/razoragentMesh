@@ -79,7 +79,10 @@ export interface MerchantCatalogFormData {
   readonly fmcgFacet: FmcgFacetFormData;
 }
 
-export type CatalogSubmissionStatus = "idle" | "submitting" | "success" | "error" | "offline";
+// No "offline" state: a publish either reached the mesh or it did not, and the dashboard
+// knows which. The removed state reported a failed publish as an amber warning reading
+// "Validated payload synthesized and ready for deployment", which a merchant reads as success.
+export type CatalogSubmissionStatus = "idle" | "submitting" | "success" | "error";
 
 export interface CatalogSubmissionResult {
   readonly status: CatalogSubmissionStatus;

@@ -7,6 +7,19 @@ export interface CourierSlaRule {
 export const toolGetLiveSkuQuote = "get_live_sku_quote";
 export const toolReserveInventoryLock = "reserve_inventory_lock";
 export const toolVerifyShippingSla = "verify_shipping_sla";
+// Discovery. Without this an agent can only quote a SKU id it was already given,
+// so a third-party agent had no way to begin a purchase on its own.
+export const toolSearchCatalog = "search_catalog";
+
+// The purchase half of the protocol. Discovery, quoting and locking let an agent price a cart;
+// these four let it actually buy, by producing the three AP2 mandates and settling them. Each
+// signs with a different key, which is the whole point of the three-party split:
+//   principal key -> M_I (userSignature)   merchant key -> M_C (merchantSignature)
+//   buyer key     -> M_E (agentSignature)
+export const toolEstablishAgentDelegation = "establish_agent_delegation";
+export const toolCreateCartMandate = "create_cart_mandate";
+export const toolSignExecutionMandate = "sign_execution_mandate";
+export const toolExecuteSettlement = "execute_settlement";
 
 export const jsonRpcVersion = "2.0";
 export const mcpServerName = "razoragent-mesh-mcp";
@@ -28,6 +41,14 @@ export const defaultMerchantSecretKey =
   process.env.HMAC_SECRET_KEY || developmentMerchantSecretKey;
 export const defaultMerchantPrivateKeyHex =
   process.env.MERCHANT_PRIVATE_KEY_HEX || developmentMerchantPrivateKeyHex;
+
+// docker-compose passes `MERCHANT_PRIVATE_KEY_HEX=${MERCHANT_PRIVATE_KEY_HEX:-}`, so an unset
+// variable arrives as "" -- falsy in JS -- and the fallback above wins silently. These flags let
+// startup say so out loud rather than leaving the operator to infer it.
+export const merchantPrivateKeyIsDevelopmentFallback =
+  defaultMerchantPrivateKeyHex === developmentMerchantPrivateKeyHex;
+export const merchantSecretKeyIsDevelopmentFallback =
+  defaultMerchantSecretKey === developmentMerchantSecretKey;
 
 export const defaultLockTtlSeconds = 60;
 export const minLockTtlSeconds = 10;
@@ -80,6 +101,12 @@ export const zoneCStandardCostPaise = 12000;
 export const zoneCExpressHours = 36;
 export const zoneCExpressCostPaise = 22000;
 
+// MCP revisions this server implements. The newest is offered when a client asks for
+// something we do not recognise; when the client names one of these we echo it back, which
+// is what the spec requires and what strict clients check before proceeding.
+export const supportedProtocolVersions: ReadonlyArray<string> = ["2025-06-18", "2025-03-26", "2024-11-05"];
+export const preferredProtocolVersion = supportedProtocolVersions[0];
+
 export const parseErrorCode = -32700;
 export const invalidRequestErrorCode = -32600;
 export const methodNotFoundErrorCode = -32601;
@@ -88,7 +115,6 @@ export const internalErrorCode = -32603;
 export const skuNotFoundErrorCode = -32004;
 export const unregisteredZoneErrorCode = -32005;
 export const arithmeticDriftErrorCode = -32008;
-export const insufficientStockErrorCode = 409;
 
 export const pincodePrefixStateMap: Record<string, string> = {
   "11": "DL",

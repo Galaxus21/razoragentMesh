@@ -1,7 +1,8 @@
-// Fails the build when a guide names something that does not exist.
+// Exits non-zero when a guide names something that does not exist.
 //
-// Run by CI after the reference artifacts are regenerated, so a rename in the SDK surfaces as a
-// failing job on the commit that renamed it rather than as a support question months later.
+// Run by hand -- `npm run docs:verify` from packages/telemetryDashboard -- after regenerating the
+// reference artifacts, so a rename in the SDK surfaces while you still remember renaming it
+// rather than as a support question months later. This repository has no CI by choice.
 // Regenerate the artifacts first: npm run docs:reference && python scripts/generateApiReference.py
 
 import { formatFinding, verifyDocSnippets } from "../src/lib/reference/docSnippetVerifier.js";

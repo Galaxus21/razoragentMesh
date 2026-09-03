@@ -3,8 +3,9 @@
 // The examples live at the repository root, next to the packages they import; the dashboard's
 // Docker build only copies this package. Rather than reach outside the build context at render
 // time -- which works locally and fails in the image -- the regions are extracted here and
-// committed, exactly as the SDK reference artifacts in the same directory are. CI regenerates and
-// fails on any diff, so an edited example that was not re-synced cannot ship.
+// committed, exactly as the SDK reference artifacts in the same directory are. Re-run
+// `npm run docs:examples` after editing an example and commit the diff; `git diff --exit-code
+// generated/` is the by-hand check that nothing was left unsynced. This repository has no CI.
 
 import fs from "node:fs";
 import path from "node:path";

@@ -30,19 +30,6 @@ from .routes.negotiateRoute import (
 )
 
 
-class GatewayState:
-    """Aggregated gateway state wrapper for backwards compatibility."""
-
-    def __init__(self) -> None:
-        self.escrowClient = defaultEscrowClient
-        self.antiSpamShield = defaultAntiSpamShield
-        self.activeNegotiators = activeNegotiators
-        self.alertManager = defaultAlertManager
-
-
-gatewayState = GatewayState()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and graceful shutdown."""
@@ -86,10 +73,7 @@ def createGatewayApp() -> FastAPI:
 app = createGatewayApp()
 
 __all__ = [
-    "GatewayState",
-    "alertsRouter",
     "app",
     "createGatewayApp",
-    "gatewayState",
     "lifespan",
 ]

@@ -117,9 +117,14 @@ def buildStandardCartMandate(
     totalTaxPaise = cgstPaise * 2
     totalGrossPaise = taxableSubtotal + totalTaxPaise
 
+    # The category the merchant signs for. Every intent mandate built by these fixtures
+    # delegates `[defaultCategory]`, so a cart left on the schema's "uncategorized" sentinel is
+    # a cart the budget gate cannot place inside the delegation -- which is exactly what it
+    # rejects now that `skuCategories` reaches it.
     cartItem = CartItemSchema(
         skuId=targetSkuId, quantity=quantity, unitPricePaise=unitPricePaise,
         hsnCode=defaultHsnCode, gstRatePercent=gstRate, lineTotalPaise=taxableSubtotal,
+        category=defaultCategory,
     )
     taxBreakdown = TaxBreakdownSchema(
         cgstPaise=cgstPaise, sgstPaise=cgstPaise, igstPaise=0, totalTaxPaise=totalTaxPaise,

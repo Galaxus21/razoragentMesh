@@ -19,14 +19,6 @@ def evaluateMargin(
     return askPaise >= minRequiredPaise
 
 
-def computeMinimumMarginFloor(
-    wholesaleCostPaise: int,
-    marginFloorBps: int = sellerMarginFloorBps,
-) -> int:
-    """Computes absolute minimum floor price in paise given wholesale cost and margin basis points."""
-    return wholesaleCostPaise + (wholesaleCostPaise * marginFloorBps) // basisPointsDivisor
-
-
 def computeSellerCounterAsk(
     initialAskPaise: int,
     buyerBidPaise: int,
@@ -43,7 +35,6 @@ def computeSellerCounterAsk(
 
 
 __all__ = [
-    "computeMinimumMarginFloor",
     "computeSellerCounterAsk",
     "evaluateMargin",
 ]

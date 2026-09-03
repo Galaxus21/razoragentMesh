@@ -3,8 +3,8 @@
 //
 // The distinction matters more than it looks. A fenced block in a guide is a copy; nothing links
 // it to the SDK, so it rots quietly and the reader finds out. A region is a view onto a program
-// that CI runs on every push, so the same commit that would have made this prose wrong instead
-// makes a job go red.
+// that is compiled and run by `python scripts/verifyExamples.py`, so prose that has gone wrong is
+// caught by running that check rather than by a reader hitting it.
 //
 // Like <ApiEndpoint>, an unresolvable reference throws instead of rendering an empty box. Doc
 // pages are statically generated, so the throw fails `next build` and names the file and region.
@@ -40,8 +40,8 @@ export function Snippet({ file, region, children }: SnippetProps): React.JSX.Ele
           {repositoryFilePrefix}
           {file}
         </code>{" "}
-        (region <code className="font-mono text-textSecondary">{region}</code>) — compiled and run
-        in CI.
+        (region <code className="font-mono text-textSecondary">{region}</code>) — a region of a
+        runnable program, not a pasted copy.
       </p>
     </div>
   );

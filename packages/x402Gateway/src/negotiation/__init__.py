@@ -11,7 +11,6 @@ from .convergenceChecker import (
     validateMonotonicity,
 )
 from .marginEvaluator import (
-    computeMinimumMarginFloor,
     computeSellerCounterAsk,
     evaluateMargin,
 )
@@ -21,7 +20,6 @@ __all__ = [
     "NegotiationStepResult",
     "RubinsteinStahlNegotiator",
     "checkConvergence",
-    "computeMinimumMarginFloor",
     "computeSellerCounterAsk",
     "computeSpread",
     "evaluateMargin",

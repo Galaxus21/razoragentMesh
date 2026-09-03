@@ -24,17 +24,20 @@ import { SseConnectionState, TelemetryEvent } from "../src/types/telemetryEventT
 
 const expectedRouteList: ReadonlyArray<string> = [
   "/overview",
-  "/protocol",
   "/self-healing",
   "/infrastructure",
+  "/protocol",
+  "/playground/layers",
   "/playground",
   "/playground/adversarial",
+  "/playground/live-agent",
   "/sdk-console",
   "/agent-observability",
   "/negotiation-hub",
   "/security-audit",
   "/merchant-studio",
   "/docs/setup",
+  "/docs/agent-quickstart",
   "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
@@ -44,7 +47,7 @@ const expectedRouteList: ReadonlyArray<string> = [
 
 const mockSessionPrefix = "session-challenger-m2-";
 const stressToggleIterations = 10000;
-const expectedTotalNavItems = 17;
+const expectedTotalNavItems = 20;
 
 function simulateLocalStorageReader(rawValue: string | null): boolean {
   if (rawValue === null) {
@@ -122,7 +125,7 @@ describe("Milestone 2 Challenger 1: Sidebar State Machine & Storage Edge Cases",
 });
 
 describe("Milestone 2 Challenger 1: App Shell Navigation & Route Resolution", () => {
-  it("should contain exactly 17 valid navigation items matching the Stitch specification", () => {
+  it("should contain exactly 20 valid navigation items matching the Stitch specification", () => {
     assert.equal(navigationItems.length, expectedTotalNavItems);
 
     const routes = navigationItems.map((item) => item.route);

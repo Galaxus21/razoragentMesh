@@ -117,6 +117,7 @@ function _signAndPackageQuote(params: SignAndPackageQuoteParams): SkuQuoteRespon
     offered_unit_price_paise: pricing.offeredUnitPricePaise,
     currency: currencyInr,
     hsn_code: sku.hsnCode,
+    category: sku.category,
     gst_rate_percent: sku.gstRatePercent,
     tax_breakdown: {
       cgst_paise: pricing.tax.cgstPaise, sgst_paise: pricing.tax.sgstPaise,

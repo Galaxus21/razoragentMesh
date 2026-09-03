@@ -14,6 +14,28 @@ from razoragentMesh.tests.mockInfraHelpers import (
 fixturesDirectory = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def allowClientServerTimeForDeterminism() -> Any:
+    """Opens the documented `serverTime` test seam for the whole suite.
+
+    Several settlement tests POST a fixed `serverTime` so that mandate expiry, the nonce drift
+    window and the invoice date are deterministic rather than dependent on the wall clock. In a
+    real deployment that override is refused unless it sits within the NTP drift window of the
+    real clock -- an unbounded `serverTime` lets a caller settle an expired mandate and back-date
+    a statutory invoice without breaking a signature.
+
+    Enabling it here keeps those tests honest about what they are doing. The guard itself is
+    tested with the flag explicitly off; see testServerTimeClockOverride.py.
+    """
+    previousValue = os.environ.get("ALLOW_CLIENT_SERVER_TIME")
+    os.environ["ALLOW_CLIENT_SERVER_TIME"] = "true"
+    yield
+    if previousValue is None:
+        os.environ.pop("ALLOW_CLIENT_SERVER_TIME", None)
+    else:
+        os.environ["ALLOW_CLIENT_SERVER_TIME"] = previousValue
+
+
 @pytest.fixture(scope="session")
 def agentKeyFixtures() -> Dict[str, Any]:
     filePath = os.path.join(fixturesDirectory, "agentKeyFixtures.json")

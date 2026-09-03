@@ -211,9 +211,14 @@ def writeArtifact(fileName: str, payload: Dict[str, Any]) -> None:
 
 
 def main() -> None:
-    # The service modules import each other as `packages.<service>....`, so the repo root has to
-    # be importable regardless of where this script is invoked from.
+    # Both roots, because the tree uses both import spellings: service modules import each
+    # other as `packages.<service>...`, while modules shared across packages -- the catalog
+    # sanitizer that merchantApi's ingress layer pulls in, for one -- are imported as
+    # `razoragentMesh.packages....`, which only resolves from the directory ABOVE the repo.
+    # Without the second insert this script fails from its own documented invocation, and the
+    # drift checker's "regenerate with" instruction sends the reader into that failure.
     sys.path.insert(0, str(repoRoot))
+    sys.path.insert(0, str(repoRoot.parent))
 
     services = [describeHttpService(*service) for service in fastApiServices]
     if not all(service["operations"] for service in services):

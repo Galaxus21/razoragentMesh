@@ -12,6 +12,7 @@ import {
   corsAllowAllOrigins,
   corsAllowedHeaders,
   corsAllowedMethods,
+  corsExposedHeaders,
   corsPreflightMaxAgeSeconds,
   defaultHttpPort,
   errorDetailFieldName,
@@ -20,17 +21,20 @@ import {
   headerAllowMethods,
   headerAllowOrigin,
   headerContentType,
+  headerExposeHeaders,
   headerMaxAge,
   healthStatusOk,
   httpBindHost,
   httpPortEnvVar,
   maxRequestBodyBytes,
   mediaTypeJson,
+  methodDelete,
   methodGet,
   methodOptions,
   methodPost,
   routeHealth,
   routeLock,
+  routeMcp,
   routeQuote,
   routeRpc,
   routeSla,
@@ -38,6 +42,7 @@ import {
   statusBadRequest,
   statusMethodNotAllowed,
   statusNoContent,
+  statusAccepted,
   statusNotFound,
   statusOk,
   statusPayloadTooLarge
@@ -45,22 +50,32 @@ import {
 import { mcpServerName, mcpServerVersion } from "../constants/protocolConstants.js";
 import { mapErrorToHttpResponse } from "./httpErrorMapper.js";
 import { handleLockRequest, handleQuoteRequest, handleSlaRequest } from "./routeHandlers.js";
+import { countActiveStreamableSessions, handleStreamableRequest } from "./mcpStreamableTransport.js";
 
 export interface McpHttpServerOptions {
   readonly jsonRpcHandler: (message: unknown) => Promise<unknown>;
   readonly toolsManifest: readonly unknown[];
+  /** Shared tool registry, so /mcp executes the same code as stdio and /rpc. */
+  readonly toolDispatcher: (
+    toolName: string,
+    toolArguments: unknown,
+    context?: { readonly sessionId: string }
+  ) => Promise<unknown>;
 }
 
 const bodyTooLargeMessage = "Request body exceeded the maximum permitted size.";
 const malformedJsonMessage = "Request body is not valid JSON.";
 const routeNotFoundMessage = "No such route on the MCP HTTP adapter.";
 const methodNotAllowedMessage = "HTTP method not permitted for this route.";
+const invalidMcpSessionMessage =
+  "No valid MCP session. POST an initialize request without Mcp-Session-Id to start one.";
 const localOriginBase = "http://localhost";
 
 function applyCorsHeaders(response: http.ServerResponse): void {
   response.setHeader(headerAllowOrigin, corsAllowAllOrigins);
   response.setHeader(headerAllowMethods, corsAllowedMethods);
   response.setHeader(headerAllowHeaders, corsAllowedHeaders);
+  response.setHeader(headerExposeHeaders, corsExposedHeaders);
   response.setHeader(headerMaxAge, corsPreflightMaxAgeSeconds);
 }
 
@@ -104,7 +119,11 @@ function buildHealthPayload(): Record<string, unknown> {
     status: healthStatusOk,
     service: mcpServerName,
     version: mcpServerVersion,
-    transports: ["stdio", "http"]
+    // What this port serves. Reaching /health at all proves the HTTP transports are up;
+    // stdio is a separate transport on the same process and is not implied by this response.
+    transports: ["http", "mcp-streamable-http"],
+    mcpEndpoint: routeMcp,
+    activeMcpSessions: countActiveStreamableSessions()
   };
 }
 
@@ -116,6 +135,30 @@ async function routeRequest(
   const requestUrl = new URL(request.url ?? "/", localOriginBase);
   const pathname = requestUrl.pathname;
   const method = request.method ?? methodGet;
+
+  // MCP Streamable HTTP. Handled before the REST chain because the SDK owns the whole
+  // response -- status, headers and any SSE framing -- and only needs CORS applied first.
+  // GET (open the stream) and DELETE (end the session) carry no body, so only POST is parsed.
+  if (pathname === routeMcp) {
+    if (method !== methodGet && method !== methodPost && method !== methodDelete) {
+      sendError(response, statusMethodNotAllowed, "MethodNotAllowed", methodNotAllowedMessage);
+      return;
+    }
+    applyCorsHeaders(response);
+    const mcpBody = method === methodPost ? await readRequestBody(request) : undefined;
+    const handled = await handleStreamableRequest(request, response, mcpBody, {
+      toolsManifest: options.toolsManifest as ReadonlyArray<Record<string, unknown>>,
+      toolDispatcher: options.toolDispatcher
+    });
+    if (!handled) {
+      if (method === methodGet) {
+        sendError(response, statusMethodNotAllowed, "MethodNotAllowed", "GET SSE stream not offered without active session.");
+        return;
+      }
+      sendError(response, statusBadRequest, "InvalidSession", invalidMcpSessionMessage);
+    }
+    return;
+  }
 
   if (pathname === routeHealth && method === methodGet) {
     sendJson(response, statusOk, buildHealthPayload());
@@ -138,7 +181,16 @@ async function routeRequest(
     return;
   }
   if (pathname === routeRpc && method === methodPost) {
-    sendJson(response, statusOk, await options.jsonRpcHandler(await readRequestBody(request)));
+    const rpcResult = await options.jsonRpcHandler(await readRequestBody(request));
+    // A null result means the message was a notification, which must not be answered with a
+    // body. Serialising it as `null` made clients parse a bare null as a malformed response.
+    if (rpcResult === null) {
+      applyCorsHeaders(response);
+      response.writeHead(statusAccepted);
+      response.end();
+      return;
+    }
+    sendJson(response, statusOk, rpcResult);
     return;
   }
 
@@ -190,6 +242,21 @@ export function resolveHttpPort(): number {
 export function startMcpHttpServer(options: McpHttpServerOptions): http.Server {
   const server = createMcpHttpServer(options);
   const port = resolveHttpPort();
+
+  // Without this handler a bind failure is an uncaught exception that takes the whole process
+  // down -- including the stdio transport an MCP client is talking to. The common case is a
+  // judge whose Docker mesh already owns this port; the stdio session must survive it.
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      process.stderr.write(
+        `[MCP HTTP] Port ${port} is already in use, so the HTTP adapter did not start. ` +
+          `Set MCP_TRANSPORT=stdio to disable it, or PORT to bind elsewhere.\n`
+      );
+      return;
+    }
+    process.stderr.write(`[MCP HTTP] Server error: ${String(error)}\n`);
+  });
+
   server.listen(port, httpBindHost, () => {
     process.stderr.write(`[MCP HTTP] REST adapter listening on ${httpBindHost}:${port}\n`);
   });

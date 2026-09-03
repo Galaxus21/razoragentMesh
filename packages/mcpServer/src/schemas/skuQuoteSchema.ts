@@ -43,6 +43,11 @@ export const skuQuoteResponseSchema = z.object({
   offered_unit_price_paise: z.number().int().min(0),
   currency: z.literal(currencyInr),
   hsn_code: z.string(),
+  // The catalog's category for this SKU. It travels on the quote so create_cart_mandate can
+  // put it in the merchant-signed cart, where the settlement budget gate checks it against the
+  // delegation's authorized_categories. Sourced from the mesh's own catalog on every quote --
+  // an agent-supplied category would let the agent name whichever one it was authorized for.
+  category: z.string().min(1),
   gst_rate_percent: z.number(),
   tax_breakdown: z.object({
     cgst_paise: z.number().int().min(0),

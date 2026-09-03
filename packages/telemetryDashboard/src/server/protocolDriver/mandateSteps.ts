@@ -11,6 +11,7 @@ import {
   authorizedCategories,
   merchantGstin,
   merchantStateCode,
+  millisPerSecond,
   upiCircleDelegationToken
 } from "./driverConfig";
 import { describeMandateArtifact } from "./stepRecorder";
@@ -132,7 +133,14 @@ export const stepSignCart: ExecutableStep = {
         discountPaise: 0,
         totalPaise,
         inventoryLockToken: lock.lockToken,
-        inventoryLockExpiresAt: lock.expiresAtUnixMs
+        // SECONDS. The lock tool reports milliseconds, but the settlement enclave compares this
+        // against int(time.time()) in _verifyInventoryLockActive
+        // (mandateEngine/settlement/twoPhaseCommitSaga.py:318). Passing milliseconds made
+        // `evaluatedAt > inventoryLockExpiresAt` always false, so the guard could never fire --
+        // and its own docstring names the cost: "an expired reservation still settles, so stock
+        // released back to other buyers can be sold twice". Converting here makes it enforce.
+        // The MCP server's create_cart_mandate converts identically; the two must not diverge.
+        inventoryLockExpiresAt: Math.floor(lock.expiresAtUnixMs / millisPerSecond)
       },
       context.merchantSigner
     );

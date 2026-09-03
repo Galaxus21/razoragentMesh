@@ -14,6 +14,12 @@ class AgentKeypair(BaseModel):
     agentDid: str = Field(pattern=r"^did:agent:[0-9a-f]{64}$")
 
 
+# Must equal mandateEngine/mandates/cartMandateSchema.py and buyerSdkTs/src/sdkConstants.ts:
+# the value lands in the signed payload, so a divergence breaks cross-SDK verification rather
+# than merely reading oddly. test_crossCompatibilityMesh.py pins them equal.
+uncategorizedCartItemCategory: str = "uncategorized"
+
+
 class CartItemSchema(BaseModel):
     """Line item within a cart mandate."""
 
@@ -25,6 +31,7 @@ class CartItemSchema(BaseModel):
     hsnCode: str = Field(pattern=r"^[0-9]{4,8}$")
     gstRatePercent: int = Field(ge=0, le=28)
     lineTotalPaise: int = Field(gt=0)
+    category: str = Field(default=uncategorizedCartItemCategory, min_length=1)
 
 
 class TaxBreakdownSchema(BaseModel):

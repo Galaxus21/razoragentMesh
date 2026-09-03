@@ -6,6 +6,12 @@ from typing import Any, Dict, List, Optional
 
 # Constants
 defaultRedisUrl = "redis://localhost:6379/0"
+
+# docker-compose gates mcp-server and merchant-api on this script's exit code.
+exitCodeSeedingSucceeded = 0
+exitCodeSeedingFailed = 1
+# Sentinel distinguishing 'Qdrant seeded nothing' from 'Qdrant could not be reached'.
+qdrantSeedingFailed = -1
 defaultQdrantHost = "localhost"
 defaultQdrantPort = 6333
 defaultCollectionName = "razoragent_catalog"
@@ -40,8 +46,11 @@ async def seedRedisStore(catalogData: List[Dict[str, Any]], redisUrl: str) -> in
         print(f"Successfully seeded {len(catalogData)} SKUs into Redis store.")
         return len(catalogData)
     except Exception as redisError:
-        print(f"Redis seeding skipped ({redisError}). Proceeding with mock validation.")
-        return 0
+        # Not "skipped": failed. docker-compose gates mcp-server and merchant-api on this
+        # container completing successfully, so swallowing this brings the whole mesh up
+        # "healthy" against an unseeded store. The caller decides whether that is fatal.
+        print(f"Redis seeding FAILED ({redisError}).")
+        raise
 
 
 def _buildQdrantPoints(catalogData: List[Dict[str, Any]], pointStructCls: Any) -> List[Any]:
@@ -89,12 +98,28 @@ def seedQdrantCollection(catalogData: List[Dict[str, Any]], qdrantHost: str, qdr
             return len(points)
         return 0
     except Exception as qdrantError:
-        print(f"Qdrant seeding skipped ({qdrantError}). Proceeding.")
-        return 0
+        # Qdrant is genuinely optional: the mesh quotes, locks and settles without a vector
+        # index -- only the Layer 3 substitution search needs one. So this stays non-fatal, but
+        # it must not read as a transient hiccup when it is a service that never came up.
+        print(
+            f"Qdrant seeding FAILED ({qdrantError}). Continuing without a vector index: "
+            "quoting and settlement work, out-of-stock substitution will find no candidates."
+        )
+        return qdrantSeedingFailed
 
 
 async def seedCatalogStore() -> int:
-    """Seeds merchant product catalog fixtures for Qdrant and Redis indexing."""
+    """Seeds merchant product catalog fixtures for Qdrant and Redis indexing.
+
+    The exit code is load-bearing. docker-compose.yml gates both `mcp-server` and `merchant-api`
+    on `catalog-seeder: service_completed_successfully`, so exiting 0 after a total seeding
+    failure brings the mesh up looking healthy with nothing in the stores -- and the first
+    symptom is a SKU that cannot be quoted, several layers away from the cause.
+
+    Redis is required: the MCP server hydrates its catalog from `mesh:catalog:*` at boot, so an
+    unseeded Redis means an empty catalog. Qdrant is not required, and is reported rather than
+    treated as fatal -- quoting, locking and settlement all work without a vector index.
+    """
     catalogData = loadCatalogFixtures()
     print(f"Loading {len(catalogData)} SKUs from {catalogFilePath}...")
 
@@ -102,11 +127,25 @@ async def seedCatalogStore() -> int:
     qdrantHost = os.environ.get("QDRANT_HOST", defaultQdrantHost)
     qdrantPort = int(os.environ.get("QDRANT_PORT", defaultQdrantPort))
 
-    await seedRedisStore(catalogData, redisUrl)
-    seedQdrantCollection(catalogData, qdrantHost, qdrantPort)
+    try:
+        seededCount = await seedRedisStore(catalogData, redisUrl)
+    except Exception as redisError:
+        print(
+            "\nCatalog seeding aborted: Redis is required and could not be seeded "
+            f"({redisError}). Services that depend on this seeder will not start."
+        )
+        return exitCodeSeedingFailed
 
-    print(f"\nCatalog inspection completed for {len(catalogData)} items.")
-    return 0
+    if not seededCount:
+        print("\nCatalog seeding aborted: Redis reported zero SKUs written.")
+        return exitCodeSeedingFailed
+
+    qdrantResult = seedQdrantCollection(catalogData, qdrantHost, qdrantPort)
+    if qdrantResult == qdrantSeedingFailed:
+        print("Vector index unavailable; continuing because Qdrant is not required to settle.")
+
+    print(f"\nCatalog seeding completed for {len(catalogData)} items.")
+    return exitCodeSeedingSucceeded
 
 
 if __name__ == "__main__":

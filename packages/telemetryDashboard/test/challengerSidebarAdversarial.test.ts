@@ -14,11 +14,12 @@ import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 
 const stressLoopIterations = 5000;
-const expectedCategoryCount = 5;
-const expectedTotalRouteCount = 17;
+const expectedCategoryCount = 6;
+const expectedTotalRouteCount = 20;
 
 const defaultCategoryIds: ReadonlyArray<string> = [
   "platformOps",
+  "protocolPlayground",
   "aiBuyerAgents",
   "cfosAuditors",
   "merchants",
@@ -59,6 +60,7 @@ describe("Challenger 1 Empirical Stress: Rapid State Transitions & Category Isol
   it("should maintain state consistency across 5,000 rapid toggles per category", () => {
     let state: Record<string, boolean> = {
       platformOps: true,
+      protocolPlayground: true,
       aiBuyerAgents: true,
       cfosAuditors: true,
       merchants: true,
@@ -77,6 +79,7 @@ describe("Challenger 1 Empirical Stress: Rapid State Transitions & Category Isol
   it("should enforce category state isolation during randomized cross-category mutations", () => {
     let state: Record<string, boolean> = {
       platformOps: true,
+      protocolPlayground: true,
       aiBuyerAgents: true,
       cfosAuditors: true,
       merchants: true,

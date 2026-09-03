@@ -38,7 +38,7 @@ and a test fails if these drift apart.
 | 12 | Property Test: Luhn Mod-36 Invariants | Hypothesis suite verifying valid GSTIN roundtrip and single-char mutation falsification | M4 | DONE |
 | 13 | Property Test: Ed25519 JCS Canonical Invariants | Hypothesis & fast-check suites verifying canonical JCS ordering, sign/verify, and float ban | M4 | DONE |
 | 14 | Standardize Vector Payload Schema Naming | Consistent O(1) in-place Qdrant payload patching standardized to `in_stock` field | M5 | DONE |
-| 15 | Comprehensive Monorepo Regression Gate | Verify all 1,564 tests and new property test suites pass with zero regressions | M5 | DONE |
+| 15 | Comprehensive Monorepo Regression Gate | Verify the full suite and the new property tests pass with zero regressions (1,564 tests at the time M5 closed; run `python scripts/countTests.py` for the current inventory) | M5 | DONE |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |

@@ -65,13 +65,25 @@ Services exposed:
 - **Mandate Settlement Engine API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Merchant Onboarding & Bullion API Docs:** [http://localhost:4002/docs](http://localhost:4002/docs)
 - **x402 Dynamic Negotiation Gateway Docs:** [http://localhost:4003/docs](http://localhost:4003/docs)
-- **MCP Discovery Server:** two transports. MCP JSON-RPC 2.0 over **stdio** for agent runtimes,
-  and a **REST adapter on [http://localhost:4001](http://localhost:4001)** (`/health`,
-  `/api/v1/tools`, `/api/v1/quote`, `/api/v1/lock`, `/api/v1/sla`) for the buyer SDKs, whose
-  calls are plain HTTP. To exercise the stdio transport directly:
+- **MCP Server:** three faces on port 4001. **Streamable HTTP at
+  [http://localhost:4001/mcp](http://localhost:4001/mcp)** is how an external agent connects --
+  Claude Desktop, Claude Code or Cursor points at that URL and gets all eight tools. MCP JSON-RPC
+  2.0 over **stdio** serves runtimes that spawn a process instead. A **REST adapter** (`/health`,
+  `/api/v1/tools`, `/api/v1/quote`, `/api/v1/lock`, `/api/v1/sla`) serves the buyer SDKs, whose
+  calls are plain HTTP.
+
+  Connecting your own agent takes one command:
 
   ```bash
-  echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | docker run -i --rm razoragent_mcp_server:latest node dist/mcpServerMain.js
+  claude mcp add --transport http razoragent-mesh http://localhost:4001/mcp
+  ```
+
+  See **[the Agent Quickstart](./packages/telemetryDashboard/docs/agent-quickstart.mdx)** for the
+  full walkthrough: publish a product from the dashboard, ask your agent to buy it in plain
+  language, and watch the protocol execute live. To smoke-test the stdio transport directly:
+
+  ```bash
+  echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | docker run -i --rm -e MCP_TRANSPORT=stdio razoragent_mcp_server:latest node dist/mcpServerMain.js
   ```
 - **Qdrant Vector DB Console:** [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
 - **Redis Nonce Ledger:** `localhost:6379`
@@ -141,36 +153,32 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
-| Python backend + Python Buyer SDK | 1252 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
-| MCP discovery server | 133 | `cd packages/mcpServer && npm test` |
-| TypeScript Buyer SDK | 94 | `cd packages/buyerSdkTs && npm test` |
-| Telemetry dashboard + SKU Studio | 258 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **1,737** | `python scripts/countTests.py` |
+| Python backend + Python Buyer SDK | 1292 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
+| MCP discovery server | 169 | `cd packages/mcpServer && npm test` |
+| TypeScript Buyer SDK | 98 | `cd packages/buyerSdkTs && npm test` |
+| Telemetry dashboard + SKU Studio | 282 | `cd packages/telemetryDashboard && npm test` |
+| **Total** | **1,841** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 
-### Continuous integration
+### Verifying the claims in this README
 
-`.github/workflows/ci.yml` runs five jobs on every push. Three of them exist to stop this README
-from lying:
+Every number here is produced by a command, and each command is runnable from a clean
+checkout. Nothing in this section takes more than a minute.
 
-| Job | What it fails on |
+| Command | What it proves |
 |---|---|
-| `python` | Backend and Python SDK suites |
-| `typescript` | Type check and test the MCP server, TypeScript SDK and dashboard |
-| `claims` | A stale cross-language GST formula in the docs, or a statutory constant with no citation |
-| `docs` | A guide naming a method, argument, port, route or example region the code does not have; a stale generated reference; an example that fails to compile or run |
-| `test-counts` | A documented test count that disagrees with measurement |
+| `python scripts/countTests.py --check` | No test count in this README or the guide was hand-typed |
+| `npx tsx examples/typescript/mandateChain.ts` | Builds a full AP2 mandate chain, verifies it, edits the cart, and exits non-zero unless the first verifies **and** the tampered second is refused |
+| `PYTHONPATH=packages/buyerSdkPy python examples/python/mandateChain.py` | The same proof, in Python |
+| `cd packages/telemetryDashboard && npm run docs:verify` | Every method, argument, port and route the guides name still exists in the code |
+| `python scripts/generateApiReference.py` | Regenerates the API tables; a non-empty `git diff` afterwards means the committed reference is stale |
+| `python scripts/mutationScore.py` | Measures how much of the suite's protection is real — see [`docs/TEST_QUALITY_AUDIT.md`](docs/TEST_QUALITY_AUDIT.md) |
 
-The `docs` job also *executes* `examples/typescript/mandateChain.ts` and
-`examples/python/mandateChain.py`, which build a full AP2 mandate chain, verify it, edit the cart,
-and exit non-zero unless the first verifies and the second is refused.
-
-Every number in that table is produced by `python scripts/countTests.py`, which CI runs
-with `--check` so the table cannot drift from measurement (rule V-01). Treat the total as
-inventory, not as evidence: a statutory GST bug in this repository survived 1,545 of these
-tests, because no test compared the two implementations against each other. The benchmarks,
-property invariants, and cross-language vectors above are what actually constrain behaviour.
+Treat the test total as inventory, not as evidence: a statutory GST bug in this repository
+survived 1,545 of these tests, because no test compared the two implementations against each
+other. The benchmarks, property invariants, and cross-language vectors above are what
+actually constrain behaviour.
 
 ---
 
@@ -182,18 +190,20 @@ so the Docker build context stays self-contained.
 
 | Document | Live route | Scope |
 |---|---|---|
-| [`SETUP_GUIDE.md`](./packages/telemetryDashboard/docs/SETUP_GUIDE.md) | `/docs/setup` | Environment, container topology, and local setup |
-| [`DEVELOPER_ONBOARDING_GUIDE.md`](./packages/telemetryDashboard/docs/DEVELOPER_ONBOARDING_GUIDE.md) | `/docs/onboarding` | Full protocol topology, merchant onboarding, and buyer-agent lifecycle in TS and Python |
-| [`BUYER_AGENT_SDK_GUIDE.md`](./packages/telemetryDashboard/docs/BUYER_AGENT_SDK_GUIDE.md) | `/docs/buyer-sdk` | AI buyer agent SDK and AP2 protocol |
-| [`MERCHANT_ONBOARDING_GUIDE.md`](./packages/telemetryDashboard/docs/MERCHANT_ONBOARDING_GUIDE.md) | `/docs/merchant-guide` | Merchant onboarding and the universal SKU Studio |
-| [`TELEMETRY_OBSERVABILITY_GUIDE.md`](./packages/telemetryDashboard/docs/TELEMETRY_OBSERVABILITY_GUIDE.md) | `/docs/telemetry` | SSE streaming architecture, KPIs, and the 12 canonical event schemas |
-| [`GSTR1_INVOICE_SPECIFICATION.md`](./packages/telemetryDashboard/docs/GSTR1_INVOICE_SPECIFICATION.md) | `/docs/gstr1-invoice` | Statutory GST compliance, integer-paise arithmetic, JCS audit digest |
+| [`setup.mdx`](./packages/telemetryDashboard/docs/setup.mdx) | `/docs/setup` | Environment, container topology, and local setup |
+| [`agent-quickstart.mdx`](./packages/telemetryDashboard/docs/agent-quickstart.mdx) | `/docs/agent-quickstart` | Connecting your own agent over MCP and driving a signed purchase end to end |
+| [`onboarding.mdx`](./packages/telemetryDashboard/docs/onboarding.mdx) | `/docs/onboarding` | Full protocol topology, merchant onboarding, and buyer-agent lifecycle in TS and Python |
+| [`buyer-sdk.mdx`](./packages/telemetryDashboard/docs/buyer-sdk.mdx) | `/docs/buyer-sdk` | AI buyer agent SDK and AP2 protocol |
+| [`merchant-guide.mdx`](./packages/telemetryDashboard/docs/merchant-guide.mdx) | `/docs/merchant-guide` | Merchant onboarding and the universal SKU Studio |
+| [`telemetry.mdx`](./packages/telemetryDashboard/docs/telemetry.mdx) | `/docs/telemetry` | SSE streaming architecture, KPIs, and the 12 canonical event schemas |
+| [`gstr1-invoice.mdx`](./packages/telemetryDashboard/docs/gstr1-invoice.mdx) | `/docs/gstr1-invoice` | Statutory GST compliance, integer-paise arithmetic, JCS audit digest |
 
 Repository-level documentation not served by the dashboard:
 
 | Document | Scope |
 |---|---|
 | [`docs/STATUTORY_RATES.md`](./docs/STATUTORY_RATES.md) | Where tax rates live, their citations and verification dates, and the procedure for keeping them true |
+| [`docs/AGENT_SETUP_TROUBLESHOOTING.md`](./docs/AGENT_SETUP_TROUBLESHOOTING.md) | Symptom-by-symptom fixes for connecting an external agent, with the exact error text |
 | [`GUIDE.md`](./GUIDE.md) | Architecture and presentation material |
 | [`PROJECT.md`](./PROJECT.md) | Completed milestone log |
 
@@ -249,12 +259,15 @@ degraded cache cannot halt a live demo. Production should fail closed.
 Qdrant and Razorpay. It verifies protocol logic thoroughly; it does not verify real
 infrastructure behaviour under failure.
 
-**Settlement has only ever run in mock mode.** `RazorpayRouteClient` accepts `apiKey`,
-`apiSecret` and `isMockMode`, but both places the application constructs it pass
-`isMockMode=True` literally and no credentials, and nothing reads the `RAZORPAY_KEY_ID` /
-`RAZORPAY_KEY_SECRET` that `docker-compose.yml` sets. Every settlement this repository has
-executed went through the mock ledger, and no environment variable can change that. The 2PC saga,
-compensation and invoicing around it are real.
+**Settlement has only ever run in mock mode here, but an environment variable does change
+that.** `buildRouteClient` (`packages/mandateEngine/settlement/routeClientFactory.py`) selects the
+live transport whenever `MandateEngineSettings.hasRazorpayCredentials` holds -- that is, when
+`RAZORPAY_KEY_ID` is not one of the `placeholderRazorpayKeyIds` (`""`, `rzp_test_mock`,
+`rzp_test_MockApiKey12345`) and `RAZORPAY_KEY_SECRET` is non-empty. Both are read at
+`packages/mandateEngine/config.py:25,30`. Ship the defaults and you get `isMockMode=True` and a
+logged warning; supply real credentials and settlement will reach the Razorpay Route API. Every
+settlement *this repository* has executed went through the mock ledger, because the placeholder
+values were never replaced. The 2PC saga, compensation and invoicing around it are real.
 
 **Three benchmark files assert their own reimplementations.**
 `testTc05NegativeConstraint.py`, `testTc06AntiSpamSybil.py` and `testTc09ConcurrencyDoubleLock.py`

@@ -16,6 +16,7 @@ from razoragentMesh.packages.merchantApi import (
     UniversalProductListing,
     synthesizeFacetDescription,
 )
+from razoragentMesh.packages.merchantApi.src.catalog.autoVectorizer import pointIdForSku
 from razoragentMesh.tests.mockInfraHelpers import MockQdrantClient, MockRedisAsync
 
 
@@ -170,7 +171,9 @@ async def testAutoVectorizerUpsertAndRemove(mockQdrant: MockQdrantClient) -> Non
     )
     await vectorizer.upsertListing(listing)
     pts = mockQdrant.collections["merchantCatalog"]
-    assert len(pts) == 1 and pts[0]["id"] == "SKU-JEW-02"
+    assert len(pts) == 1 and pts[0]["id"] == pointIdForSku("SKU-JEW-02")
+    # The id is a derived UUID because Qdrant rejects arbitrary strings; the SKU stays
+    # recoverable from the payload, which is what every read path actually uses.
     assert pts[0]["payload"]["skuId"] == "SKU-JEW-02" and pts[0]["payload"]["availableStock"] == 8
 
     await vectorizer.removeListing("SKU-JEW-02")
@@ -202,11 +205,11 @@ async def testAutoVectorizerNativeClientUpsertAndRemove() -> None:
     await vectorizer.upsertListing(listing)
     assert len(upsertCalls) == 1
     pt = upsertCalls[0]["points"][0]
-    assert pt.id == "SKU-NAT-01"
+    assert pt.id == pointIdForSku("SKU-NAT-01")
     assert pt.payload["availableStock"] == 12
     assert pt.payload["skuId"] == "SKU-NAT-01"
 
     await vectorizer.removeListing("SKU-NAT-01")
     assert len(deleteCalls) == 1
-    assert deleteCalls[0]["points_selector"].points == ["SKU-NAT-01"]
+    assert deleteCalls[0]["points_selector"].points == [pointIdForSku("SKU-NAT-01")]
 

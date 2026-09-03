@@ -4,10 +4,18 @@ export const keyHexLength = 64;
 export const seedByteLength = 32;
 export const signatureHexLength = 128;
 
+// The category a merchant asserts when it does not classify the SKU. Must equal the Python
+// spelling in mandateEngine/mandates/cartMandateSchema.py and razoragent_buyer_sdk/mandateModels.py:
+// the value lands in the JCS-canonicalized payload, so a divergence makes the same cart hash
+// differently in the two SDKs and every cross-SDK signature fails. It is a real string rather
+// than an omitted key because Python emits the field always and JSON.stringify drops undefined.
+export const uncategorizedCartItemCategory = "uncategorized" as const;
+
 export const defaultIntentValiditySeconds = 86400;
-export const defaultLockTtlSeconds = 120;
+// Matches Python SDK and MCP server (packages/mcpServer/src/constants/protocolConstants.ts:53).
+// Both SDKs call the same /api/v1/lock endpoint, so the hold window must match.
+export const defaultLockTtlSeconds = 60;
 export const defaultPowDifficultyZeros = 4;
-export const escalatedPowDifficultyZeros = 5;
 export const maxNegotiationTurns = 5;
 export const microFeePerTurnPaise = 50;
 
@@ -33,17 +41,14 @@ export const mandateCartAmendedPrefix = "cart_amended_" as const;
 
 export const defaultProtocolFeeAccount = "acc_protocol_fees";
 export const defaultProtocolFeePaise = 50;
-export const defaultLogisticsAccount = "acc_logistics_delivery";
 
 export const hexEncoding = "hex" as const;
 export const utf8Encoding = "utf-8" as const;
-export const sha256Algorithm = "sha256" as const;
 
 export const headerPowChallenge = "X-Mesh-Pow-Challenge" as const;
 export const headerPowSolution = "X-Mesh-Pow-Solution" as const;
 export const headerEscrowToken = "X-Mesh-Escrow-Token" as const;
 export const headerBuyerAgentDid = "X-Buyer-Agent-Did" as const;
-export const headerAuthenticate = "WWW-Authenticate" as const;
 
 export const mediaTypeApplicationJson = "application/json" as const;
 export const httpMethodGet = "GET" as const;

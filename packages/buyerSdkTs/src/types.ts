@@ -18,6 +18,12 @@ export interface CartItem {
   readonly hsnCode: string;
   readonly gstRatePercent: number;
   readonly lineTotalPaise: number;
+  /**
+   * Merchant-asserted product category, checked at settlement against the Intent Mandate's
+   * `authorizedCategories`. Optional to supply; `createSignedCartMandate` fills in
+   * `uncategorizedCartItemCategory` so the signed payload always carries the key.
+   */
+  readonly category?: string;
 }
 
 export interface IntentMandate {

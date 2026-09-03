@@ -63,6 +63,13 @@ const expectedLayerByPathPrefix: Readonly<Record<string, string>> = {
   "packages/x402Gateway/src/middleware/proofOfWorkMiddleware.py": "ingress",
   "packages/mcpServer": "discovery",
   "packages/merchantApi": "discovery",
+  // Two files in the Merchant API belong to other layers, the same way the PoW middleware above
+  // belongs to ingress rather than to the gateway package it lives in. Layer 3's search half
+  // runs here because this is where the Qdrant client is, and Layer 0 is called from here
+  // because this is where merchant text enters the mesh.
+  "packages/merchantApi/src/routes/oosHealingRoute.py": "resilience",
+  "packages/merchantApi/src/routes/healingTelemetry.py": "resilience",
+  "packages/merchantApi/src/catalog/ingressSanitizer.py": "ingress",
   "packages/x402Gateway": "negotiation",
   "packages/vectorHealer": "resilience",
   "packages/mandateEngine": "settlement",

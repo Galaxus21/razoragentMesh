@@ -13,17 +13,20 @@ import { isRouteMatching } from "../src/constants/sidebarNavigationConfig.js";
 
 const expectedRouteList: ReadonlyArray<string> = [
   "/overview",
-  "/protocol",
   "/self-healing",
   "/infrastructure",
+  "/protocol",
+  "/playground/layers",
   "/playground",
   "/playground/adversarial",
+  "/playground/live-agent",
   "/sdk-console",
   "/agent-observability",
   "/negotiation-hub",
   "/security-audit",
   "/merchant-studio",
   "/docs/setup",
+  "/docs/agent-quickstart",
   "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
@@ -33,17 +36,20 @@ const expectedRouteList: ReadonlyArray<string> = [
 
 const expectedLabelList: ReadonlyArray<string> = [
   "Overview",
-  "Protocol Map",
   "Self-Healing",
   "Infrastructure",
-  "Protocol Playground",
+  "Protocol Map",
+  "Layer Explorer",
+  "Run The Protocol",
   "Adversarial Playground",
+  "Live Agent",
   "SDK Console",
   "Agent Observability",
   "Negotiation Hub",
   "Security & Audit",
   "Merchant Studio",
   "System Setup",
+  "Agent Quickstart",
   "Developer Onboarding",
   "Buyer SDK",
   "Merchant Guide",
@@ -53,6 +59,7 @@ const expectedLabelList: ReadonlyArray<string> = [
 
 const expectedCategoryIds: ReadonlyArray<string> = [
   "platformOps",
+  "protocolPlayground",
   "aiBuyerAgents",
   "cfosAuditors",
   "merchants",
@@ -61,6 +68,7 @@ const expectedCategoryIds: ReadonlyArray<string> = [
 
 const expectedCategoryLabels: ReadonlyArray<string> = [
   "Platform Ops",
+  "Protocol Playground",
   "AI Buyer Agents",
   "CFOs & Auditors",
   "Merchants",
@@ -101,8 +109,8 @@ describe("Milestone 2 — Sidebar State & Persistence Invariants", () => {
 });
 
 describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
-  it("should define exactly 5 top-level navigation categories", () => {
-    assert.equal(navigationCategories.length, 5);
+  it("should define exactly 6 top-level navigation categories", () => {
+    assert.equal(navigationCategories.length, 6);
 
     const categoryIds = navigationCategories.map((c) => c.id);
     assert.deepEqual(categoryIds, expectedCategoryIds);
@@ -116,19 +124,19 @@ describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
     }
   });
 
-  it("should register exactly 17 unique navigation routes across all categories", () => {
-    assert.equal(navigationItems.length, 17);
+  it("should register exactly 20 unique navigation routes across all categories", () => {
+    assert.equal(navigationItems.length, 20);
 
     const routes = navigationItems.map((item) => item.route);
     const uniqueRoutes = new Set(routes);
-    assert.equal(uniqueRoutes.size, 17);
+    assert.equal(uniqueRoutes.size, 20);
 
     for (const expectedRoute of expectedRouteList) {
       assert.ok(uniqueRoutes.has(expectedRoute), `Missing route: ${expectedRoute}`);
     }
   });
 
-  it("should map descriptive labels and valid properties for all 17 child items", () => {
+  it("should map descriptive labels and valid properties for all 20 child items", () => {
     const labels = navigationItems.map((item) => item.label);
     for (let index = 0; index < expectedLabelList.length; index += 1) {
       assert.equal(labels[index], expectedLabelList[index]);

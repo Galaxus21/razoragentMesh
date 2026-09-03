@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { runEndpointPath } from "@/constants/playgroundConstants";
+import type { RunParameters } from "@/server/protocolDriver/driverConfig";
 import type {
   ProtocolRunEvent,
   ProtocolStepRecord,
@@ -26,7 +27,7 @@ export interface ProtocolRunState {
 }
 
 export interface UseProtocolRunResult extends ProtocolRunState {
-  readonly startRun: (scenarioId: string) => Promise<void>;
+  readonly startRun: (scenarioId: string, parameters?: Partial<RunParameters>) => Promise<void>;
   readonly reset: () => void;
 }
 
@@ -69,17 +70,26 @@ export function useProtocolRun(): UseProtocolRunResult {
     setState(idleState);
   }, []);
 
-  const startRun = useCallback(async (scenarioId: string) => {
+  // `parameters` carries only the fields a visitor actually overrode. Omitting the key entirely
+  // when nothing was edited keeps an untouched run byte-for-byte identical to the default run,
+  // rather than sending a redundant copy of the defaults back to the driver.
+  const startRun = useCallback(
+    async (scenarioId: string, parameters?: Partial<RunParameters>) => {
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setState({ ...idleState, isRunning: true });
 
+    const requestBody =
+      parameters && Object.keys(parameters).length > 0
+        ? { scenarioId, parameters }
+        : { scenarioId };
+
     try {
       const response = await fetch(runEndpointPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenarioId }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal
       });
 
@@ -132,7 +142,9 @@ export function useProtocolRun(): UseProtocolRunResult {
         errorMessage: `Could not reach the run endpoint: ${failure.message}`
       }));
     }
-  }, []);
+    },
+    []
+  );
 
   return { ...state, startRun, reset };
 }

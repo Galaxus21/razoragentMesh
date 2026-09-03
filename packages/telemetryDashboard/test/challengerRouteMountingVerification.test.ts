@@ -38,17 +38,20 @@ import { isRouteMatching } from "../src/constants/sidebarNavigationConfig.js";
 
 const expectedRoutes: ReadonlyArray<string> = [
   "/overview",
-  "/protocol",
   "/self-healing",
   "/infrastructure",
+  "/protocol",
+  "/playground/layers",
   "/playground",
   "/playground/adversarial",
+  "/playground/live-agent",
   "/sdk-console",
   "/agent-observability",
   "/negotiation-hub",
   "/security-audit",
   "/merchant-studio",
   "/docs/setup",
+  "/docs/agent-quickstart",
   "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
@@ -111,8 +114,8 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
 });
 
 describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route Resolution", () => {
-  it("should verify 100% route alignment between navigationItems and expected 17 routes", () => {
-    assert.equal(navigationItems.length, 17);
+  it("should verify 100% route alignment between navigationItems and expected 20 routes", () => {
+    assert.equal(navigationItems.length, 20);
 
     const actualRoutes = navigationItems.map((item) => item.route);
     assert.deepEqual(actualRoutes, expectedRoutes);

@@ -22,6 +22,10 @@ import {
 // Enough to be unmistakable in the UI without looking like a rounding error.
 const settlementInflationPaise = 250_000;
 
+// HTTP 409 is what the engine's nonce ledger returns for an already-consumed nonce. Any other
+// status from a replay is a genuine fault, not the defence firing.
+const replayRejectedStatusCode = 409;
+
 export const stepInflateSettlementAmount: ExecutableStep = {
   definition: {
     stepId: "inflateSettlementAmount",
@@ -74,23 +78,45 @@ export const stepReplaySettlement: ExecutableStep = {
     const cartMandate = requireState(context.state.cartMandate, "replaySettlement");
     const executionMandate = requireState(context.state.executionMandate, "replaySettlement");
 
-    const settlement = await context.client.executeSettlement({
-      intentMandate,
-      cartMandate,
-      executionMandate,
-      merchantAccount: demoMerchantAccount,
-      paymentId: demoPaymentId,
-      serverTime: currentUnixSeconds()
-    });
+    try {
+      const settlement = await context.client.executeSettlement({
+        intentMandate,
+        cartMandate,
+        executionMandate,
+        merchantAccount: demoMerchantAccount,
+        paymentId: demoPaymentId,
+        serverTime: currentUnixSeconds()
+      });
 
-    // Reaching here means the ledger accepted a nonce it had already spent. The run summary treats
-    // an unrefused adversarial scenario as UNEXPECTED, which is exactly what this is.
-    return {
-      status: "SUCCEEDED",
-      resultSummary: {
-        replayAccepted: true,
-        settlement: settlement as unknown as Record<string, unknown>
+      // Reaching here means the ledger accepted a nonce it had already spent. The run summary
+      // treats an unrefused adversarial scenario as UNEXPECTED, which is exactly what this is.
+      return {
+        status: "SUCCEEDED",
+        resultSummary: {
+          replayAccepted: true,
+          settlement: settlement as unknown as Record<string, unknown>
+        }
+      };
+    } catch (error) {
+      // The nonce ledger lives in the engine, not in this process, so unlike the three pure-crypto
+      // attacks this refusal arrives as an HTTP error rather than a thrown verifier result. Without
+      // this branch the SDK's throw reaches the driver's generic catch and is recorded as FAILED --
+      // which renders the one attack the ledger actually stopped as a red failure captioned "a real
+      // failure, not a protocol refusal", the precise opposite of what happened. Only the ledger's
+      // own 409 is a refusal; anything else really is a broken run and is rethrown.
+      const failure = error as Error & { statusCode?: number };
+      if (failure.statusCode !== replayRejectedStatusCode) {
+        throw error;
       }
-    };
+      return {
+        status: "REFUSED",
+        refusal: {
+          errorName: failure.name,
+          message: failure.message,
+          invariantViolated: "INV-05",
+          statusCode: failure.statusCode
+        }
+      };
+    }
   }
 };

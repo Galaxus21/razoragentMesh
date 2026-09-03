@@ -34,18 +34,33 @@ services:
 
   mcp-server:
     build:
-      context: ./packages/mcpServer
-      dockerfile: Dockerfile
+      # Root context so the mandate tools can link the real buyer SDK (file:../buyerSdkTs),
+      # matching merchant-api, x402-gateway and telemetry-dashboard above.
+      context: .
+      dockerfile: packages/mcpServer/Dockerfile
     image: razoragent_mcp_server:latest
     container_name: razoragent_mcp_server
-    # mcpServer runs two transports: MCP JSON-RPC over stdio for MCP clients, and the REST
-    # adapter (packages/mcpServer/src/http/httpAdapter.ts) on this port for the buyer SDKs,
-    # whose getLiveSkuQuote/reserveInventoryLock/verifyShippingSla calls are plain HTTP.
+    # This port serves two HTTP faces: the MCP Streamable HTTP transport at /mcp, which an
+    # external agent (Claude Desktop, Claude Code, Cursor) connects to by URL, and the REST
+    # adapter (packages/mcpServer/src/http/httpAdapter.ts) that the buyer SDKs target, whose
+    # getLiveSkuQuote/reserveInventoryLock/verifyShippingSla calls are plain HTTP.
+    #
+    # MCP_TRANSPORT=http because this container has no stdin_open/tty: the stdio transport
+    # would attach to a closed stdin and never serve anything. Local development that wants
+    # stdio runs the server directly instead.
     ports:
       - "4001:4001"
     environment:
       - PORT=4001
+      - MCP_TRANSPORT=http
       - REDIS_URL=redis://redis:6379/0
+      # Where MCP tool activity is published so the dashboard renders an external agent's work.
+      # Without this the panels stay dark until settlement, because the mandate engine is the
+      # only in-service telemetry producer.
+      - MANDATE_ENGINE_URL=http://mandate-engine:8000
+      # Ranking for search_catalog runs in merchantApi, which owns the embedding model
+      # and the Qdrant client; this service is TypeScript and has no embedder.
+      - MERCHANT_API_URL=http://merchant-api:4002
       - MERCHANT_PRIVATE_KEY_HEX=${MERCHANT_PRIVATE_KEY_HEX:-}
       - HMAC_SECRET_KEY=${HMAC_SECRET_KEY:-}
     healthcheck:
@@ -101,7 +116,6 @@ services:
     ports:
       - "4002:4002"
     environment:
-      - PORT=4002
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
@@ -132,7 +146,6 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - PORT=8000
       - REDIS_URL=redis://redis:6379/0
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
@@ -157,7 +170,6 @@ services:
     ports:
       - "4003:4003"
     environment:
-      - PORT=4003
       - REDIS_URL=redis://redis:6379/0
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4003/api/v1/mesh/health', timeout=3)"]

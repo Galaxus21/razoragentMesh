@@ -33,7 +33,7 @@ When running the mesh locally (via Docker Compose or native processes), each mic
 | **`localhost:8000`** | **Mandate Engine** | REST / SSE (Layer 4 & 5) | AP2 cryptographic mandate verification (Ed25519), 2-Phase Commit (2PC) multi-party settlement sagas, statutory GSTR-1 tax invoicing, and live Server-Sent Events (SSE) telemetry stream. | `GET /health`<br />`POST /api/v1/settlement/execute`<br />`GET /api/v1/telemetry/stream` |
 | **`localhost:4002`** | **Merchant API** | REST (Layer 1) | Merchant DID registration, autonomous negotiation policy configuration, multi-channel catalog ingestion (REST, CSV, Shopify, ERP), domain facets, and dynamic MCX bullion pricing. | `GET /health`<br />`POST /api/v1/merchant/register`<br />`POST /api/v1/merchant/{merchantDid}/catalog` |
 | **`localhost:4003`** | **x402 Gateway** | REST (Layer 0 & 2) | Dynamic HTTP 402 negotiation gateway, SHA-256 Proof-of-Work (PoW) Sybil/anti-spam shield, Rubinstein-Ståhl bilateral bargaining engine, and AST contract compilation. | `GET /api/v1/mesh/health`<br />`POST /api/v1/mesh/negotiate`<br />`GET /api/v1/mesh/challenge` |
-| **`localhost:4001`** | **MCP Server** | JSON-RPC 2.0 (Layer 1) | Model Context Protocol tool discovery server for autonomous AI buyer agents (`get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`). | `POST /rpc`<br />`Stdio` pipe |
+| **`localhost:4001`** | **MCP Server** | JSON-RPC 2.0 (Layer 1) | Model Context Protocol server exposing eight tools to autonomous AI buyer agents: discovery (`search_catalog`), commerce (`get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`) and purchase (`establish_agent_delegation`, `create_cart_mandate`, `sign_execution_mandate`, `execute_settlement`). | `POST /mcp` (Streamable HTTP)<br />`POST /rpc`<br />`Stdio` pipe |
 | **`localhost:3000`** | **Telemetry Dashboard** | Web / HTTP (Layer 5) | Real-time Next.js 15 web inspector, visual audit trail, dynamic Markdown documentation viewer, and Universal SKU Studio. | `GET /`<br />`GET /overview`<br />`GET /docs/setup` |
 | **`localhost:6333`** | **Qdrant Vector DB** | REST / gRPC (Layer 3) | High-speed vector search engine providing Approximate Nearest Neighbor (ANN) cosine similarity search and sub-300ms out-of-stock vector cart healing. | `GET /healthz`<br />`POST /collections/merchant_catalog/points/search` |
 | **`localhost:6379`** | **Redis State Store** | TCP (Layer 0–4) | Distributed in-memory cache, atomic Lua inventory locking with monotonic fencing tokens, Pub/Sub event bus, and single-use anti-replay nonce ledger. | `PING` (via redis-cli) |
@@ -76,14 +76,31 @@ MERCHANT_API_URL=http://localhost:4002
 
 # x402 Gateway: allows a price-drop callback URL pointing at localhost. Development only.
 ALLOW_LOCALHOST_CALLBACK=true
+
+# Merchant API's auto-vectorizer builds its Qdrant client from these
+# (packages/merchantApi/src/merchantApp.py). Defaults to localhost:6333.
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+
+# Supplying real Razorpay credentials switches settlement OFF the mock ledger. The mandate engine
+# reads both (packages/mandateEngine/config.py:25,30) and buildRouteClient selects the live
+# transport whenever the key id is not a placeholder and the secret is non-empty. Leave unset to
+# stay on the mock ledger.
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
 ```
 
 Every variable above is read by code. Earlier revisions of this guide also listed `TELEMETRY_PORT`,
-`MERCHANT_API_PORT`, `GATEWAY_PORT`, `MCP_SERVER_PORT`, `QDRANT_HOST`, `QDRANT_PORT`,
-`QDRANT_COLLECTION_NAME`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
-`ED25519_PRIVATE_KEY` and `AP2_GATE_DAILY_LIMIT_PAISE`. Nothing read any of them — setting them had
-no effect, and `ED25519_PRIVATE_KEY` in particular looked like the way to supply a signing key while
-the code was reading `MERCHANT_PRIVATE_KEY_HEX`. They have been removed rather than left to mislead.
+`MERCHANT_API_PORT`, `GATEWAY_PORT`, `MCP_SERVER_PORT`, `QDRANT_COLLECTION_NAME`,
+`RAZORPAY_WEBHOOK_SECRET`, `ED25519_PRIVATE_KEY` and `AP2_GATE_DAILY_LIMIT_PAISE`. Nothing reads any
+of them — setting them has no effect, and `ED25519_PRIVATE_KEY` in particular looked like the way to
+supply a signing key while the code was reading `MERCHANT_PRIVATE_KEY_HEX`. They have been removed
+rather than left to mislead.
+
+That list previously also named `QDRANT_HOST`, `QDRANT_PORT`, `RAZORPAY_KEY_ID` and
+`RAZORPAY_KEY_SECRET`. All four are read by code and are documented above instead: the Qdrant pair
+by the Merchant API's auto-vectorizer, the Razorpay pair by the mandate engine, where they decide
+whether settlement runs against the mock ledger or the live Route API.
 
 ---
 

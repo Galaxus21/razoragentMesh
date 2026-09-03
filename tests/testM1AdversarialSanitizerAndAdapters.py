@@ -13,7 +13,12 @@ from razoragentMesh.packages.catalogSanitizer import (
     stripMarkdownAndHtml,
     stripZeroWidthCharacters,
 )
-from razoragentMesh.packages.mandateEngine.settlement.settlementExceptions import (
+# Imported from the module under test, not from the mandate engine. This test used to import the
+# engine's same-named exception and pass -- but only inside the monorepo, where catalogSanitizer's
+# `try: from ...mandateEngine import ArithmeticDriftException` succeeded and rebound the name.
+# Installed standalone, the sanitizer raised its own class and this assertion would have failed.
+# The test was encoding that sys.path-dependent binding as correct behaviour.
+from razoragentMesh.packages.catalogSanitizer.ingressShieldExceptions import (
     ArithmeticDriftException,
 )
 from razoragentMesh.packages.merchantApi.src.adapters.csvIngestionAdapter import (
@@ -61,6 +66,89 @@ def testSanitizerRejectsBooleansInNumericFields() -> None:
     payloadWithBoolStock = dict(basePayload, availableStock=False)
     with pytest.raises(SchemaSanitizationFailureException):
         sanitizeMerchantSkuQuote(payloadWithBoolStock)
+
+
+def testSanitizerRejectsFalsyNonIntegersInTaxComponents() -> None:
+    """Covers the three tax fields the boolean test above does not reach.
+
+    baseUnitPricePaise and availableStock route through _extractNumericFields, which calls the
+    strict-integer guard directly. cgstPaise, sgstPaise and igstPaise route through
+    _buildTaxBreakdown, which used to call it as `_validateStrictInteger(cgst or 0, ...)` -- and
+    `or 0` replaced every falsy value with int 0 *before* the guard ran. So the guard was disarmed
+    on exactly the three fields no test covered, and the two it did cover were the two where it
+    worked. A merchant payload carrying "cgstPaise": 0.0 was accepted by a module whose stated
+    contract is that financial fields are strictly integer paise.
+    """
+    basePayload = {
+        "skuId": "SKU-ADV-002",
+        "title": "Test Title",
+        "description": "Test Desc",
+        "availableStock": 10,
+        "baseUnitPricePaise": 10000,
+        "offeredUnitPricePaise": 9500,
+        "hsnCode": "84821010",
+        "gstRatePercent": 18,
+        "taxBreakdown": {"cgstPaise": 0, "sgstPaise": 0, "igstPaise": 0, "totalTaxPaise": 0},
+        "quoteExpiryTimestamp": 1780000000,
+        "quoteHash": "a" * 64,
+    }
+    for fieldName in ("cgstPaise", "sgstPaise", "igstPaise"):
+        for falsyNonInteger in (0.0, False):
+            taxBreakdown = dict(basePayload["taxBreakdown"], **{fieldName: falsyNonInteger})
+            payload = dict(basePayload, taxBreakdown=taxBreakdown)
+            with pytest.raises(SchemaSanitizationFailureException):
+                sanitizeMerchantSkuQuote(payload)
+
+
+def testSanitizerTreatsAbsentTaxComponentAsZero() -> None:
+    """The absent-key case must keep working; rearming the guard must not make it strict.
+
+    Without this, `_validateStrictInteger(cgst if cgst is not None else 0, ...)` could be
+    "fixed" to reject a missing key and the suite would not notice.
+    """
+    payload = {
+        "skuId": "SKU-ADV-003",
+        "title": "Test Title",
+        "description": "Test Desc",
+        "availableStock": 10,
+        "baseUnitPricePaise": 10000,
+        "offeredUnitPricePaise": 9500,
+        "hsnCode": "84821010",
+        "gstRatePercent": 18,
+        "taxBreakdown": {"totalTaxPaise": 0},
+        "quoteExpiryTimestamp": 1780000000,
+        "quoteHash": "a" * 64,
+    }
+    sanitized = sanitizeMerchantSkuQuote(payload)
+    assert sanitized.taxBreakdown.cgstPaise == 0
+    assert sanitized.taxBreakdown.igstPaise == 0
+
+
+def testSanitizerKeepsProseContainingComparisonOperators() -> None:
+    """A description is not markup: `<` and `>` used as maths must survive.
+
+    The tag pattern was r"<[^>]+>", which matched from the first "<" to the next ">" anywhere in
+    the string. "fits screens < 15in and > 10in" came out as "fits screens 10in" -- silent data
+    loss, no exception, and the merchant sees a truncated listing with nothing explaining it.
+    This is the only defect in the audit where the code produced *wrong output* rather than
+    doing nothing.
+    """
+    assert cleanAndTruncateText("fits screens < 15in and > 10in", 80) == (
+        "fits screens < 15in and > 10in"
+    )
+    assert cleanAndTruncateText("a < b and c > d", 80) == "a < b and c > d"
+    assert cleanAndTruncateText("load < 5kg", 80) == "load < 5kg"
+
+
+def testSanitizerStillStripsRealTags() -> None:
+    """Tightening the pattern must not stop it removing actual markup.
+
+    Paired with the test above: one pins that prose survives, the other that tags do not, so a
+    later loosening in either direction fails here.
+    """
+    assert cleanAndTruncateText("<script>alert(1)</script>", 80) == "alert(1)"
+    assert cleanAndTruncateText("<b>bold</b> text", 80) == "bold text"
+    assert cleanAndTruncateText("<img src=x onerror=alert(1)>", 80) == ""
 
 
 def testSanitizerDetectsTaxBreakdownDrift() -> None:

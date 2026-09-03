@@ -128,7 +128,7 @@ async def test_s01_autonomous_b2b_hardware_purchase_inter_state() -> None:
     total_paise = computeCartSettlementTotal(taxable, gst.totalTaxPaise, shippingPaise=10000, discountPaise=0)
     assert total_paise == 4140000
 
-    item = CartItemSchema(skuId="SKU-B2B-01", quantity=1, unitPricePaise=unit_price, hsnCode="8471", gstRatePercent=18, lineTotalPaise=taxable)
+    item = CartItemSchema(skuId="SKU-B2B-01", quantity=1, unitPricePaise=unit_price, hsnCode="8471", gstRatePercent=18, lineTotalPaise=taxable, category="industrial_hardware")
     tax_breakdown = TaxBreakdownSchema(cgstPaise=0, sgstPaise=0, igstPaise=gst.igstPaise, totalTaxPaise=gst.totalTaxPaise)
     
     cart = createSignedCartMandate(
@@ -146,7 +146,10 @@ async def test_s01_autonomous_b2b_hardware_purchase_inter_state() -> None:
     
     # 4. Invariant Verification
     assert verifyMandateHashChain(intent, cart, exec_m) is True
-    assert validateBudgetGate(intent, cart, exec_m, serverTime=now) is True
+    assert validateBudgetGate(
+        intent, cart, exec_m, serverTime=now,
+        skuCategories=[cart_item.category for cart_item in cart.items],
+    ) is True
     
     # 5. Settlement Execution & GSTR-1 Generation
     redis = MockRedisAsync()
@@ -423,6 +426,7 @@ async def test_s10_end_to_end_autonomous_commerce_settlement_audit_trail() -> No
     item = CartItemSchema(
         skuId=sanitized.skuId, quantity=1, unitPricePaise=sanitized.offeredUnitPricePaise,
         hsnCode=sanitized.hsnCode, gstRatePercent=sanitized.gstRatePercent, lineTotalPaise=sanitized.offeredUnitPricePaise,
+        category="industrial_electronics",
     )
     tax_breakdown = TaxBreakdownSchema(cgstPaise=45000, sgstPaise=45000, igstPaise=0, totalTaxPaise=90000)
     cart = createSignedCartMandate(

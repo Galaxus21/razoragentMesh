@@ -23,7 +23,7 @@ from .mandates.executionMandateSchema import ExecutionMandate
 from .mandates.intentMandateSchema import IntentMandate
 from .nonce.nonceLedger import NonceLedger
 from .settlement.compensationDlq import CompensationDlq
-from .settlement.razorpayRouteClient import RazorpayRouteClient
+from .settlement.routeClientFactory import buildRouteClient
 from .settlement.settlementExceptions import (
     ArithmeticDriftException, ArithmeticEnclaveMismatchException,
     BudgetExceededViolation, CategoryNotAuthorizedException,
@@ -43,6 +43,10 @@ from .settlement.splitManifestBuilder import (
 from .telemetryEmitter import (
     TelemetryEventEmitter, TelemetryEventModel, globalTelemetryEmitter, provenanceLive,
 )
+from .verification.clockOverrideGuard import (
+    ClockOverrideRejectedException,
+    rejectOutOfWindowServerTime,
+)
 from .verification.settlementLedger import SettlementLedger
 
 
@@ -56,7 +60,12 @@ class ExecuteSettlementRequestSchema(BaseModel):
     executionMandate: ExecutionMandate = Field(description="Buyer agent execution commitment (M_E)")
     merchantAccount: str = Field(min_length=1, description="Linked vendor account ID (acc_...)")
     paymentId: str = Field(min_length=1, description="Primary Razorpay/UPI payment identifier")
-    serverTime: Optional[int] = Field(default=None, description="Optional server timestamp")
+    # Not a protocol field: unsigned, and it overrides every expiry check in the saga. Bounded
+    # to the real clock by verification/clockOverrideGuard.py, which explains why.
+    serverTime: Optional[int] = Field(
+        default=None,
+        description="Test-only clock override; rejected unless near the real clock. Omit it.",
+    )
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Custom metadata")
 
 
@@ -108,6 +117,10 @@ def _registerSettlementRoutes(app: FastAPI) -> None:
         emitter: TelemetryEventEmitter = Depends(getTelemetryEmitter),
     ) -> SettlementResult:
         """Executes full 2PC cryptographic mandate verification and Route split payout."""
+        try:
+            rejectOutOfWindowServerTime(payload.serverTime)
+        except ClockOverrideRejectedException as clockError:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(clockError))
         try:
             result = await orchestrator.executeSettlementSaga(
                 intentMandate=payload.intentMandate, cartMandate=payload.cartMandate,
@@ -232,7 +245,7 @@ def _initializeSettlementState(app: FastAPI) -> None:
     if not getattr(app.state, "telemetryEmitter", None):
         app.state.telemetryEmitter = globalTelemetryEmitter
     if not getattr(app.state, "routeClient", None):
-        app.state.routeClient = RazorpayRouteClient(isMockMode=True)
+        app.state.routeClient = buildRouteClient()
     if not getattr(app.state, "compensationDlq", None):
         app.state.compensationDlq = CompensationDlq(redisClient=app.state.redis)
     if not getattr(app.state, "settlementLedger", None):

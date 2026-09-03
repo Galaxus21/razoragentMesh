@@ -7,7 +7,8 @@ import {
   mandateExecPrefix,
   mandateIntentPrefix,
   millisPerSecond,
-  signatureFieldKeys
+  signatureFieldKeys,
+  uncategorizedCartItemCategory
 } from "./sdkConstants.js";
 import { AgentKeyManager } from "./agentKeyManager.js";
 import { canonicalizeJson, computeSha256Digest } from "./jcsCanonicalizer.js";
@@ -117,6 +118,17 @@ export function createSignedIntentMandate(
 
 export const createIntentMandate = createSignedIntentMandate;
 
+/**
+ * Fills in the category the merchant is asserting. Python's CartItemSchema defaults this field
+ * and always emits it, while JSON.stringify drops an undefined key entirely -- so leaving it out
+ * here would make the same cart canonicalize to different bytes on the two sides and every
+ * cross-SDK signature check would fail. Normalising once, before signing, keeps the wire format
+ * identical whether or not the caller classified the SKU.
+ */
+function _withSignedCategory(item: CartItem): CartItem {
+  return { ...item, category: item.category ?? uncategorizedCartItemCategory };
+}
+
 export function createSignedCartMandate(
   params: CreateCartMandateParams,
   merchantSigner: AgentKeyManager
@@ -135,7 +147,7 @@ export function createSignedCartMandate(
     discountPaise: params.discountPaise ?? 0,
     inventoryLockExpiresAt: params.inventoryLockExpiresAt,
     inventoryLockToken: params.inventoryLockToken,
-    items: params.items,
+    items: params.items.map(_withSignedCategory),
     merchantDid: merchantSigner.getAgentDid(),
     merchantGstin: params.merchantGstin,
     merchantStateCode: params.merchantStateCode,
@@ -153,29 +165,47 @@ export function createSignedCartMandate(
 
 export const createCartMandate = createSignedCartMandate;
 
-export function createSignedExecutionMandate(
+/** The Execution Mandate exactly as it is signed: `model_dump()` minus `agentSignature`. */
+export type UnsignedExecutionPayload = Omit<ExecutionMandate, "agentSignature">;
+
+/**
+ * Builds the nine-key payload an Execution Mandate signature covers, without signing it.
+ *
+ * Split out of `createSignedExecutionMandate` so that a caller who cannot sign in-process --
+ * an MCP server handing exact bytes to an external agent that holds its own key -- derives the
+ * payload from this one definition rather than restating it. The canonical shape already
+ * exists in mandateFactory.py and buyerSdkPy/mandateModels.py; a fourth hand-rolled copy would
+ * sign cleanly and fail verification at settlement with no useful error.
+ *
+ * `buyerAgentDid` is a parameter rather than a signer lookup precisely because the agent-held
+ * path has a DID but no key.
+ */
+export function buildUnsignedExecutionPayload(
   params: CreateExecutionMandateParams,
-  buyerAgentSigner: AgentKeyManager
-): ExecutionMandate {
+  buyerAgentDid: string
+): UnsignedExecutionPayload {
   const ts = params.timestamp ?? Math.floor(Date.now() / millisPerSecond);
   const nonce = params.nonce ?? uuidv4().replace(/-/g, "");
   const executionId = params.executionId ?? `${mandateExecPrefix}${uuidv4().replace(/-/g, "").slice(0, 16)}`;
 
-  const intentMandateHash = computeMandateHash(params.intentMandate as unknown as Record<string, unknown>);
-  const cartMandateHash = computeMandateHash(params.cartMandate as unknown as Record<string, unknown>);
-
-  const unsignedPayload = {
-    buyerAgentDid: buyerAgentSigner.getAgentDid(),
-    cartMandateHash,
+  return {
+    buyerAgentDid,
+    cartMandateHash: computeMandateHash(params.cartMandate as unknown as Record<string, unknown>),
     currency: defaultCurrency,
     executionId,
-    intentMandateHash,
+    intentMandateHash: computeMandateHash(params.intentMandate as unknown as Record<string, unknown>),
     nonce,
     settlementAmountPaise: params.settlementAmountPaise,
     timestamp: ts,
     upiCircleToken: params.upiCircleToken
   };
+}
 
+export function createSignedExecutionMandate(
+  params: CreateExecutionMandateParams,
+  buyerAgentSigner: AgentKeyManager
+): ExecutionMandate {
+  const unsignedPayload = buildUnsignedExecutionPayload(params, buyerAgentSigner.getAgentDid());
   const agentSignature = buyerAgentSigner.signPayload(unsignedPayload);
   return { ...unsignedPayload, agentSignature };
 }

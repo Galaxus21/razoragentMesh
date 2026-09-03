@@ -9,6 +9,7 @@ import {
   hsnPresetOptions,
   maxDiscountBps,
   maxQuoteTtlSeconds,
+  meshCatalogProxyEndpoint,
   minQuoteTtlSeconds,
   minVolumeQuantity,
   paisePerInrUnit,
@@ -106,7 +107,7 @@ const validTestFormData: MerchantCatalogFormData = {
   },
 };
 
-describe("Challenger 2 Empirical Verification: Form Submission & Offline Fallback", () => {
+describe("Challenger 2 Empirical Verification: Form Submission & Failure Reporting", () => {
   async function simulatePublishToMesh(
     formData: MerchantCatalogFormData,
     customFetch: (url: string, init?: RequestInit) => Promise<Response>
@@ -121,7 +122,9 @@ describe("Challenger 2 Empirical Verification: Form Submission & Offline Fallbac
 
     try {
       const payload = buildUniversalProductPayload(formData);
-      const endpoint = `/api/v1/merchant/${encodeURIComponent(formData.merchantDid)}/catalog`;
+      // Mirrors the real hook: a server-side proxy, not a relative path to a route the
+      // dashboard does not serve. The old value 404ed on every publish.
+      const endpoint = meshCatalogProxyEndpoint;
       const response = await customFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,21 +145,18 @@ describe("Challenger 2 Empirical Verification: Form Submission & Offline Fallbac
         status: "error",
         message: `Mesh catalog rejected listing: ${errorText} (HTTP ${response.status})`,
       };
-    } catch {
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
       return {
-        status: "offline",
-        message:
-          "Mesh API node unreachable (local dev mode). Validated payload synthesized and ready for deployment.",
-        skuId: formData.skuId,
-        merchantDid: formData.merchantDid,
-        timestampMs: Date.now(),
+        status: "error",
+        message: `Publish failed -- the dashboard could not be reached: ${detail}`,
       };
     }
   }
 
   it("should successfully return status 'success' (CREATED) when backend responds with HTTP 200/201", async () => {
     const mockSuccessFetch = async (url: string, init?: RequestInit): Promise<Response> => {
-      assert.ok(url.includes("/api/v1/merchant/"));
+      assert.equal(url, meshCatalogProxyEndpoint);
       assert.equal(init?.method, "POST");
       const body = JSON.parse(init?.body as string);
       assert.equal(body.skuId, validTestFormData.skuId);
@@ -176,17 +176,28 @@ describe("Challenger 2 Empirical Verification: Form Submission & Offline Fallbac
     assert.ok(typeof result.timestampMs === "number" && result.timestampMs > 0);
   });
 
-  it("should gracefully handle network failure / offline simulation with status 'offline' (CREATED Simulated) without unhandled promise rejections", async () => {
+  it("should report a network failure as a failure, never as success-flavoured text", async () => {
     const mockNetworkFailureFetch = async (): Promise<Response> => {
       throw new TypeError("Failed to fetch: Connection refused (ECONNREFUSED)");
     };
 
     const result = await simulatePublishToMesh(validTestFormData, mockNetworkFailureFetch);
-    assert.equal(result.status, "offline");
-    assert.ok(result.message.includes("Mesh API node unreachable (local dev mode)"));
-    assert.equal(result.skuId, validTestFormData.skuId);
-    assert.equal(result.merchantDid, validTestFormData.merchantDid);
-    assert.ok(typeof result.timestampMs === "number" && result.timestampMs > 0);
+
+    // The listing did not reach the mesh, so the operator must be told it failed. This branch
+    // previously returned status "offline" with "Validated payload synthesized and ready for
+    // deployment" -- text a merchant reasonably reads as "published". The old test asserted
+    // that message was correct, which is why it stayed wrong.
+    assert.equal(result.status, "error");
+    assert.ok(
+      /fail/i.test(result.message),
+      `a failed publish must say so; got: ${result.message}`
+    );
+    for (const reassurance of ["ready for deployment", "synthesized", "local dev mode"]) {
+      assert.ok(
+        !result.message.includes(reassurance),
+        `a failed publish must not reassure the operator with "${reassurance}"`
+      );
+    }
   });
 
   it("should return status 'error' when backend rejects payload with HTTP 400 / 500", async () => {

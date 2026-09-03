@@ -1,5 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
-import { defaultCatalogFormState, HsnPresetOption } from "@/constants/merchantCatalogConstants";
+import {
+  defaultCatalogFormState,
+  HsnPresetOption,
+  meshCatalogProxyEndpoint,
+} from "@/constants/merchantCatalogConstants";
 import {
   buildUniversalProductPayload,
   resolveGstFromHsn,
@@ -201,8 +205,11 @@ export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
     setIsSubmitting(true);
     setSubmissionResult(null);
     try {
-      const endpoint = `/api/v1/merchant/${encodeURIComponent(formData.merchantDid)}/catalog`;
-      const response = await fetch(endpoint, {
+      // Server-side proxy, not the merchant API directly. The previous relative path resolved
+      // against the dashboard origin, where nothing serves it, so every publish 404ed and no
+      // listing ever reached the mesh. The browser cannot call port 4002 itself either: inside
+      // Docker the merchant API is addressable only by compose service name.
+      const response = await fetch(meshCatalogProxyEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -222,14 +229,14 @@ export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
           message: `Mesh catalog rejected listing: ${errorText} (HTTP ${response.status})`,
         });
       }
-    } catch {
+    } catch (error: unknown) {
+      // A publish that did not happen is a failure, reported as one. This branch used to say
+      // "Validated payload synthesized and ready for deployment", which reads like success --
+      // so a merchant whose listing never reached the mesh was told it had.
+      const detail = error instanceof Error ? error.message : String(error);
       setSubmissionResult({
-        status: "offline",
-        message:
-          "Mesh API node unreachable (local dev mode). Validated payload synthesized and ready for deployment.",
-        skuId: formData.skuId,
-        merchantDid: formData.merchantDid,
-        timestampMs: Date.now(),
+        status: "error",
+        message: `Publish failed -- the dashboard could not be reached: ${detail}`,
       });
     } finally {
       setIsSubmitting(false);

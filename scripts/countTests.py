@@ -5,7 +5,13 @@ documents that quote it, so no test count is ever hand-typed.
 
 Rule V-01 (verification-standards.md) requires every quantitative claim to carry the
 command that produced it. The generated block therefore embeds each command next to
-its number, and `--check` fails CI the moment a document drifts from measurement.
+its number, and `--check` exits non-zero the moment a document drifts from measurement.
+
+    python scripts/countTests.py            # measure and print
+    python scripts/countTests.py --write    # sync every document that quotes a count
+    python scripts/countTests.py --check    # fail if any of those documents has drifted
+
+This repository has no CI by choice; the commands above are run by hand.
 """
 
 import argparse
@@ -51,9 +57,9 @@ documentedFilePaths: List[Path] = [
     meshRoot / "GUIDE.md",
 ]
 
-# Lives in the outer workspace, which is a separate (untracked) directory that CI never checks
-# out. Synchronised when it is there, so local runs keep it honest; skipped when it is not, rather
-# than failing the build over a file this repository cannot contain.
+# Lives in the outer workspace, a separate (untracked) directory that is not part of this
+# repository. Synchronised when it is there, so local runs keep it honest; skipped when it is not,
+# rather than failing over a file this repository cannot contain.
 optionalFilePaths: List[Path] = [
     workspaceRoot / ".agents" / "rules" / "project-knowledge-base.md",
 ]
@@ -98,7 +104,7 @@ def measureAllSuites() -> List[SuiteResult]:
 
 
 def measurePythonSuite() -> SuiteResult:
-    """Collection only -- pytest never executes here, so this stays fast in CI."""
+    """Collection only -- pytest never executes here, so a by-hand run stays fast."""
     output = runCommand(pythonSuiteCommand, meshRoot)
     match = pytestCollectedPattern.search(output)
     if not match:

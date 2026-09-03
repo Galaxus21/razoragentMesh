@@ -3,6 +3,7 @@ import {
   BookOpen,
   Bot,
   Briefcase,
+  FlaskConical,
   Server,
   Store,
 } from "lucide-react";
@@ -35,9 +36,28 @@ export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
     icon: Server,
     children: [
       { route: "/overview", label: "Overview", description: "Mesh Command Center" },
-      { route: "/protocol", label: "Protocol Map", description: "Six Layers, Probed Live" },
       { route: "/self-healing", label: "Self-Healing", description: "Vector Healer & SLA Watch" },
       { route: "/infrastructure", label: "Infrastructure", description: "2PC Splits & Webhooks" },
+    ],
+  },
+  // The protocol surfaces a reviewer needs -- read the layer, then exercise it -- used to be
+  // split across Platform Ops (the map) and AI Buyer Agents (the two playgrounds and the SDK
+  // console), so evaluating one layer end to end meant hopping between two categories. They are
+  // one section now, ordered map-then-run so a reader meets the protocol before driving it.
+  {
+    id: "protocolPlayground",
+    label: "Protocol Playground",
+    icon: FlaskConical,
+    children: [
+      { route: "/protocol", label: "Protocol Map", description: "Six Layers, Probed Live" },
+      { route: "/playground/layers", label: "Layer Explorer", description: "Packages At Each Stage" },
+      { route: "/playground", label: "Run The Protocol", description: "Scenarios End To End" },
+      { route: "/playground/adversarial", label: "Adversarial Playground", description: "Break It On Purpose" },
+      // Sits beside the two playgrounds because it is the same protocol view driven from
+      // outside: an external agent's MCP calls, grouped by session, rather than a run this
+      // dashboard started.
+      { route: "/playground/live-agent", label: "Live Agent", description: "Watch An External Agent" },
+      { route: "/sdk-console", label: "SDK Console", description: "Call The SDK Yourself" },
     ],
   },
   {
@@ -45,9 +65,6 @@ export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
     label: "AI Buyer Agents",
     icon: Bot,
     children: [
-      { route: "/playground", label: "Protocol Playground", description: "Run the Protocol Live" },
-      { route: "/playground/adversarial", label: "Adversarial Playground", description: "Break It On Purpose" },
-      { route: "/sdk-console", label: "SDK Console", description: "Call The SDK Yourself" },
       { route: "/agent-observability", label: "Agent Observability", description: "MCP Reasoning Traces" },
       { route: "/negotiation-hub", label: "Negotiation Hub", description: "B2B Dynamic Concessions" },
     ],
@@ -89,6 +106,7 @@ export const collapseLabel = "Collapse sidebar";
 
 export const defaultExpandedCategories: Record<string, boolean> = {
   platformOps: true,
+  protocolPlayground: true,
   aiBuyerAgents: true,
   cfosAuditors: true,
   merchants: true,

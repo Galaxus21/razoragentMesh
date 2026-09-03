@@ -12,6 +12,7 @@ from ..settlement.settlementExceptions import (
     CategoryNotAuthorizedException,
     MandateExpiredException,
     SingleTransactionLimitExceededException,
+    TaxHeadMismatchException,
     UnauthorizedAgentException,
 )
 from .arithmeticEnclave import (
@@ -38,7 +39,11 @@ def validateBudgetGate(
 
     _verifyDelegatedAgent(intentMandate, executionMandate)
 
-    enclaveTotal = _recomputeEnclaveTotal(cartMandate)
+    # Determined once and shared. Computing it separately in each consumer meant the copy
+    # inside the total recomputation could be inverted with no observable effect -- CGST+SGST
+    # and IGST sum to the same total -- so one of the two determinations was unfalsifiable.
+    isIntraState = cartMandate.merchantStateCode == cartMandate.buyerDeliveryStateCode
+    enclaveTotal = _recomputeEnclaveTotal(cartMandate, isIntraState)
     settlementAmt = executionMandate.settlementAmountPaise
     if enclaveTotal != settlementAmt or cartMandate.totalPaise != settlementAmt:
         raise ArithmeticEnclaveMismatchException(
@@ -47,6 +52,7 @@ def validateBudgetGate(
         )
 
     _verifyBudgetCaps(intentMandate, settlementAmt)
+    _verifyTaxHeads(cartMandate, isIntraState)
     _verifyCategoryAuthorization(intentMandate, skuCategories)
     return True
 
@@ -70,9 +76,8 @@ def _verifyDelegatedAgent(
         )
 
 
-def _recomputeEnclaveTotal(cartMandate: CartMandate) -> int:
+def _recomputeEnclaveTotal(cartMandate: CartMandate, isIntraState: bool) -> int:
     """Calculates total paise from items and taxes using pure integer arithmetic."""
-    isIntraState = cartMandate.merchantStateCode == cartMandate.buyerDeliveryStateCode
     recomputedSubtotal = 0
     recomputedTax = 0
 
@@ -88,6 +93,48 @@ def _recomputeEnclaveTotal(cartMandate: CartMandate) -> int:
         cartMandate.shippingPaise,
         cartMandate.discountPaise,
     )
+
+
+def _verifyTaxHeads(cartMandate: CartMandate, isIntraState: bool) -> None:
+    """Checks WHICH tax heads the cart declares, not merely that they sum correctly.
+
+    `_recomputeEnclaveTotal` compares totals, and CGST+SGST and IGST come to the same total for
+    the same rate -- 18% on Rs.3,500 is 63000 paise either way. So a cart declaring the whole
+    amount as IGST on an intra-state sale settles cleanly today: the money is right and the
+    statutory heads are wrong, which surfaces as a mis-filed GSTR-1 rather than as a bad number.
+
+    Surfaced by mutation testing: flipping `merchantStateCode == buyerDeliveryStateCode` to `!=`
+    survived the entire suite, because nothing downstream of the total recomputation can observe
+    the difference. It is caught here instead, which is why `validateBudgetGate`determines the
+    place of supply once and hands it to both.
+
+    The place/rate rule is not restated here -- `computeGstBreakdown` owns it and this reuses it,
+    accumulating per line because tax is floored per line.
+    """
+    expectedCgst = 0
+    expectedSgst = 0
+    expectedIgst = 0
+    for item in cartMandate.items:
+        lineTaxable = computeLineItemTotal(item.unitPricePaise, item.quantity)
+        gst = computeGstBreakdown(lineTaxable, item.gstRatePercent, isIntraState)
+        expectedCgst += gst.cgstPaise
+        expectedSgst += gst.sgstPaise
+        expectedIgst += gst.igstPaise
+
+    declared = cartMandate.taxBreakdown
+    if (
+        declared.cgstPaise != expectedCgst
+        or declared.sgstPaise != expectedSgst
+        or declared.igstPaise != expectedIgst
+    ):
+        placeOfSupply = "intra-state" if isIntraState else "inter-state"
+        raise TaxHeadMismatchException(
+            f"Cart {cartMandate.cartId} is {placeOfSupply} "
+            f"({cartMandate.merchantStateCode} -> {cartMandate.buyerDeliveryStateCode}) and must "
+            f"declare cgst={expectedCgst}, sgst={expectedSgst}, igst={expectedIgst} paise, but "
+            f"declares cgst={declared.cgstPaise}, sgst={declared.sgstPaise}, "
+            f"igst={declared.igstPaise}: ₹0 charged"
+        )
 
 
 def _verifyBudgetCaps(intentMandate: IntentMandate, amountPaise: int) -> None:
@@ -106,13 +153,36 @@ def _verifyCategoryAuthorization(
     intentMandate: IntentMandate,
     skuCategories: Optional[list[str]],
 ) -> None:
-    """Ensures cart categories are within delegated whitelist."""
-    if not intentMandate.authorizedCategories or not skuCategories:
+    """Ensures cart categories are within the delegated whitelist.
+
+    An empty `authorizedCategories` is an unrestricted delegation, not a broken one: the user
+    placed no category bound, so any cart is in scope. A non-empty whitelist is a bound, and a
+    bound that cannot be evaluated must refuse. Returning early on a missing category list --
+    which this did -- meant a caller silenced the whole check by passing nothing, and every
+    caller did: `skuCategories` had no production caller at all, so `authorized_categories` was
+    recorded on the mandate and enforced nowhere.
+
+    Comparison is case-insensitive to match `catalogStore.ts`, which already selects catalog
+    SKUs by `category.toLowerCase()`. One category vocabulary, one notion of equality.
+    """
+    if not intentMandate.authorizedCategories:
         return
-    unauthorized = set(skuCategories) - set(intentMandate.authorizedCategories)
+
+    authorized = {category.strip().casefold() for category in intentMandate.authorizedCategories}
+    if not skuCategories:
+        raise CategoryNotAuthorizedException(
+            f"Intent mandate {intentMandate.mandateId} restricts spending to "
+            f"{sorted(intentMandate.authorizedCategories)}, but the cart carries no category to "
+            f"check against it: ₹0 charged"
+        )
+
+    unauthorized = {
+        category for category in skuCategories if category.strip().casefold() not in authorized
+    }
     if unauthorized:
         raise CategoryNotAuthorizedException(
-            f"Unauthorized product categories in cart: {sorted(list(unauthorized))}"
+            f"Unauthorized product categories in cart: {sorted(unauthorized)} "
+            f"(authorized: {sorted(intentMandate.authorizedCategories)}): ₹0 charged"
         )
 
 

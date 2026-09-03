@@ -11,7 +11,7 @@ from fastapi import Request
 
 from .nonce.nonceLedger import NonceLedger
 from .settlement.compensationDlq import CompensationDlq
-from .settlement.razorpayRouteClient import RazorpayRouteClient
+from .settlement.routeClientFactory import buildRouteClient
 from .settlement.settlementOrchestrator import SettlementOrchestrator
 from .settlement.splitManifestBuilder import (
     defaultLogisticsAccount, defaultProtocolFeeAccount, defaultProtocolFeePaise,
@@ -76,7 +76,7 @@ def getSettlementOrchestrator(request: Request) -> SettlementOrchestrator:
         return orchestrator
     routeClient = getattr(request.app.state, "routeClient", None)
     if routeClient is None:
-        routeClient = RazorpayRouteClient(isMockMode=True)
+        routeClient = buildRouteClient()
         request.app.state.routeClient = routeClient
     orchestrator = SettlementOrchestrator(
         routeClient=routeClient, nonceLedger=getNonceLedger(request),

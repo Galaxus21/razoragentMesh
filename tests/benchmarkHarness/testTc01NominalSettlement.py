@@ -68,6 +68,7 @@ def _buildTc01Mandates(
     totalPaise = taxableSubtotal + totalTaxPaise
 
     cartItem = CartItemSchema(
+        category="industrial_electronics",
         skuId=nominalSkuId, quantity=nominalQuantity, unitPricePaise=nominalUnitPricePaise,
         hsnCode="8504", gstRatePercent=nominalGstRate, lineTotalPaise=taxableSubtotal,
     )

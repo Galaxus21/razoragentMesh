@@ -244,6 +244,13 @@ def buildOosHealingEvent(sessionId: str, nowMs: int) -> Dict[str, Any]:
             "originalPricePaise": 4200000,
             "substitutePricePaise": 4250000,
             "priceDeltaPaise": 50000,
+            # Scripted, like every other number in this file, and stamped SYNTHETIC on the way
+            # out. It is called out because this one used to be read as a measurement: it was
+            # the ONLY producer of OOS_HEALED telemetry in the repository, so the dashboard's
+            # "Sub-300ms Vector Self-Healing" tile displayed 214ms whatever the healer did.
+            # The measured figure now comes from POST /api/v1/catalog/heal-oos, which times
+            # OosInterceptor.findSubstitute, and metricsBar.tsx excludes SYNTHETIC events from
+            # that average.
             "healingDurationMs": 214,
             "patchedMandateHash": "0x12fe89ab34cd56ef78ab90cd12ef34ab56cd78ef90ab12cd34ef56ab78cd90ef",
             "negativeConstraintsPassed": True,

@@ -33,18 +33,6 @@ class InsufficientEscrowBalanceException(GatewayBaseException):
     """Raised when micro-escrow balance is insufficient for turn micro-metering."""
 
 
-class MicroEscrowDebitException(GatewayBaseException):
-    """Raised when an error occurs during micro-escrow debit operation."""
-
-
-class AstCompilationException(GatewayBaseException):
-    """Raised when compiling negotiated terms into commercial contract AST fails."""
-
-
-class InvalidBidPayloadException(GatewayBaseException):
-    """Raised when input bid payload fails domain or schema validation."""
-
-
 class UnsafeCallbackUrlException(GatewayBaseException, ValueError):
     """Raised when a webhook callback URL targets a non-HTTPS, private, loopback,
     or link-local address, to prevent server-side request forgery (SSRF).
@@ -63,13 +51,10 @@ except Exception:
 
 __all__ = [
     "ArithmeticDriftException",
-    "AstCompilationException",
     "EscrowSessionNotFoundException",
     "GatewayBaseException",
     "InsufficientEscrowBalanceException",
-    "InvalidBidPayloadException",
     "InvalidProofOfWorkException",
-    "MicroEscrowDebitException",
     "NegotiationExhaustedException",
     "NonMonotonicConcessionViolation",
     "PowChallengeExpiredException",

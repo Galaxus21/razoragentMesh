@@ -5,6 +5,9 @@ import { CheckCircle2, DollarSign, Layers, ShieldCheck, Zap } from "lucide-react
 import { TelemetryEvent } from "@/types/telemetryEventTypes";
 import { formatLatency, formatPaiseToCompactInr } from "@/lib/currencyFormatter";
 
+// Events replayed from the seeder carry this. They are demo data, not measurements.
+const syntheticProvenance = "SYNTHETIC";
+
 export interface MetricsBarProps {
   readonly events: ReadonlyArray<TelemetryEvent>;
 }
@@ -17,6 +20,7 @@ export function MetricsBar({ events }: MetricsBarProps): React.JSX.Element {
     let convergedCount = 0;
     let mandateSignedCount = 0;
     let healingCount = 0;
+    let measuredHealingCount = 0;
     let totalHealingMs = 0;
 
     for (const evt of events) {
@@ -31,11 +35,19 @@ export function MetricsBar({ events }: MetricsBarProps): React.JSX.Element {
         mandateSignedCount += 1;
       } else if (evt.eventType === "OOS_HEALED") {
         healingCount += 1;
-        totalHealingMs += evt.payload.healingDurationMs;
+        // Only measured events contribute to the latency figure. This tile sits next to a
+        // "< 300ms SLA" label, so it reads as a measurement of the running system -- and the
+        // seeded replay stream (scripts/seedTelemetryStream.py) emits a fixed 214ms. Averaging
+        // that in published a constant as a measurement no matter what the code did.
+        if (evt.provenance !== syntheticProvenance) {
+          measuredHealingCount += 1;
+          totalHealingMs += evt.payload.healingDurationMs;
+        }
       }
     }
 
-    const avgHealingMs = healingCount > 0 ? totalHealingMs / healingCount : 0;
+    const avgHealingMs =
+      measuredHealingCount > 0 ? totalHealingMs / measuredHealingCount : 0;
     return {
       totalSettledPaise,
       paymentCount,
@@ -43,6 +55,7 @@ export function MetricsBar({ events }: MetricsBarProps): React.JSX.Element {
       convergedCount,
       mandateSignedCount,
       healingCount,
+      measuredHealingCount,
       avgHealingMs,
     };
   }, [events]);
@@ -108,9 +121,13 @@ export function MetricsBar({ events }: MetricsBarProps): React.JSX.Element {
         </div>
         <div className="mt-2 flex items-baseline gap-2">
           <span className="font-mono text-xl font-bold text-textPrimary">
-            {formatLatency(metrics.avgHealingMs)}
+            {metrics.measuredHealingCount > 0 ? formatLatency(metrics.avgHealingMs) : "--"}
           </span>
-          <span className="text-xs text-statusWarning font-medium">&lt; 300ms SLA</span>
+          {/* The SLA label only appears beside a real measurement. Showing "0ms < 300ms SLA"
+              when nothing has been measured is the same false claim in a cheerier form. */}
+          <span className="text-xs text-statusWarning font-medium">
+            {metrics.measuredHealingCount > 0 ? "< 300ms SLA" : "no measured heals yet"}
+          </span>
         </div>
         <p className="mt-1 text-xs text-textMuted">Cosine sim &ge; 0.85 vector search</p>
       </div>

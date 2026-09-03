@@ -3,7 +3,7 @@ title: "RazorAgent Mesh v2.0 — Developer Onboarding Guide"
 description: "Provides an integration guide for merchants and buyer agents covering key management, catalog ingestion, AP2 mandates, 2PC settlement, and code examples."
 navLabel: "Developer Onboarding"
 navDescription: "End-to-End Integration Guide"
-order: 2
+order: 3
 icon: "Rocket"
 audience: "developer"
 ---
@@ -57,8 +57,10 @@ The protocol operates across 5 distinct cryptographic, discovery, negotiation, a
 │   └── SHA-256 Dynamic Proof-of-Work (PoW) difficulty challenges + Anti-Replay Ledger  │
 │                                                                                        │
 │ Layer 1: Deterministic Discovery Enclave (MCP Server)                                  │
-│   └── Anthropic JSON-RPC 2.0 Tools (get_live_sku_quote, reserve_inventory_lock,       │
-│       verify_shipping_sla) + 4-Tier Auto-Discount Engine + HMAC-SHA256 Quote Digest   │
+│   └── Anthropic JSON-RPC 2.0 Tools: search_catalog, get_live_sku_quote,               │
+│       reserve_inventory_lock, verify_shipping_sla, establish_agent_delegation,         │
+│       create_cart_mandate, sign_execution_mandate, execute_settlement                  │
+│       + 4-Tier Auto-Discount Engine + HMAC-SHA256 Quote Digest                         │
 │                                                                                        │
 │ Layer 2: HTTP 402-INR Dynamic Negotiation Gateway                                      │
 │   └── Micro-escrow pre-auth + Rubinstein-Ståhl game-theoretic bilateral bargaining │

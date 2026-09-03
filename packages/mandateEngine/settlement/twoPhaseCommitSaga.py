@@ -250,7 +250,12 @@ class TwoPhaseCommitSaga:
         """
         self.verifyMandateSignatures(intentMandate, cartMandate, executionMandate)
         verifyMandateChain(intentMandate, cartMandate, executionMandate)
-        validateBudgetGate(intentMandate, cartMandate, executionMandate, serverTime)
+        # Keyword-bound on purpose: the fourth positional parameter is `currentTimestamp`, not
+        # `serverTime`, so the old positional call bound the authoritative clock to the advisory one.
+        validateBudgetGate(
+            intentMandate, cartMandate, executionMandate,
+            skuCategories=_signedCartCategories(cartMandate), serverTime=serverTime,
+        )
         _verifyInventoryLockActive(cartMandate, serverTime)
 
         await self._nonceLedger.validateAndRecordNonce(
@@ -304,6 +309,18 @@ class TwoPhaseCommitSaga:
             expiresAtUnix=intentMandate.validUntilTimestamp,
             serverTime=serverTime,
         )
+
+
+def _signedCartCategories(cartMandate: CartMandate) -> list[str]:
+    """Reads the categories the merchant signed for, which is the only trustworthy source.
+
+    `validateBudgetGate` accepts `skuCategories` from its caller, and until now no caller passed
+    any, so `authorized_categories` on the Intent Mandate was recorded and never enforced. The
+    list has to come from the cart itself: an agent free to name its own categories would name
+    whichever ones its delegation happened to authorize, and the check would attest to nothing.
+    Merchant-signed, it is a statement the merchant is accountable for.
+    """
+    return [item.category for item in cartMandate.items]
 
 
 def _verifyInventoryLockActive(
