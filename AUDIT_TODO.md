@@ -44,10 +44,32 @@ clean. `mcpServer` in particular has had one item found in it (15) and no system
 - *Settlement, crypto and GST internals.* The 2PC saga, the Ed25519 path and the arithmetic enclave
   were treated as out of scope beyond what items 3 and 6 name — they are the parts pass one found
   genuinely exercised, and `TEST_QUALITY_AUDIT.md` §3.3 and §3.5 already probe the enclave.
-- *Runtime verification of the full mesh.* `docker compose up --build` was not run. Findings that
-  needed execution were verified in-process — FastAPI's `TestClient` against the real app factory
-  (item 17), direct calls into the real modules (items 20, 27, 28, 29, 30) — and each carries the
-  command. The npm suites in `mcpServer`, `buyerSdkTs` and `telemetryDashboard` were not run.
+- *Runtime verification of the full mesh.* **Done on 2026-09-03 — no longer an exclusion.**
+  `docker compose up -d --build` was run against the working tree; all eight services came up
+  healthy on the first attempt with no build fixes, and every npm suite was run. The full
+  dress-rehearsal record is in the *Mesh Dress Rehearsal* report; what it found, and what has
+  since been fixed, is summarised below.
+
+  Six of six naive third-party Gemini agents (via `agy`, no repo access) completed real
+  settlements in 43–117s, each producing a correct GSTR-1 invoice — so the headline claim holds.
+  The run also surfaced five defects that 1,500+ green unit tests could not reach, all since
+  fixed and each with a regression test:
+
+  1. a quote that lapsed reported a *hash mismatch* rather than an expiry (the most common
+     refusal of the whole run, 10 occurrences);
+  2. a custodial delegation bought exactly once, dying at `sign_execution_mandate` with a raw
+     crypto error *after* taking real inventory — and carried its settled state forward, which
+     made a replay of the previous mandate reachable;
+  3. `heal-oos` returned HTTP 500 on every request once a merchant published from the Studio
+     (`json.loads("25")` is an `int`, and the SCAN glob matched `:stock` keys);
+  4. an unmapped pincode was silently taxed as Karnataka;
+  5. the tax-head guard was shadowed by the arithmetic enclave at odd quantities.
+
+  Three built features were also unreachable and are now wired: the compiled office SKUs were
+  never indexed (so `search_catalog` could not find `SKU-CHAIR-001`), price-drop alerts registered
+  as `active` but nothing ever dispatched them, and a live catalog edit silently erased a SKU's
+  promotions. The `OOS_HEALED` observation this file asks for below is now reachable:
+  `POST /api/v1/catalog/heal-oos` answers 200 with `embeddingMode: model`.
 
 **Checked and clean**, recorded so the same ground is not re-swept:
 

@@ -280,6 +280,60 @@ freezes the count at three so a fourth cannot appear. The other benchmarks do im
 Razorpay API reference before live use. The mechanism is correct regardless of the header
 string.
 
+**An order cannot be looked up after the fact.** `SettlementResult` -- carrying the `paymentId`,
+the `transfers[]` and the full GSTR-1 invoice -- is built at `settlementOrchestrator.py:192` and
+returned to the caller. It is never persisted: the only settlement keys in Redis are existence
+flags for replay defence. If the caller loses the response, the receipt is unrecoverable. There
+is no `get_order_status` tool and no invoice re-fetch endpoint.
+
+**There is no cancel or refund path.** `AmendmentMandate` has a schema
+(`mandateEngine/mandates/amendmentMandateSchema.py`), a factory, and builders in both SDKs -- but
+no verifier and no route consumes one. The Route client exposes `capturePayment`,
+`createTransfer` and `reverseTransfer` and no `refundPayment`, and `compensateTransfers` reverses
+the *split transfers*, not the primary capture. Reversing a settled purchase would also need the
+transfer IDs, which live only in the unpersisted result above. This is the largest absent feature
+and it is blocked on order persistence.
+
+**A delegation cannot be scoped to a merchant.** It bounds budget, categories and validity;
+there is no `authorized_merchants` field. The pattern to add would mirror
+`_verifyCategoryAuthorization` and check `cartMandate.merchantDid` (merchant-signed) rather than
+`merchant_account` (caller-supplied and unsigned). With one hardcoded demo merchant key it would
+be structurally correct but not yet discriminating, which is why it was not added.
+
+**Out-of-stock substitution is HTTP-only.** `POST /api/v1/catalog/heal-oos` works and publishes
+`OOS_HEALED`, but no MCP tool reaches it, so an agent that hits an out-of-stock SKU over MCP is
+told no and has to search again itself.
+
+**A negotiated price is recorded, not applied.** `negotiate_price` runs the real protocol and the
+gateway compiles an immutable contract AST on convergence, but nothing feeds that price back into
+`get_live_sku_quote` -- which remains the only source of a bindable `quote_hash`. An agent that
+negotiates and then quotes is quoted the list price. Wiring the two together needs an answer to
+who may claim a negotiated price, which is a design question, not a missing line.
+
+**Negotiation state is process-local.** `negotiateRoute.activeNegotiators` is a plain dict keyed
+`{buyerAgentDid}:{skuId}`, not Redis. It does not survive a gateway restart and would not work
+across replicas. Fine for a single-container demo; the tool's description says so rather than
+implying durability.
+
+**The merchant cost floor is looked up and then ignored.** `_resolveSellerCostFloor` reads a
+margin policy from Redis and passes it into `RubinsteinStahlNegotiator`, which forwards it to
+`computeSellerCounterAsk` -- a method the route never calls, because the route takes the seller's
+ask from the request instead. Outside tests, the policy influences no outcome.
+
+**Six states resolve to the wrong tax code at two-digit pincode granularity.** `pincodePrefixStateMap`
+keys on the first two digits, which cannot separate Goa (403xxx, resolved as Maharashtra --
+GST state 27 rather than 30), Puducherry (605xxx), Sikkim (737xxx), Andaman & Nicobar (744xxx),
+Ladakh (194xxx), or the individual north-eastern states inside the 79x block. Correcting this
+needs three-digit granularity in both the TypeScript and Python maps, and there is no shared
+fixture keeping the two in step -- the nearest precedent is `tests/fixtures/gstGoldenVectors.json`.
+An unmapped prefix is now refused rather than silently taxed as Karnataka; these six are mapped,
+just mapped coarsely.
+
+**The Python buyer SDK cannot negotiate.** It has `getPowChallenge`, `createEscrowSession` and
+`releaseEscrow`, and imports `endpointMeshNegotiate` for URL routing, but there is no
+`negotiateTurn` method -- so the negotiation loop exists only in the MCP server's
+`negotiate_price`. The TypeScript SDK is in the same position.
+
 ### Where the engineering effort actually went
 
 Integer-paise arithmetic with no floating point in any monetary path; RFC 8785 JCS

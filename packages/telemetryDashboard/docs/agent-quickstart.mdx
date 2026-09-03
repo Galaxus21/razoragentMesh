@@ -89,7 +89,7 @@ Use absolute paths for `cwd` if your client does not resolve relative ones.
 
 ### Confirm the connection
 
-Ask your agent to list its tools. You should see **eight**:
+Ask your agent to list its tools. You should see **ten**:
 
 They are listed in the order they are meant to be called:
 
@@ -97,12 +97,22 @@ They are listed in the order they are meant to be called:
 |---|---|
 | `establish_agent_delegation` | Pairs your agent, issues a signed Intent Mandate |
 | `search_catalog` | Natural-language product discovery |
+| `browse_catalog` | Lists what the mesh sells, with filters and paging |
 | `get_live_sku_quote` | Live price, tax and discount for a SKU |
+| `negotiate_price` | Bargains for a lower unit price over x402-INR |
 | `reserve_inventory_lock` | Atomic stock reservation with a fencing token |
 | `verify_shipping_sla` | Serviceability and delivery-tier check |
 | `create_cart_mandate` | Merchant-signed cart at mesh-derived prices |
 | `sign_execution_mandate` | Binds intent and cart into an Execution Mandate |
 | `execute_settlement` | Runs the 2PC settlement saga |
+
+Two of these are optional. `browse_catalog` is there for when you cannot phrase a good search
+query, or want to see the range before choosing. `negotiate_price` runs a real alternating-offer
+negotiation -- five turns, each gated by a proof-of-work solve and charged ₹0.50 from a
+micro-escrow it opens and releases for you. It is worth a call on anything expensive and a waste
+on anything cheap, and it reports both the saving and the fees so your agent can tell which.
+Note that a negotiated price is recorded in the gateway's contract AST and is **not** applied to
+your quote: `get_live_sku_quote` is still the only source of a bindable `quote_hash`.
 
 Pair first. In `mesh_demo_custodial` the mesh mints your buyer DID inside
 `establish_agent_delegation`, so a `buyer_agent_id` to quote with does not exist until you have
@@ -116,8 +126,8 @@ In the dashboard, open **Merchant Studio** and publish a product — give it a t
 find in plain language, like *Ergonomic Mesh Office Chair with Lumbar Support*.
 
 Publishing writes the listing to Redis and indexes it in Qdrant, so it becomes discoverable to
-`search_catalog` immediately. The seeded fixtures are industrial parts, so anything you add in a
-different category is easy to pick out of search results.
+`search_catalog` immediately. The mesh boots with two seeded sets -- industrial parts and office
+equipment -- so give yours a distinctive title if you want it easy to pick out of search results.
 
 Anything you publish lives in the running containers, not in the fixtures — `docker compose down -v`
 removes it.
