@@ -1,5 +1,6 @@
 """Unit test suite for merchantApi catalog manager, Qdrant patcher, and vectorizer."""
 
+import json
 from typing import Any
 from decimal import Decimal
 import pytest
@@ -213,3 +214,48 @@ async def testAutoVectorizerNativeClientUpsertAndRemove() -> None:
     assert len(deleteCalls) == 1
     assert deleteCalls[0]["points_selector"].points == [pointIdForSku("SKU-NAT-01")]
 
+
+
+@pytest.mark.asyncio
+async def testUpsertBroadcastsPromotionsSoLiveEditsDoNotEraseThem(
+    mockRedis: MockRedisAsync,
+) -> None:
+    """The pub/sub payload must carry promotions, not just the stored record.
+
+    The broadcast hand-picks fields, and promotions was not among them. That is worse than
+    "promotions only load at boot": the MCP server's catalogStore.addSku FULL-REPLACES the SKU it
+    holds, and its subscriber schema coerces a missing `promotions` to []. So every live edit to a
+    promoted SKU silently erased its promotions until mcp-server was restarted, and the
+    "wait for the sale" advice stopped working with no error anywhere.
+    """
+    from razoragentMesh.packages.merchantApi.src.schemas.universalProductSchema import (
+        ScheduledPromotionSchema,
+    )
+
+    published: list[str] = []
+
+    async def capturePublish(_channel: str, payload: str) -> None:
+        published.append(payload)
+
+    mockRedis.publish = capturePublish  # type: ignore[assignment]
+
+    manager = CatalogManager(redisClient=mockRedis)
+    listing = UniversalProductListing(
+        skuId="SKU-DESK-PROMO-01", merchantDid="did:mesh:merchant_demo_01",
+        title="Standing Desk", description="Height adjustable standing desk",
+        category="Furniture", hsnCode="94013000", gstRatePercent=18,
+        baseUnitPricePaise=4500000, availableStock=10, originPincode="560001",
+        promotions=[
+            ScheduledPromotionSchema(
+                campaignId="CMP-REPUBLIC-01", name="Republic Day Sale",
+                startsAtUnix=2000000000, endsAtUnix=2000086400, discountBps=1500,
+            )
+        ],
+    )
+    await manager.upsertSku(listing)
+
+    assert published, "upsertSku must publish a catalog event"
+    item = json.loads(published[-1])["item"]
+    assert "promotions" in item, sorted(item)
+    assert [p["campaignId"] for p in item["promotions"]] == ["CMP-REPUBLIC-01"]
+    assert item["promotions"][0]["discountBps"] == 1500

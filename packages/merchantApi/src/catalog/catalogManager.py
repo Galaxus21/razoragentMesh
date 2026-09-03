@@ -66,6 +66,11 @@ class CatalogManager:
             "baseUnitPricePaise": listing.baseUnitPricePaise,
             "availableStock": listing.availableStock,
             "volumeTiers": [tier.model_dump() for tier in listing.volumeTiers],
+            # Omitting this did more than delay promotions until the next boot. The MCP server's
+            # catalogStore.addSku FULL-REPLACES the stored SKU, and its subscriber schema coerces
+            # a missing `promotions` to [] -- so any live edit to a promoted SKU silently erased
+            # its promotions, and "wait for the sale" stopped working until mcp-server restarted.
+            "promotions": [promotion.model_dump() for promotion in listing.promotions],
             "originPincode": listing.originPincode,
         }
         await self._publishEvent(action, listing.skuId, listing.merchantDid, item=itemPayload)
