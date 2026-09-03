@@ -212,9 +212,14 @@ describe("Milestone 2 Challenger 1: TelemetryContext Lifecycle & Scenario Stream
     if (healEvent.eventType === "OOS_HEALED") {
       assert.ok(healEvent.payload.cosineSimilarity >= 0.85, "Similarity must be >= 0.85");
       assert.ok(healEvent.payload.healingDurationMs < 300, "Healing duration must be sub-300ms SLA");
-      assert.ok(healEvent.payload.patchedMandateHash.startsWith("0x"), "Patched hash must start with 0x");
+      // Both fields are optional on the payload now: the Merchant API's Layer 3 route signs no
+      // AmendmentMandate, so it has no patched hash to report. This fixture is the MCP-side
+      // scenario, which does, so the assertions stand -- they just have to say so first.
+      const { patchedMandateHash, priceDeltaPaise } = healEvent.payload;
+      assert.ok(patchedMandateHash, "The MCP-side healing scenario must carry a patched hash");
+      assert.ok(patchedMandateHash.startsWith("0x"), "Patched hash must start with 0x");
       const expectedDelta = healEvent.payload.substitutePricePaise - healEvent.payload.originalPricePaise;
-      assert.equal(healEvent.payload.priceDeltaPaise, expectedDelta, "Price delta arithmetic must match");
+      assert.equal(priceDeltaPaise, expectedDelta, "Price delta arithmetic must match");
     }
   });
 });

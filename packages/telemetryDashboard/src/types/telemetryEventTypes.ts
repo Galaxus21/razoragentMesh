@@ -112,9 +112,13 @@ export interface OosHealedPayload {
   readonly cosineSimilarity: number;
   readonly originalPricePaise: number;
   readonly substitutePricePaise: number;
-  readonly priceDeltaPaise: number;
+  // Optional because the Merchant API's Layer 3 route deliberately signs no AmendmentMandate --
+  // the buyer key belongs to the agent, so the patching half lives in the MCP server. Neither
+  // field is read by any component; requiring them of every producer only invited a fabricated
+  // hash. See oosHealingRoute.py's module docstring for why the split is where it is.
+  readonly priceDeltaPaise?: number;
   readonly healingDurationMs: number;
-  readonly patchedMandateHash: string;
+  readonly patchedMandateHash?: string;
   readonly negativeConstraintsPassed?: boolean;
 }
 

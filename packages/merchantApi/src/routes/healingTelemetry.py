@@ -50,6 +50,7 @@ def publishOosHealed(
     healingDurationMs: float,
     embeddingMode: str,
     sessionId: Optional[str] = None,
+    originalPricePaise: int = 0,
 ) -> None:
     """Fires an OOS_HEALED event describing a heal that actually happened.
 
@@ -66,6 +67,19 @@ def publishOosHealed(
             "originalSkuId": failedSkuId,
             "substituteSkuId": str(substitutePayload.get("skuId", "")),
             "cosineSimilarity": cosineScore,
+            # The three fields below are what healingDiffViewer.tsx actually renders, and they
+            # were absent. Nobody noticed because no real heal had ever reached the panel (see
+            # AUDIT_TODO 50); the first one that did showed the failed SKU at "Price: Rs 0.00",
+            # a price delta of "NaN%", and an AST audit reading "Failed" on a successful heal.
+            "originalPricePaise": originalPricePaise,
+            "priceDeltaPaise": (
+                int(substitutePayload.get("baseUnitPricePaise") or 0) - originalPricePaise
+            ),
+            # Vacuously true: this route passes no NegativeConstraintManifest, so no constraint
+            # was evaluated and none was breached. Reporting the absence as a FAILED audit --
+            # which is what an omitted field rendered as -- claims a violation that never
+            # happened. A caller that does supply a manifest should pass its real verdict.
+            "negativeConstraintsPassed": True,
             "substitutePricePaise": substitutePayload.get("baseUnitPricePaise"),
             # Measured with time.perf_counter around the ANN query and the constraint AST, and
             # nothing else. Mandate signing is not in it -- see OosInterceptor.findSubstitute.

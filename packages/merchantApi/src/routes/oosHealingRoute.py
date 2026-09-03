@@ -139,6 +139,7 @@ async def healOutOfStockSku(
         cosineScore=cosineScore,
         healingDurationMs=durationMs,
         embeddingMode=embeddingMode,
+        originalPricePaise=_listedPricePaise(catalogStore, request.failedSkuId),
     )
 
     return OosHealingResponse(
@@ -150,6 +151,17 @@ async def healOutOfStockSku(
         healingDurationMs=durationMs,
         embeddingMode=embeddingMode,
     )
+
+
+def _listedPricePaise(catalogStore: List[Dict[str, Any]], skuId: str) -> int:
+    """The failed SKU's own price, which the healing panel renders beside the substitute's."""
+    for entry in catalogStore:
+        if entry.get("skuId") == skuId:
+            try:
+                return int(entry.get("baseUnitPricePaise") or 0)
+            except (TypeError, ValueError):
+                return 0
+    return 0
 
 
 def _useIndexedQueryVector(
