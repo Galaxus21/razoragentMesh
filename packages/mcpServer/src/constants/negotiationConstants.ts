@@ -48,6 +48,10 @@ export const buyerConcessionRateBps = 3000;
 // Difficulty is per-IP dynamic in the gateway's anti-spam shield, so a solve is not a fixed cost:
 // this bounds the total, and the tool returns the turns it did complete rather than hanging.
 export const powSolveBudgetMs = 15_000;
+// The gateway's answer when the merchant has not opted in to negotiation. Named rather than
+// inlined because it is the one status this client treats as a commercial answer, not a fault.
+export const httpStatusForbidden = 403;
+
 export const negotiationHttpTimeoutMs = 10_000;
 
 // Refused by the request schema before any escrow is created or any fee is charged.

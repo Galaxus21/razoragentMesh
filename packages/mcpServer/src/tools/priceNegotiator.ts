@@ -32,6 +32,7 @@ import {
 import {
   createEscrowSession,
   fetchPowChallenge,
+  NegotiationRefusedError,
   releaseEscrowSession,
   submitNegotiationTurn
 } from "../negotiation/negotiationClient.js";
@@ -79,6 +80,7 @@ interface NegotiationLoopState {
   agreedUnitPricePaise: number | null;
   contractAstHash: string | null;
   cumulativeFeesPaise: number;
+  declinedReason: string | null;
 }
 
 /**
@@ -105,12 +107,22 @@ export async function negotiatePrice(
     turns: [],
     agreedUnitPricePaise: null,
     contractAstHash: null,
-    cumulativeFeesPaise: 0
+    cumulativeFeesPaise: 0,
+    declinedReason: null
   };
 
   let refundedPaise = 0;
   try {
     await _runNegotiationLoop(request, listUnitPricePaise, escrow.sessionToken, state);
+  } catch (error: unknown) {
+    // A merchant declining to negotiate is an answer, not a fault. Letting it out as a tool error
+    // would tell an agent the mesh is broken when what it should do is buy at the listed price --
+    // and the refusal arrives before any turn is debited, so there is nothing to report but the
+    // reason.
+    if (!(error instanceof NegotiationRefusedError)) {
+      throw error;
+    }
+    state.declinedReason = error.reason;
   } finally {
     refundedPaise = await _releaseQuietly(escrow.sessionToken);
   }
@@ -209,12 +221,13 @@ function _buildResponse(
   const savings = converged
     ? Math.max(0, listUnitPricePaise - (state.agreedUnitPricePaise as number))
     : 0;
+  const status = state.declinedReason !== null ? "DECLINED" : converged ? "CONVERGED" : "EXHAUSTED";
 
   return negotiatePriceResponseSchema.parse({
     sku_id: request.sku_id,
     quantity: request.quantity,
     currency: currencyInr,
-    status: converged ? "CONVERGED" : "EXHAUSTED",
+    status,
     list_unit_price_paise: listUnitPricePaise,
     agreed_unit_price_paise: state.agreedUnitPricePaise,
     savings_vs_list_paise: savings,
@@ -223,7 +236,13 @@ function _buildResponse(
     micro_fees_paid_paise: state.cumulativeFeesPaise,
     escrow_refunded_paise: refundedPaise,
     contract_ast_hash: state.contractAstHash,
-    next_step: _describeNextStep(converged, savings, state.cumulativeFeesPaise)
+    declined_reason: state.declinedReason,
+    next_step: _describeNextStep(
+      converged,
+      savings,
+      state.cumulativeFeesPaise,
+      state.declinedReason
+    )
   });
 }
 
@@ -235,8 +254,16 @@ function _buildResponse(
 function _describeNextStep(
   converged: boolean,
   savingsPaise: number,
-  feesPaise: number
+  feesPaise: number,
+  declinedReason: string | null
 ): string {
+  if (declinedReason !== null) {
+    return (
+      `${declinedReason} Nothing was charged for asking. Call get_live_sku_quote and buy at the ` +
+      "listed price; negotiating this SKU again will get the same answer until the merchant " +
+      "enables it."
+    );
+  }
   if (!converged) {
     return (
       "No agreement: the turn budget ran out with a spread still open. Either raise " +

@@ -104,7 +104,10 @@ const discoveryToolsManifest = [
     description:
       "Bargains for a lower unit price by running a full x402-INR alternating-offer negotiation " +
       "against the merchant gateway -- up to 5 turns, each gated by a proof-of-work solve and " +
-      "charged ₹0.50 from a micro-escrow this tool opens and releases for you. Give it what you " +
+      "charged ₹0.50 from a micro-escrow this tool opens and releases for you. Negotiation is " +
+      "opt-in per merchant: many sell at a firm listed price and answer status DECLINED, which " +
+      "costs nothing and means buy at list rather than retry. The merchant also sets the floor, " +
+      "so a converged price is theirs to allow, not yours to name. Give it what you " +
       "want to open at and, in max_unit_price_paise, the most you will pay: the bid ladder never " +
       "crosses that ceiling, so a CONVERGED result is always affordable. Worth a call before " +
       "get_live_sku_quote on anything expensive; skip it on cheap items, where the turn fees can " +

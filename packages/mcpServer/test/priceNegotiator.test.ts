@@ -53,7 +53,9 @@ let releasedTokens: string[] = [];
  * buyerBid >= sellerAsk (negotiation/convergenceChecker.py) -- so the ladder under test is
  * scored the same way the real service would score it.
  */
-function installGatewayStub(options: { readonly failRelease?: boolean } = {}): void {
+function installGatewayStub(
+  options: { readonly failRelease?: boolean; readonly declineReason?: string } = {}
+): void {
   submittedTurns = [];
   releasedTokens = [];
   let cumulativeFeesPaise = 0;
@@ -77,6 +79,10 @@ function installGatewayStub(options: { readonly failRelease?: boolean } = {}): v
       return _jsonResponse(201, { sessionToken: "esc_tok_test", remainingBalancePaise: 5000, initialHoldPaise: 5000 });
     }
     if (target.endsWith("/api/v1/mesh/negotiate")) {
+      if (options.declineReason !== undefined) {
+        // What the gateway answers for a merchant who has not opted in to negotiation.
+        return _jsonResponse(403, { detail: options.declineReason });
+      }
       const payload = JSON.parse(init?.body ?? "{}") as StubTurn;
       submittedTurns.push(payload);
       cumulativeFeesPaise += 50;
@@ -306,4 +312,82 @@ test("the seller never asks below the buyer's standing bid", () => {
 test("the buyer's bid stops exactly at the ceiling", () => {
   assert.equal(nextBuyerBidPaise(9_999, 10_000), 10_000);
   assert.equal(nextBuyerBidPaise(10_000, 10_000), 10_000);
+});
+
+
+test("a merchant who has not opted in is reported as DECLINED, not as a tool failure", async () => {
+  // Negotiation is opt-in per merchant. Letting the gateway's 403 out as an exception would tell
+  // an agent the mesh is broken, when the correct reading is "this seller's price is firm".
+  const reason = "This merchant has not enabled negotiation. Their listed price is firm.";
+  installGatewayStub({ declineReason: reason });
+
+  const result = await negotiatePrice(
+    {
+      sku_id: testSkuId,
+      quantity: 1,
+      buyer_agent_id: testBuyerDid,
+      opening_bid_paise: 85_000,
+      max_unit_price_paise: 95_000
+    },
+    buildCatalogStore()
+  );
+
+  assert.equal(result.status, "DECLINED");
+  assert.equal(result.declined_reason, reason);
+  assert.equal(result.agreed_unit_price_paise, null);
+  assert.equal(result.contract_ast_hash, null);
+  assert.equal(result.turns_used, 0);
+  // The refusal lands before any turn is held, so asking cost nothing.
+  assert.equal(result.micro_fees_paid_paise, 0);
+  assert.match(result.next_step, /get_live_sku_quote/);
+  // The escrow this tool opened is still released -- a declined negotiation must not park money.
+  assert.equal(releasedTokens.length, 1);
+});
+
+test("a declined negotiation says which merchant behaviour caused it", async () => {
+  // "switched off" and "could not check" are different answers: one is final, the other is worth
+  // retrying. Flattening them into a generic refusal is what makes an agent retry forever.
+  const reason =
+    "Negotiation is unavailable: this gateway cannot reach its policy store, so it cannot " +
+    "confirm the merchant opted in.";
+  installGatewayStub({ declineReason: reason });
+
+  const result = await negotiatePrice(
+    {
+      sku_id: testSkuId,
+      quantity: 1,
+      buyer_agent_id: testBuyerDid,
+      opening_bid_paise: 85_000,
+      max_unit_price_paise: 95_000
+    },
+    buildCatalogStore()
+  );
+
+  assert.equal(result.status, "DECLINED");
+  assert.match(result.declined_reason ?? "", /cannot reach its policy store/);
+});
+
+test("a gateway fault is still an error, so a real outage is not read as a firm price", async () => {
+  installGatewayStub();
+  const stubbedFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: { body?: string; headers?: Record<string, string> }) => {
+    if (String(url).endsWith("/api/v1/mesh/negotiate")) {
+      return _jsonResponse(500, { detail: "internal error" });
+    }
+    return stubbedFetch(url as never, init as never);
+  }) as typeof globalThis.fetch;
+
+  await assert.rejects(
+    negotiatePrice(
+      {
+        sku_id: testSkuId,
+        quantity: 1,
+        buyer_agent_id: testBuyerDid,
+        opening_bid_paise: 85_000,
+        max_unit_price_paise: 95_000
+      },
+      buildCatalogStore()
+    ),
+    /HTTP 500/
+  );
 });

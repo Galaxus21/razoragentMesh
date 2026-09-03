@@ -12,11 +12,29 @@ import {
   headerEscrowToken,
   headerPowChallenge,
   headerPowSolution,
+  httpStatusForbidden,
   negotiateTurnPath,
   negotiationHttpTimeoutMs,
   powChallengePath,
   resolveX402GatewayUrl
 } from "../constants/negotiationConstants.js";
+
+/**
+ * The merchant declined, rather than the request being wrong. Negotiation is opt-in per merchant
+ * (x402Gateway/src/negotiation/merchantTerms.py), so a 403 here is a legitimate commercial answer
+ * -- "this seller's price is firm" -- and the tool turns it into a result the agent can act on
+ * instead of an error it has to interpret. Distinguished by type rather than by matching on the
+ * message, so a reworded refusal upstream does not silently become a crash.
+ */
+export class NegotiationRefusedError extends Error {
+  readonly reason: string;
+
+  constructor(reason: string) {
+    super(reason);
+    this.name = "NegotiationRefusedError";
+    this.reason = reason;
+  }
+}
 
 export interface PowChallenge {
   readonly challengeToken: string;
@@ -90,6 +108,9 @@ async function requestGateway(
     // that moved the wrong way. Relaying it is what lets an agent correct itself instead of
     // retrying the same losing turn.
     const detail = await _readErrorDetail(response);
+    if (response.status === httpStatusForbidden) {
+      throw new NegotiationRefusedError(detail);
+    }
     throw new Error(`Negotiation gateway refused with HTTP ${response.status}: ${detail}`);
   }
   return await response.json();

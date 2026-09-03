@@ -53,8 +53,10 @@ export const negotiatePriceResponseSchema = z.object({
   /**
    * CONVERGED -- the two sides met; agreed_unit_price_paise is bindable.
    * EXHAUSTED -- the turn budget ran out with a spread still open; nothing was agreed.
+   * DECLINED  -- this merchant does not negotiate. Not a failure: their listed price is the
+   *              price, and no micro-fee was charged for asking.
    */
-  status: z.enum(["CONVERGED", "EXHAUSTED"]),
+  status: z.enum(["CONVERGED", "EXHAUSTED", "DECLINED"]),
   list_unit_price_paise: z.number().int().min(0),
   // Null unless status is CONVERGED. A number here is the seller's final ask, which is at or
   // below the buyer's final bid -- so the buyer never pays more than it offered.
@@ -66,8 +68,12 @@ export const negotiatePriceResponseSchema = z.object({
   // because it is real money and a saving smaller than the fees is not a saving.
   micro_fees_paid_paise: z.number().int().min(0),
   escrow_refunded_paise: z.number().int().min(0),
-  // The gateway compiles an immutable contract AST on convergence. Null when EXHAUSTED.
+  // The gateway compiles an immutable contract AST on convergence. Null otherwise.
   contract_ast_hash: z.string().nullable(),
+  // Set only when status is DECLINED, in the merchant's own terms -- whether they have switched
+  // negotiation off, never configured it, or the gateway could not check. The last of those is
+  // worth retrying and the others are not, so the distinction is preserved rather than flattened.
+  declined_reason: z.string().nullable(),
   next_step: z.string().min(1)
 });
 
