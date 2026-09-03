@@ -453,9 +453,10 @@
     },
     {
       "constructorParameters": [
-        "refundAmountPaise",
+        "refundedBalancePaise",
         "sessionToken",
-        "status"
+        "timestamp",
+        "totalDebitedPaise"
       ],
       "inheritsFrom": [
         "pydantic.main.BaseModel"
@@ -463,7 +464,7 @@
       "kind": "class",
       "members": [
         {
-          "name": "refundAmountPaise",
+          "name": "refundedBalancePaise",
           "signature": "<class 'int'>"
         },
         {
@@ -471,19 +472,28 @@
           "signature": "<class 'str'>"
         },
         {
-          "name": "status",
-          "signature": "<class 'str'>"
+          "name": "timestamp",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "totalDebitedPaise",
+          "signature": "<class 'int'>"
         }
       ],
       "name": "EscrowRefundReceipt",
-      "signature": "EscrowRefundReceipt(*, sessionToken: Annotated[str, MinLen(min_length=1)], refundAmountPaise: Annotated[int, Ge(ge=0)], status: str = 'refunded') -> None"
+      "signature": "EscrowRefundReceipt(*, sessionToken: Annotated[str, MinLen(min_length=1)], totalDebitedPaise: Annotated[int, Ge(ge=0)], refundedBalancePaise: Annotated[int, Ge(ge=0)], timestamp: Annotated[int, Gt(gt=0)]) -> None"
     },
     {
       "constructorParameters": [
-        "balancePaise",
         "buyerAgentDid",
+        "createdAtUnix",
+        "debitedTotalPaise",
         "expiresAtUnix",
-        "sessionToken"
+        "initialHoldPaise",
+        "isReleased",
+        "remainingBalancePaise",
+        "sessionToken",
+        "totalTurnsDebited"
       ],
       "inheritsFrom": [
         "pydantic.main.BaseModel"
@@ -491,24 +501,44 @@
       "kind": "class",
       "members": [
         {
-          "name": "balancePaise",
+          "name": "buyerAgentDid",
+          "signature": "<class 'str'>"
+        },
+        {
+          "name": "createdAtUnix",
           "signature": "<class 'int'>"
         },
         {
-          "name": "buyerAgentDid",
-          "signature": "<class 'str'>"
+          "name": "debitedTotalPaise",
+          "signature": "<class 'int'>"
         },
         {
           "name": "expiresAtUnix",
           "signature": "<class 'int'>"
         },
         {
+          "name": "initialHoldPaise",
+          "signature": "<class 'int'>"
+        },
+        {
+          "name": "isReleased",
+          "signature": "<class 'bool'>"
+        },
+        {
+          "name": "remainingBalancePaise",
+          "signature": "<class 'int'>"
+        },
+        {
           "name": "sessionToken",
           "signature": "<class 'str'>"
+        },
+        {
+          "name": "totalTurnsDebited",
+          "signature": "<class 'int'>"
         }
       ],
       "name": "EscrowSession",
-      "signature": "EscrowSession(*, sessionToken: Annotated[str, MinLen(min_length=1)], buyerAgentDid: Annotated[str, _PydanticGeneralMetadata(pattern='^did:agent:[0-9a-f]{64}$')], balancePaise: Annotated[int, Ge(ge=0)], expiresAtUnix: Annotated[int, Gt(gt=0)]) -> None"
+      "signature": "EscrowSession(*, sessionToken: Annotated[str, MinLen(min_length=1)], buyerAgentDid: Annotated[str, MinLen(min_length=1)], initialHoldPaise: Annotated[int, Gt(gt=0)], remainingBalancePaise: Annotated[int, Ge(ge=0)], debitedTotalPaise: Annotated[int, Ge(ge=0)], totalTurnsDebited: Annotated[int, Ge(ge=0)], createdAtUnix: Annotated[int, Gt(gt=0)], expiresAtUnix: Annotated[int, Gt(gt=0)], isReleased: bool = False) -> None"
     },
     {
       "constructorParameters": [
