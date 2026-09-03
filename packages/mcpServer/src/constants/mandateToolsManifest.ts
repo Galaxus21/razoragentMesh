@@ -31,8 +31,14 @@ export const mandateToolsManifest = [
     name: toolEstablishAgentDelegation,
     description:
       "Pairs your agent with the mesh and issues a signed Intent Mandate delegating a bounded " +
-      "spending authority to your DID. Call this first; the other three purchase tools take " +
-      "the delegation_id it returns. key_custody has NO default and you must state it. " +
+      "spending authority to your DID. The other three purchase tools take the delegation_id " +
+      "it returns -- but PRICE THE PURCHASE BEFORE YOU CALL THIS. get_live_sku_quote and " +
+      "verify_shipping_sla both answer without any delegation, and the cart charges exactly " +
+      "the shipping_cost_paise the SLA returned, so offered_unit_price_paise x quantity + " +
+      "total_tax_paise + shipping_cost_paise is the all-in total. Set max_budget_paise from " +
+      "that figure, not from a guess you mean to correct afterwards -- see the ceiling rule " +
+      "below for why a correction upward will not be accepted. " +
+      "key_custody has NO default and you must state it. " +
       `'${custodyAgentHeld}': you keep your Ed25519 private key, prove possession by signing ` +
       "the budget terms, and later sign the Execution Mandate yourself -- the mesh never holds " +
       `buyer authority. '${custodyMeshDemoCustodial}': the mesh mints and holds the buyer key ` +
@@ -44,12 +50,15 @@ export const mandateToolsManifest = [
       "discards the session buyer key once that purchase settles, so its lifetime is the " +
       "purchase and not validity_seconds. Call this tool again for each further purchase -- " +
       "reusing a settled delegation is refused, whatever budget it has left. " +
-      "Know what that means for the ceiling you are given: max_budget_paise binds ONE " +
-      "delegation, so establishing a second one starts a second budget rather than continuing " +
-      "the first. The mesh cannot tell that two delegations belong to the same person. If your " +
-      "buyer gave you a total to spend, YOU are the one tracking it across delegations -- and " +
-      "before you re-pair to correct a cap or retry, check whether the purchase you are redoing " +
-      "already settled. Settling the same cart twice in one session is refused; settling it " +
+      "Know what that means for the ceiling you are given: the FIRST max_budget_paise this " +
+      "session declares becomes the session ceiling and binds every later delegation too. A " +
+      "further establish_agent_delegation may LOWER that ceiling but can never raise it, " +
+      "because re-pairing is you reconnecting and not your buyer granting more money. So a " +
+      "provisional cap you intended to widen once you knew the price will hold you to the " +
+      "provisional figure and the purchase will be refused with nothing charged. Across MCP " +
+      "sessions there is no ceiling at all and YOU are the one tracking the buyer's total. " +
+      "Before you re-pair to retry, check whether the purchase you are redoing already " +
+      "settled. Settling the same cart twice in one session is refused; settling it " +
       "twice across sessions is not.",
     inputSchema: {
       type: "object",

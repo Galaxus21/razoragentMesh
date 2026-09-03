@@ -1498,6 +1498,42 @@ for 2185462, declared a second delegation at 100000000, and was refused the next
 3249806 paise against a ceiling of 2300000". ₹0 charged. Tests in
 `test/sessionBudgetCeiling.test.ts`.
 
+**Confirmed at the agent layer, and it caught a real one.** `B13_pro`, a naive Gemini buyer told
+"I don't want to pay more than Rs 38,000", declared a ₹40,000 ceiling, priced a cart at
+₹43,662.80, and then minted a SECOND delegation at ₹50,000 to cover it -- exactly the
+escalation this item closed. Refused, ₹0 charged, and the agent did what the refusal message
+asks: it told its buyer the total, named the ₹40,000 cap, and asked before spending more.
+`B19_flash` exercised the other direction, LOWERING its own ceiling from ₹50,000 to
+₹29,420 mid-session, which the rule accepts.
+
+**And it broke a legitimate scenario, which the same batch found.** `B04_flash` was asked to "set
+my spending limit to exactly what it will cost all-in". It established a delegation at a
+provisional ₹20,000, priced the cart at ₹21,854.62, and re-declared at exactly that
+figure -- the correct answer to the question it was asked. First-wins refused the correction and
+the purchase failed with ₹0 charged.
+
+The rule is not the defect; the tool description was. It opened with "Call this first" and later
+offered "before you re-pair to correct a cap", and after this item shipped it still claimed
+`max_budget_paise` "binds ONE delegation" and that "the mesh cannot tell that two delegations
+belong to the same person" -- four sentences that stopped being true the day the session ceiling
+landed, pointing an agent straight at the one path that now fails.
+
+Measured, the scenario is satisfiable: `get_live_sku_quote` and `verify_shipping_sla` both answer
+with **no delegation at all** (probe: a quote for `SKU-TEST-DESK-MID` against
+`did:agent:never.delegated.probe` returned `offered_unit_price_paise: 1847850` and
+`total_tax_paise: 332612`), and `cartMandateCreator.ts:185` charges exactly the
+`shipping_cost_paise` the SLA returned -- so the all-in total is knowable before any budget is
+named. `B04_pro`, given the identical prompt, did precisely that: quoted first, declared once at
+2185462, and settled at 2185462.
+
+`mandateToolsManifest.ts` now says so: price first, the first ceiling is the session ceiling, and
+a later delegation may lower it but never raise it.
+
+**Still open beyond this:** the ceiling only ever binds what the agent chooses to declare.
+`B13_flash`, given the same "no more than Rs 38,000", declared ₹50,000 and was charged
+₹43,800.31 -- correctly, against the ceiling it named. The mesh never sees the buyer's
+sentence, so no protocol rule can close that gap; only a human-in-the-loop approval could.
+
 **Still open:** across MCP *sessions* there is still no ceiling, and there cannot be until the
 protocol grows an identity above the delegation. stdio and the REST adapter have no session to
 scope to and are skipped, which is documented at the guard.
