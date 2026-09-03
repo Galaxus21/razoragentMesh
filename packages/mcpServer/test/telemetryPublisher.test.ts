@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
 import { dispatchToolCall } from "../src/mcpServerMain.js";
+import { publishToolResult } from "../src/telemetry/telemetryPublisher.js";
 
 const testSkuId = "SKU-CHAIR-001";
 const testBuyerDid = "did:agent:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
@@ -242,4 +243,72 @@ test("a tool that signs no mandate publishes no MANDATE_SIGNED", async () => {
   );
   await settlePublishes();
   assert.equal(eventsOfType("MANDATE_SIGNED").length, 0);
+});
+
+// negotiate_price runs a whole negotiation inside one tool call, so unlike every other derived
+// publisher here it fans one result out into several events. Driven through publishToolResult
+// rather than dispatchToolCall: the capturing fetch above stands in for the telemetry bus, and
+// dispatching the real tool would send its gateway traffic there too.
+const negotiationResult = {
+  sku_id: testSkuId,
+  quantity: 2,
+  status: "CONVERGED",
+  list_unit_price_paise: 100_000,
+  agreed_unit_price_paise: 91_805,
+  contract_ast_hash: "ast_hash_deadbeef",
+  turns: [
+    { turn_number: 1, buyer_bid_paise: 85_000, seller_ask_paise: 100_000, spread_paise: 15_000,
+      converged: false, micro_fee_paise: 50, cumulative_micro_fees_paise: 50 },
+    { turn_number: 2, buyer_bid_paise: 91_570, seller_ask_paise: 91_805, spread_paise: 235,
+      converged: false, micro_fee_paise: 50, cumulative_micro_fees_paise: 100 },
+    { turn_number: 3, buyer_bid_paise: 92_599, seller_ask_paise: 91_805, spread_paise: 0,
+      converged: true, micro_fee_paise: 50, cumulative_micro_fees_paise: 150 }
+  ]
+};
+
+test("a negotiation publishes one BID_TURN_COMPLETED per turn, which is what the chart plots", async () => {
+  publishToolResult("negotiate_price", {}, negotiationResult, testSessionId, "call-neg", 900);
+  await settlePublishes();
+
+  const turns = eventsOfType("BID_TURN_COMPLETED");
+  assert.equal(turns.length, 3);
+  assert.deepEqual(turns.map((event) => event.payload.turnNumber), [1, 2, 3]);
+  // Distinct eventIds, or the dashboard's dedupe collapses three turns into one point.
+  assert.equal(new Set(turns.map((event) => event.eventId)).size, 3);
+  assert.deepEqual(
+    turns.map((event) => event.payload.status),
+    ["IN_PROGRESS", "IN_PROGRESS", "CONVERGED"]
+  );
+});
+
+test("convergence publishes NEGOTIATION_CONVERGED with the gross the buyer committed to", async () => {
+  publishToolResult("negotiate_price", {}, negotiationResult, testSessionId, "call-neg2", 900);
+  await settlePublishes();
+
+  const converged = eventsOfType("NEGOTIATION_CONVERGED");
+  assert.equal(converged.length, 1);
+  assert.equal(converged[0].payload.finalAgreedUnitPricePaise, 91_805);
+  assert.equal(converged[0].payload.totalTurns, 3);
+  // Unit price times quantity. The panel shows this as the deal value, so an off-by-quantity
+  // here understates a bulk negotiation by the whole multiplier.
+  assert.equal(converged[0].payload.totalGrossPaise, 183_610);
+  assert.equal(converged[0].payload.contractAstHash, "ast_hash_deadbeef");
+});
+
+test("an exhausted negotiation marks its last turn EXHAUSTED and converges nothing", async () => {
+  publishToolResult(
+    "negotiate_price",
+    {},
+    { ...negotiationResult, status: "EXHAUSTED", agreed_unit_price_paise: null,
+      contract_ast_hash: null,
+      turns: negotiationResult.turns.map((turn) => ({ ...turn, converged: false })) },
+    testSessionId,
+    "call-neg3",
+    900
+  );
+  await settlePublishes();
+
+  assert.equal(eventsOfType("NEGOTIATION_CONVERGED").length, 0);
+  const statuses = eventsOfType("BID_TURN_COMPLETED").map((event) => event.payload.status);
+  assert.deepEqual(statuses, ["IN_PROGRESS", "IN_PROGRESS", "EXHAUSTED"]);
 });

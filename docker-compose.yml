@@ -61,6 +61,12 @@ services:
       # Ranking for search_catalog runs in merchantApi, which owns the embedding model
       # and the Qdrant client; this service is TypeScript and has no embedder.
       - MERCHANT_API_URL=http://merchant-api:4002
+      # negotiate_price runs the buyer half of the x402-INR alternating-offer protocol against
+      # the gateway: a proof-of-work challenge and a micro-escrow debit per turn. Without this
+      # the tool falls back to localhost:4003 and every negotiation reports the gateway
+      # unreachable, while every other tool keeps working -- so the failure looks like a bug in
+      # negotiation rather than a missing address.
+      - X402_GATEWAY_URL=http://x402-gateway:4003
       - MERCHANT_PRIVATE_KEY_HEX=${MERCHANT_PRIVATE_KEY_HEX:-}
       - HMAC_SECRET_KEY=${HMAC_SECRET_KEY:-}
     healthcheck:
@@ -76,6 +82,11 @@ services:
       catalog-seeder:
         condition: service_completed_successfully
       redis:
+        condition: service_healthy
+      # negotiate_price is the one tool that calls another service on the request path rather
+      # than best-effort, so a gateway that is not up yet turns a demo's first negotiation into
+      # an unreachable-host error. No cycle: x402-gateway waits only on redis.
+      x402-gateway:
         condition: service_healthy
     networks:
       - meshNetwork

@@ -7,6 +7,7 @@ import {
   toolBrowseCatalog,
   toolEstablishAgentDelegation,
   toolGetLiveSkuQuote,
+  toolNegotiatePrice,
   toolReserveInventoryLock,
   toolSearchCatalog,
   toolVerifyShippingSla
@@ -95,6 +96,41 @@ const discoveryToolsManifest = [
         buyer_agent_id: { type: "string", pattern: "^did:agent:[a-z0-9_\\-\\.:]+$" },
         delivery_pincode: { type: "string", pattern: "^[1-9][0-9]{5}$" },
         promo_code: { type: "string" }
+      }
+    }
+  },
+  {
+    name: toolNegotiatePrice,
+    description:
+      "Bargains for a lower unit price by running a full x402-INR alternating-offer negotiation " +
+      "against the merchant gateway -- up to 5 turns, each gated by a proof-of-work solve and " +
+      "charged ₹0.50 from a micro-escrow this tool opens and releases for you. Give it what you " +
+      "want to open at and, in max_unit_price_paise, the most you will pay: the bid ladder never " +
+      "crosses that ceiling, so a CONVERGED result is always affordable. Worth a call before " +
+      "get_live_sku_quote on anything expensive; skip it on cheap items, where the turn fees can " +
+      "exceed the saving (the response reports both, so you can tell). The agreed price is " +
+      "recorded in the gateway's contract AST -- it is NOT applied to your quote automatically, " +
+      "so get_live_sku_quote remains the only source of a bindable quote_hash.",
+    inputSchema: {
+      type: "object",
+      required: ["sku_id", "quantity", "buyer_agent_id", "opening_bid_paise", "max_unit_price_paise"],
+      properties: {
+        sku_id: { type: "string", pattern: "^SKU-[A-Z0-9_-]{3,32}$" },
+        quantity: { type: "integer", minimum: 1, maximum: 10000 },
+        buyer_agent_id: { type: "string", pattern: "^did:agent:[a-z0-9_\\-\\.:]+$" },
+        opening_bid_paise: {
+          type: "integer",
+          minimum: 1,
+          description: "Your opening offer per unit. Below the list price, or there is nothing to negotiate."
+        },
+        max_unit_price_paise: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "Your walk-away price per unit. A hard ceiling, not a target: no turn will bid above it."
+        },
+        merchant_did: { type: "string", minLength: 1 },
+        max_turns: { type: "integer", minimum: 1, maximum: 5, default: 5 }
       }
     }
   },

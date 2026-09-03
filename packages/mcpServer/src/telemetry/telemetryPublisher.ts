@@ -20,6 +20,7 @@ import {
 import {
   toolCreateCartMandate,
   toolEstablishAgentDelegation,
+  toolNegotiatePrice,
   toolReserveInventoryLock,
   toolSignExecutionMandate
 } from "../constants/protocolConstants.js";
@@ -39,6 +40,8 @@ const eventTypeToolCall = "MCP_TOOL_CALL";
 const eventTypeToolResult = "MCP_TOOL_RESULT";
 const eventTypeInventoryLocked = "INVENTORY_LOCKED";
 const eventTypeMandateSigned = "MANDATE_SIGNED";
+const eventTypeBidTurnCompleted = "BID_TURN_COMPLETED";
+const eventTypeNegotiationConverged = "NEGOTIATION_CONVERGED";
 const unknownAgentId = "unknown";
 
 /**
@@ -125,6 +128,9 @@ export function publishToolResult(
   if (toolName === toolReserveInventoryLock) {
     publishInventoryLocked(result, asRecord(toolArguments), sessionId, callId);
   }
+  if (toolName === toolNegotiatePrice) {
+    publishNegotiationTurns(result, sessionId, callId);
+  }
   publishMandateSigned(toolName, result, sessionId, callId);
 }
 
@@ -203,6 +209,85 @@ function publishInventoryLocked(
       ttlSeconds: resolveLockTtlSeconds(result, toolArguments)
     }
   });
+}
+
+/**
+ * BID_TURN_COMPLETED per turn, then NEGOTIATION_CONVERGED -- what lights the Negotiation Chart.
+ *
+ * The gateway itself emits neither, so before negotiate_price existed the panel could only ever
+ * render rows the seeder had written: the chart claimed a negotiation capability that no live run
+ * had ever produced a single data point for.
+ *
+ * One tool call is a whole negotiation, so this fans a single result out into several events --
+ * unlike the other derived publishers here, which emit at most one. The chart plots bid against
+ * ask per turn, so the turns have to arrive separately or there is nothing to draw.
+ */
+function publishNegotiationTurns(
+  result: Record<string, unknown>,
+  sessionId: string,
+  callId: string
+): void {
+  const turns = Array.isArray(result.turns) ? result.turns : [];
+  const maxTurns = turns.length;
+  const converged = result.status === "CONVERGED";
+
+  turns.forEach((rawTurn, index) => {
+    const turn = asRecord(rawTurn);
+    publishEvent({
+      eventId: `${callId}-turn-${index + 1}`,
+      eventType: eventTypeBidTurnCompleted,
+      timestampMs: nowMs(),
+      sessionId,
+      provenance: liveProvenanceValue,
+      payload: {
+        turnNumber: turn.turn_number,
+        maxTurns,
+        buyerBidPaise: turn.buyer_bid_paise,
+        sellerAskPaise: turn.seller_ask_paise,
+        spreadPaise: turn.spread_paise,
+        microFeePaidPaise: turn.micro_fee_paise,
+        cumulativeMicroFeesPaise: turn.cumulative_micro_fees_paise,
+        // The panel's union is IN_PROGRESS | CONVERGED | EXHAUSTED. Only the last turn can carry
+        // a terminal status: every earlier one left the negotiation still open by definition.
+        status: _resolveTurnStatus(turn.converged === true, index === maxTurns - 1, converged)
+      }
+    });
+  });
+
+  if (!converged) {
+    return;
+  }
+  const agreedUnitPricePaise = result.agreed_unit_price_paise;
+  const quantity = result.quantity;
+  publishEvent({
+    eventId: `${callId}-converged`,
+    eventType: eventTypeNegotiationConverged,
+    timestampMs: nowMs(),
+    sessionId,
+    provenance: liveProvenanceValue,
+    payload: {
+      finalAgreedUnitPricePaise: agreedUnitPricePaise,
+      totalTurns: maxTurns,
+      totalGrossPaise:
+        typeof agreedUnitPricePaise === "number" && typeof quantity === "number"
+          ? agreedUnitPricePaise * quantity
+          : 0,
+      // Null when the gateway converged without returning an AST hash. The panel types this as a
+      // string, so an empty string is the honest rendering of "converged, none published".
+      contractAstHash: typeof result.contract_ast_hash === "string" ? result.contract_ast_hash : ""
+    }
+  });
+}
+
+function _resolveTurnStatus(
+  turnConverged: boolean,
+  isFinalTurn: boolean,
+  negotiationConverged: boolean
+): string {
+  if (turnConverged) {
+    return "CONVERGED";
+  }
+  return isFinalTurn && !negotiationConverged ? "EXHAUSTED" : "IN_PROGRESS";
 }
 
 /**

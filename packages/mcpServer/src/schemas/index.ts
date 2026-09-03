@@ -10,3 +10,4 @@ export * from "./signExecutionMandateSchema.js";
 export * from "./executeSettlementSchema.js";
 export * from "./catalogSearchSchema.js";
 export * from "./catalogBrowseSchema.js";
+export * from "./negotiatePriceSchema.js";

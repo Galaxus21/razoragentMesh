@@ -133,6 +133,33 @@
       ]
     },
     {
+      "schemaName": "NegotiatePrice",
+      "requestFields": [
+        "buyer_agent_id",
+        "max_turns",
+        "max_unit_price_paise",
+        "merchant_did",
+        "opening_bid_paise",
+        "quantity",
+        "sku_id"
+      ],
+      "responseFields": [
+        "agreed_unit_price_paise",
+        "contract_ast_hash",
+        "currency",
+        "escrow_refunded_paise",
+        "list_unit_price_paise",
+        "micro_fees_paid_paise",
+        "next_step",
+        "quantity",
+        "savings_vs_list_paise",
+        "sku_id",
+        "status",
+        "turns",
+        "turns_used"
+      ]
+    },
+    {
       "schemaName": "ShippingSla",
       "requestFields": [
         "delivery_pincode",

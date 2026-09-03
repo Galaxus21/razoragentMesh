@@ -11,6 +11,7 @@ import {
   toolGetLiveSkuQuote,
   toolReserveInventoryLock,
   toolBrowseCatalog,
+  toolNegotiatePrice,
   toolSearchCatalog,
   toolSignExecutionMandate,
   toolVerifyShippingSla
@@ -53,12 +54,14 @@ describe("McpServerMain JSON-RPC Dispatcher", () => {
     });
 
     const result = response.result as { tools: Array<{ name: string }> };
-    assert.equal(result.tools.length, 9);
+    assert.equal(result.tools.length, 10);
     const names = result.tools.map((t) => t.name);
     // search_catalog is the entry point: without it an agent can only quote SKU ids someone
     // already handed it, so a tools/list that omits it leaves the mesh undiscoverable.
     assert.ok(names.includes(toolSearchCatalog));
     assert.ok(names.includes(toolBrowseCatalog));
+    // Negotiation was HTTP-only until now: an MCP agent could take the list price or leave it.
+    assert.ok(names.includes(toolNegotiatePrice));
     assert.ok(names.includes(toolGetLiveSkuQuote));
     assert.ok(names.includes(toolReserveInventoryLock));
     assert.ok(names.includes(toolVerifyShippingSla));

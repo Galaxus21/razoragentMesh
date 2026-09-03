@@ -13,6 +13,10 @@ export const toolSearchCatalog = "search_catalog";
 // Enumeration, as distinct from search. An agent that cannot phrase a good semantic query still
 // needs to find out what the mesh sells at all.
 export const toolBrowseCatalog = "browse_catalog";
+// Price discovery by bargaining rather than by lookup. The x402-INR gateway has spoken the
+// alternating-offer protocol from the start, but over raw HTTP only -- so an MCP agent could take
+// the list price or leave it.
+export const toolNegotiatePrice = "negotiate_price";
 
 // The purchase half of the protocol. Discovery, quoting and locking let an agent price a cart;
 // these four let it actually buy, by producing the three AP2 mandates and settling them. Each
