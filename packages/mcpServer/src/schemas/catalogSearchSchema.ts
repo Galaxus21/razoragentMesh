@@ -25,6 +25,8 @@ import {
 export interface CatalogSearchArguments {
   readonly query_text?: string;
   readonly queryText?: string;
+  /** Accepted alias. Agents guess this spelling, and a refusal over a field name reads as a bug. */
+  readonly query?: string;
   readonly limit?: number;
 }
 
@@ -52,7 +54,9 @@ function resolveLimit(requested: unknown): number {
 
 function normalizeSearchArguments(rawArguments: unknown): unknown {
   const args = (rawArguments ?? {}) as CatalogSearchArguments;
-  const queryText = (args.query_text ?? args.queryText ?? "").trim();
+  // `query` is accepted alongside the two documented spellings because a live buyer agent
+  // guessed it and was refused for a field name rather than for anything about its search.
+  const queryText = (args.query_text ?? args.queryText ?? args.query ?? "").trim();
   // Thrown here rather than left to zod so the agent reads the same sentence it always has,
   // instead of a ZodError naming a field it never sent.
   if (queryText.length === 0) {

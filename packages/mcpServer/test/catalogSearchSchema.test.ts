@@ -92,3 +92,22 @@ describe("catalogSearchRequestSchema", () => {
     assert.deepEqual(parsed, { queryText: "chair", limit: defaultSearchLimit });
   });
 });
+
+describe("query alias", () => {
+  it("accepts 'query', which a live agent guessed and was refused for", () => {
+    // A refusal over a field name reads to an agent as a broken tool rather than as a bad search.
+    const parsed = catalogSearchRequestSchema.parse({ query: "office chair" });
+    assert.equal(parsed.queryText, "office chair");
+  });
+
+  it("still prefers the documented spellings when more than one is supplied", () => {
+    assert.equal(
+      catalogSearchRequestSchema.parse({ query_text: "desk", query: "chair" }).queryText,
+      "desk"
+    );
+    assert.equal(
+      catalogSearchRequestSchema.parse({ queryText: "desk", query: "chair" }).queryText,
+      "desk"
+    );
+  });
+});

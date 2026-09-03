@@ -4,6 +4,7 @@
 // This is pure data with no behaviour, so it belongs beside the other protocol constants.
 
 import {
+  toolEstablishAgentDelegation,
   toolGetLiveSkuQuote,
   toolReserveInventoryLock,
   toolSearchCatalog,
@@ -11,8 +12,12 @@ import {
 } from "./protocolConstants.js";
 import { mandateToolsManifest } from "./mandateToolsManifest.js";
 
-// Discovery and pricing first, then the purchase half. The order is what an agent reads top to
-// bottom, and it is the order the tools are meant to be called in.
+// Pairing first, then discovery and pricing, then the rest of the purchase half. The order is
+// what an agent reads top to bottom, and every clean buyer in the dress rehearsal took it as the
+// call order -- so the previous discovery-first order actively misled them: in
+// mesh_demo_custodial the buyer DID is minted by establish_agent_delegation, and an agent that
+// quotes first has no buyer_agent_id to quote with and must back up and correct itself.
+// Nothing downstream depends on position; the manifest test asserts membership and count only.
 const discoveryToolsManifest = [
   {
     name: toolSearchCatalog,
@@ -28,7 +33,9 @@ const discoveryToolsManifest = [
           type: "string",
           minLength: 1,
           maxLength: 500,
-          description: "Plain-language description of the desired product."
+          description:
+            "Plain-language description of the desired product. 'queryText' and 'query' are " +
+            "accepted as aliases for this field."
         },
         limit: {
           type: "integer",
@@ -45,7 +52,12 @@ const discoveryToolsManifest = [
   {
     name: toolGetLiveSkuQuote,
     description:
-      "Calculates real-time unit pricing, volume discount tiers, and HSN-compliant GST for a requested SKU and volume.",
+      "Calculates real-time unit pricing, volume discount tiers, and HSN-compliant GST for a " +
+      "requested SKU and volume. When the merchant has a sale SCHEDULED, the response carries " +
+      "upcoming_promotions with the start time and the expected_savings_paise -- check it before " +
+      "committing, because waiting may be the better advice for your buyer. The field lists " +
+      "FUTURE sales only: a promotion running right now appears neither there nor in " +
+      "offered_unit_price_paise, which reflects volume tiers, campaigns and promo codes only.",
     inputSchema: {
       type: "object",
       required: ["sku_id", "quantity", "buyer_agent_id", "delivery_pincode"],
@@ -94,4 +106,17 @@ const discoveryToolsManifest = [
   }
 ];
 
-export const mcpToolsManifest = [...discoveryToolsManifest, ...mandateToolsManifest];
+// Selected by name rather than by position, so this does not silently depend on the order
+// mandateToolsManifest happens to declare its four entries in.
+const pairingToolManifest = mandateToolsManifest.filter(
+  (tool) => tool.name === toolEstablishAgentDelegation
+);
+const purchaseToolsManifest = mandateToolsManifest.filter(
+  (tool) => tool.name !== toolEstablishAgentDelegation
+);
+
+export const mcpToolsManifest = [
+  ...pairingToolManifest,
+  ...discoveryToolsManifest,
+  ...purchaseToolsManifest
+];

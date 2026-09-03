@@ -91,16 +91,22 @@ Use absolute paths for `cwd` if your client does not resolve relative ones.
 
 Ask your agent to list its tools. You should see **eight**:
 
+They are listed in the order they are meant to be called:
+
 | Tool | What it does |
 |---|---|
+| `establish_agent_delegation` | Pairs your agent, issues a signed Intent Mandate |
 | `search_catalog` | Natural-language product discovery |
 | `get_live_sku_quote` | Live price, tax and discount for a SKU |
 | `reserve_inventory_lock` | Atomic stock reservation with a fencing token |
 | `verify_shipping_sla` | Serviceability and delivery-tier check |
-| `establish_agent_delegation` | Pairs your agent, issues a signed Intent Mandate |
 | `create_cart_mandate` | Merchant-signed cart at mesh-derived prices |
 | `sign_execution_mandate` | Binds intent and cart into an Execution Mandate |
 | `execute_settlement` | Runs the 2PC settlement saga |
+
+Pair first. In `mesh_demo_custodial` the mesh mints your buyer DID inside
+`establish_agent_delegation`, so a `buyer_agent_id` to quote with does not exist until you have
+called it.
 
 ---
 

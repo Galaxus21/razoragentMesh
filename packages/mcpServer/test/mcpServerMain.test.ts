@@ -30,7 +30,21 @@ describe("McpServerMain JSON-RPC Dispatcher", () => {
     assert.equal(result.serverInfo.name, "razoragent-mesh-mcp");
   });
 
-  it("should advertise every tool an external agent needs, discovery first", async () => {
+  it("lists establish_agent_delegation first, because that is what mints the buyer DID", async () => {
+    const response = await handleJsonRpcMessage({
+      jsonrpc: "2.0",
+      id: 21,
+      method: "tools/list"
+    });
+
+    // Agents read tools/list top to bottom and take it as the call order. Every clean buyer in
+    // the dress rehearsal quoted first and had to back up, because in mesh_demo_custodial there
+    // is no buyer_agent_id to quote with until this tool has run.
+    const result = response.result as { tools: Array<{ name: string }> };
+    assert.equal(result.tools[0].name, toolEstablishAgentDelegation);
+  });
+
+  it("should advertise every tool an external agent needs, pairing first", async () => {
     const response = await handleJsonRpcMessage({
       jsonrpc: "2.0",
       id: 2,

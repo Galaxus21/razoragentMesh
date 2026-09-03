@@ -30,6 +30,7 @@
         "package_weight_grams",
         "promo_code",
         "quantity",
+        "quote_expiry_timestamp",
         "quote_hash",
         "sku_id"
       ],
