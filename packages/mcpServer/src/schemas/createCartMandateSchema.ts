@@ -20,6 +20,11 @@ export const createCartMandateRequestSchema = z.object({
   promo_code: z.string().optional(),
   package_weight_grams: z.number().int().min(1).default(defaultPackageWeightGrams),
   quote_hash: z.string().min(1),
+  // Optional, and the only free variable in the quote HMAC payload. Supplying it turns
+  // reconciliation into a single hash check plus an explicit expiry comparison, so "the
+  // parameters differ" and "the quote lapsed" stay structurally distinct. Omitting it is
+  // still supported: reconcileQuote then scans for the matching expiry instead.
+  quote_expiry_timestamp: z.number().int().positive().optional(),
   lock_token: z.string().min(1),
   fencing_token: z.number().int().min(1),
   lock_expires_at_unix_ms: z.number().int().min(1),

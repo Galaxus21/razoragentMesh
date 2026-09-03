@@ -128,6 +128,14 @@ export const mandateToolsManifest = [
         promo_code: { type: "string" },
         package_weight_grams: { type: "integer", minimum: 1, default: defaultPackageWeightGrams },
         quote_hash: { type: "string", minLength: 1, description: "From get_live_sku_quote." },
+        quote_expiry_timestamp: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "Optional but recommended: pass quote_expiry_timestamp back exactly as " +
+            "get_live_sku_quote returned it. Supplying it lets the mesh tell an expired quote " +
+            "apart from a genuine parameter mismatch and refuse with a timeout you can act on."
+        },
         lock_token: { type: "string", minLength: 1, description: "From reserve_inventory_lock." },
         fencing_token: { type: "integer", minimum: 1, description: "From reserve_inventory_lock." },
         lock_expires_at_unix_ms: {

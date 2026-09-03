@@ -111,6 +111,17 @@ export const errorProofInvalid =
 export const errorProofStale = "proof_timestamp is outside the accepted drift window";
 export const errorQuoteMismatch =
   "quote_hash does not match the quote this mesh recomputed for these parameters";
+
+/**
+ * Builds the expiry refusal. Distinct from errorQuoteMismatch on purpose: the parameters
+ * reconciled exactly and only the clock moved, so telling the agent "hash mismatch" sends it
+ * hunting for a hashing bug it does not have. Says how long ago the quote lapsed and what to
+ * do next, because only err.message reaches the agent.
+ */
+export const errorQuoteExpired = (lapsedSecondsAgo: number, validitySeconds: number): string =>
+  `quote expired ${lapsedSecondsAgo}s ago; quotes are valid for ${validitySeconds}s. ` +
+  "The parameters reconciled exactly -- only the clock moved. Call get_live_sku_quote again " +
+  "and retry create_cart_mandate with the fresh quote_hash.";
 export const errorLockSignatureInvalid = "lock_signature is not a signature this mesh produced";
 export const errorNoCartForDelegation = "No cart mandate has been created for this delegation";
 export const errorNoExecutionPayload = "No execution payload has been issued for this delegation";

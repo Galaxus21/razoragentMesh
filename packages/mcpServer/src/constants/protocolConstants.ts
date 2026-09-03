@@ -54,6 +54,12 @@ export const defaultLockTtlSeconds = 60;
 export const minLockTtlSeconds = 10;
 export const maxLockTtlSeconds = 120;
 export const quoteValiditySeconds = 60;
+/**
+ * How far past quoteExpiryTimestamp a quote is still honoured, absorbing the round trip between
+ * get_live_sku_quote and create_cart_mandate. Also bounds the reconciliation scan below the
+ * expiry, so a quote that lapsed can be named as expired rather than reported as a hash mismatch.
+ */
+export const quoteExpiryGraceSeconds = 2;
 
 export const minQuantity = 1;
 export const maxQuantity = 10000;

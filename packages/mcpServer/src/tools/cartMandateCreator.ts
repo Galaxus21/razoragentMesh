@@ -15,6 +15,7 @@ import {
   demoMerchantGstin,
   demoMerchantStateCode,
   errorLockSignatureInvalid,
+  errorQuoteExpired,
   errorQuoteMismatch,
   errorUnknownDelegation
 } from "../constants/mandateToolConstants.js";
@@ -22,6 +23,7 @@ import {
   defaultMerchantPrivateKeyHex,
   defaultOriginPincode,
   millisPerSecond,
+  quoteExpiryGraceSeconds,
   quoteValiditySeconds
 } from "../constants/protocolConstants.js";
 import {
@@ -54,29 +56,59 @@ function reconcileQuote(request: CreateCartMandateRequest, buyerAgentDid: string
   });
 
   const nowSeconds = Math.floor(Date.now() / millisPerSecond);
-  let matches = false;
-  for (let expiry = nowSeconds - 2; expiry <= nowSeconds + quoteValiditySeconds + 2; expiry++) {
-    if (
-      verifyQuoteHash(
-        {
-          skuId: quote.sku_id,
-          quantity: request.quantity,
-          offeredUnitPricePaise: quote.offered_unit_price_paise,
-          totalTaxPaise: quote.tax_breakdown.total_tax_paise,
-          quoteExpiryTimestamp: expiry,
-          buyerAgentId: buyerAgentDid
-        },
-        request.quote_hash
-      )
-    ) {
-      matches = true;
+  const hashMatchesAt = (expiry: number): boolean =>
+    verifyQuoteHash(
+      {
+        skuId: quote.sku_id,
+        quantity: request.quantity,
+        offeredUnitPricePaise: quote.offered_unit_price_paise,
+        totalTaxPaise: quote.tax_breakdown.total_tax_paise,
+        quoteExpiryTimestamp: expiry,
+        buyerAgentId: buyerAgentDid
+      },
+      request.quote_hash
+    );
+
+  // The agent passed the expiry back, so there is nothing to search for: one hash check settles
+  // whether the parameters agree, and the timestamp itself settles whether the quote is still live.
+  if (request.quote_expiry_timestamp !== undefined) {
+    if (!hashMatchesAt(request.quote_expiry_timestamp)) {
+      throw new Error(errorQuoteMismatch);
+    }
+    _rejectIfLapsed(request.quote_expiry_timestamp, nowSeconds);
+    return quote;
+  }
+
+  // No expiry supplied. quoteExpiryTimestamp is the only free variable in the HMAC payload
+  // (quoteHashSigner.ts), so scanning it recovers the exact timestamp the quote was signed with
+  // -- which is what separates "these parameters never matched" from "they matched, and then the
+  // quote lapsed". Scanning below `now` as well as above is the whole point: the old loop started
+  // at now-2 and so could never see an expired quote, and reported every one as a hash mismatch.
+  const earliest = nowSeconds - quoteValiditySeconds - quoteExpiryGraceSeconds;
+  const latest = nowSeconds + quoteValiditySeconds + quoteExpiryGraceSeconds;
+  let matchedExpiry: number | undefined;
+  for (let expiry = latest; expiry >= earliest; expiry--) {
+    if (hashMatchesAt(expiry)) {
+      matchedExpiry = expiry;
       break;
     }
   }
-  if (!matches) {
+  if (matchedExpiry === undefined) {
     throw new Error(errorQuoteMismatch);
   }
+  _rejectIfLapsed(matchedExpiry, nowSeconds);
   return quote;
+}
+
+/**
+ * Refuses a quote whose expiry has passed, grace included. Separated so both reconciliation
+ * paths above produce the identical refusal.
+ */
+function _rejectIfLapsed(quoteExpiryTimestamp: number, nowSeconds: number): void {
+  if (quoteExpiryTimestamp >= nowSeconds - quoteExpiryGraceSeconds) {
+    return;
+  }
+  throw new Error(errorQuoteExpired(nowSeconds - quoteExpiryTimestamp, quoteValiditySeconds));
 }
 
 /**

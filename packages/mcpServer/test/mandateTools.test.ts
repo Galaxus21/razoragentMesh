@@ -15,6 +15,7 @@ import { executeSettlementForDelegation } from "../src/tools/settlementExecutor.
 import { executeSkuQuote } from "../src/tools/skuQuoter.js";
 import { defaultCatalogStore } from "../src/catalog/catalogStore.js";
 import { signLockPayload } from "../src/crypto/lockSignatureGenerator.js";
+import { computeQuoteHash } from "../src/crypto/quoteHashSigner.js";
 import { millisPerSecond } from "../src/constants/protocolConstants.js";
 import {
   custodyAgentHeld,
@@ -187,6 +188,95 @@ describe("create_cart_mandate", () => {
     );
     await assert.rejects(
       () => createCartMandateForDelegation({ ...request, quote_hash: "a".repeat(64) }),
+      /quote_hash does not match/
+    );
+  });
+
+  it("names a lapsed quote as expired rather than reporting a hash mismatch", async () => {
+    const delegation = await establishCustodialDelegation();
+    const buyerAgentDid = String(delegation.delegated_agent_did);
+    const request = buildCartRequest(String(delegation.delegation_id), buyerAgentDid);
+
+    // A hash the mesh really did mint, for these exact parameters, whose expiry has passed.
+    // Before the fix the reconciliation scan started at now-2 and so could never match this,
+    // and every timed-out quote was reported as errorQuoteMismatch.
+    const quote = executeSkuQuote({
+      sku_id: testSkuId,
+      quantity: testQuantity,
+      buyer_agent_id: buyerAgentDid,
+      delivery_pincode: testPincode
+    });
+    const lapsedHash = computeQuoteHash({
+      skuId: quote.sku_id,
+      quantity: testQuantity,
+      offeredUnitPricePaise: quote.offered_unit_price_paise,
+      totalTaxPaise: quote.tax_breakdown.total_tax_paise,
+      quoteExpiryTimestamp: nowSeconds() - 10,
+      buyerAgentId: buyerAgentDid
+    });
+
+    await assert.rejects(
+      () => createCartMandateForDelegation({ ...request, quote_hash: lapsedHash }),
+      /quote expired 10s ago/
+    );
+  });
+
+  it("accepts quote_expiry_timestamp passed back and reconciles in a single hash check", async () => {
+    const delegation = await establishCustodialDelegation();
+    const buyerAgentDid = String(delegation.delegated_agent_did);
+    const quote = executeSkuQuote({
+      sku_id: testSkuId,
+      quantity: testQuantity,
+      buyer_agent_id: buyerAgentDid,
+      delivery_pincode: testPincode
+    });
+    const request = buildCartRequest(String(delegation.delegation_id), buyerAgentDid);
+
+    const result = await createCartMandateForDelegation({
+      ...request,
+      quote_hash: quote.quote_hash,
+      quote_expiry_timestamp: quote.quote_expiry_timestamp
+    });
+    assert.equal(result.price_reconciled, true);
+  });
+
+  it("still separates expiry from mismatch when the expiry is supplied explicitly", async () => {
+    const delegation = await establishCustodialDelegation();
+    const buyerAgentDid = String(delegation.delegated_agent_did);
+    const request = buildCartRequest(String(delegation.delegation_id), buyerAgentDid);
+    const quote = executeSkuQuote({
+      sku_id: testSkuId,
+      quantity: testQuantity,
+      buyer_agent_id: buyerAgentDid,
+      delivery_pincode: testPincode
+    });
+    const lapsedExpiry = nowSeconds() - 30;
+    const lapsedHash = computeQuoteHash({
+      skuId: quote.sku_id,
+      quantity: testQuantity,
+      offeredUnitPricePaise: quote.offered_unit_price_paise,
+      totalTaxPaise: quote.tax_breakdown.total_tax_paise,
+      quoteExpiryTimestamp: lapsedExpiry,
+      buyerAgentId: buyerAgentDid
+    });
+
+    await assert.rejects(
+      () =>
+        createCartMandateForDelegation({
+          ...request,
+          quote_hash: lapsedHash,
+          quote_expiry_timestamp: lapsedExpiry
+        }),
+      /quote expired 30s ago/
+    );
+    // A wrong hash under a live expiry stays a mismatch, not a timeout.
+    await assert.rejects(
+      () =>
+        createCartMandateForDelegation({
+          ...request,
+          quote_hash: "a".repeat(64),
+          quote_expiry_timestamp: quote.quote_expiry_timestamp
+        }),
       /quote_hash does not match/
     );
   });
