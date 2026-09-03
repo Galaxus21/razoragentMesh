@@ -2,7 +2,10 @@ import {
   defaultGstRatePercent,
   hsnGstLookupTable,
   maxDiscountBps,
+  maxPromotionDiscountBps,
   maxQuoteTtlSeconds,
+  minPromotionDiscountBps,
+  minPromotionWindowSeconds,
   minQuoteTtlSeconds,
   minVolumeQuantity,
   paisePerInrUnit,
@@ -12,6 +15,8 @@ import {
   FormValidationErrors,
   FormValidationResult,
   MerchantCatalogFormData,
+  ScheduledPromotionInput,
+  ScheduledPromotionPayload,
   UniversalProductListingPayload,
 } from "@/types/merchantCatalogTypes";
 
@@ -111,6 +116,12 @@ export function buildUniversalProductPayload(
       minQuantity: Number(tier.minQuantity),
       discountBps: Number(tier.discountBps),
     })),
+    // Omitted when empty. The backend model is extra="forbid" and `promotions` is optional, so
+    // an empty array is accepted but says something the merchant did not: that they considered
+    // promotions and chose none, rather than never touching the section.
+    ...(formData.promotions.length > 0 && {
+      promotions: formData.promotions.map(buildScheduledPromotionPayload),
+    }),
     ...(formData.selectedFacet === "jewelry" && {
       jewelryFacet: {
         purityCarat: formData.jewelryFacet.purityCarat,
@@ -203,6 +214,101 @@ function validateVolumeTiers(
   });
 }
 
+/**
+ * Mirrors ScheduledPromotionSchema's own validatePromotionInvariants
+ * (merchantApi/src/schemas/universalProductSchema.py). Enforced here so the merchant sees which
+ * field is wrong, rather than a pydantic 422 relayed as an opaque publish failure.
+ */
+function validatePromotions(
+  formData: MerchantCatalogFormData,
+  errors: FormValidationErrors
+): void {
+  formData.promotions.forEach((promotion, idx) => {
+    const label = `Promotion ${idx + 1}`;
+    if (!promotion.campaignId.trim()) {
+      errors[`promotion_${idx}_campaignId`] = `${label}: Campaign ID is required.`;
+    }
+    if (!promotion.name.trim()) {
+      errors[`promotion_${idx}_name`] = `${label}: Display name is required.`;
+    }
+    if (promotion.startsAtUnix <= 0) {
+      errors[`promotion_${idx}_startsAt`] = `${label}: Start time is required.`;
+    }
+    if (promotion.endsAtUnix <= 0) {
+      errors[`promotion_${idx}_endsAt`] = `${label}: End time is required.`;
+    }
+    // The backend requires only that the window is non-empty. The form is stricter: a sale too
+    // short to act on is advertised to buyer agents that then cannot reach it in time.
+    if (
+      promotion.startsAtUnix > 0 &&
+      promotion.endsAtUnix > 0 &&
+      promotion.endsAtUnix - promotion.startsAtUnix < minPromotionWindowSeconds
+    ) {
+      errors[`promotion_${idx}_endsAt`] =
+        `${label}: The sale must run for at least ${minPromotionWindowSeconds / 60} minutes after it starts.`;
+    }
+    validatePromotionDiscount(promotion, idx, label, errors);
+  });
+}
+
+function validatePromotionDiscount(
+  promotion: ScheduledPromotionInput,
+  idx: number,
+  label: string,
+  errors: FormValidationErrors
+): void {
+  const key = `promotion_${idx}_discount`;
+  if (promotion.discountKind === "PERCENT") {
+    if (
+      promotion.discountBps < minPromotionDiscountBps ||
+      promotion.discountBps > maxPromotionDiscountBps
+    ) {
+      errors[key] = `${label}: Discount must be between ${minPromotionDiscountBps} and ${maxPromotionDiscountBps} BPS.`;
+    }
+    return;
+  }
+  // convertInrToPaise returns 0 for anything unparseable or non-positive, so this one check
+  // covers a blank field, a negative and "abc" alike -- and the schema rejects all three.
+  const amountPaise = convertInrToPaise(
+    promotion.discountKind === "FLAT_OFF" ? promotion.discountInr : promotion.fixedPriceInr
+  );
+  if (amountPaise <= 0) {
+    errors[key] =
+      promotion.discountKind === "FLAT_OFF"
+        ? `${label}: Enter the rupee amount to take off.`
+        : `${label}: Enter the fixed sale price in rupees.`;
+  }
+}
+
+/**
+ * Emits exactly one of the three discount fields.
+ *
+ * ScheduledPromotionSchema requires at least one and forbids unknown keys, so sending all three
+ * with two zeroed would both over-specify the promotion and, for a zero discountBps, fail the
+ * schema's own ge= bound. `limitedStockAllocated` is dropped at 0, which the form uses to mean
+ * unlimited -- the backend spells that as an absent field, not a zero.
+ */
+export function buildScheduledPromotionPayload(
+  promotion: ScheduledPromotionInput
+): ScheduledPromotionPayload {
+  return {
+    campaignId: promotion.campaignId.trim(),
+    name: promotion.name.trim(),
+    startsAtUnix: Number(promotion.startsAtUnix),
+    endsAtUnix: Number(promotion.endsAtUnix),
+    ...(promotion.discountKind === "PERCENT" && { discountBps: Number(promotion.discountBps) }),
+    ...(promotion.discountKind === "FLAT_OFF" && {
+      discountPaise: convertInrToPaise(promotion.discountInr),
+    }),
+    ...(promotion.discountKind === "FIXED_PRICE" && {
+      fixedPricePaise: convertInrToPaise(promotion.fixedPriceInr),
+    }),
+    ...(promotion.limitedStockAllocated > 0 && {
+      limitedStockAllocated: Number(promotion.limitedStockAllocated),
+    }),
+  };
+}
+
 function validateFacets(
   formData: MerchantCatalogFormData,
   errors: FormValidationErrors
@@ -245,6 +351,7 @@ export function validateMerchantCatalogForm(formData: MerchantCatalogFormData): 
   validateBasicMetadata(formData, errors);
   validatePricingAndStock(formData, errors);
   validateVolumeTiers(formData, errors);
+  validatePromotions(formData, errors);
   validateFacets(formData, errors);
 
   return {

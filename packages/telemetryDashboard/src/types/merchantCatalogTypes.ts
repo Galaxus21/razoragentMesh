@@ -18,6 +18,35 @@ export interface VolumeTierInput {
   readonly discountBps: number;
 }
 
+/**
+ * Which of the three discount shapes a promotion uses. ScheduledPromotionSchema accepts
+ * discountBps, discountPaise or fixedPricePaise and requires at least one, so the form asks
+ * which one rather than showing three fields and hoping the merchant fills exactly one in.
+ */
+export type PromotionDiscountKind = "PERCENT" | "FLAT_OFF" | "FIXED_PRICE";
+
+/**
+ * A scheduled flash sale, in the shape the form holds it. Amounts are rupee strings here and
+ * become paise in the payload, matching how basePriceInr is handled.
+ *
+ * This is what get_live_sku_quote reports as `upcoming_promotions` with an expected_savings_paise
+ * -- the "wait for the sale" advice a buyer agent gives. The backend has supported it from the
+ * start; until now the Studio could not author one, so it could only be demonstrated by posting
+ * raw JSON to the merchant API.
+ */
+export interface ScheduledPromotionInput {
+  readonly campaignId: string;
+  readonly name: string;
+  readonly startsAtUnix: number;
+  readonly endsAtUnix: number;
+  readonly discountKind: PromotionDiscountKind;
+  readonly discountBps: number;
+  readonly discountInr: string;
+  readonly fixedPriceInr: string;
+  /** 0 means unlimited. The backend omits the field entirely rather than sending a zero. */
+  readonly limitedStockAllocated: number;
+}
+
 export interface BullionPricingFormData {
   readonly enabled: boolean;
   readonly oracleFeedSymbol: OracleFeedSymbol;
@@ -71,6 +100,7 @@ export interface MerchantCatalogFormData {
   readonly currency: "INR";
   readonly minimumOrderQuantity: number;
   readonly volumeTiers: ReadonlyArray<VolumeTierInput>;
+  readonly promotions: ReadonlyArray<ScheduledPromotionInput>;
   readonly bullionPricing: BullionPricingFormData;
   readonly selectedFacet: DomainFacetType;
   readonly jewelryFacet: JewelryFacetFormData;
@@ -139,6 +169,17 @@ export interface FmcgFacetPayload {
   readonly fssaiNumber: string;
 }
 
+export interface ScheduledPromotionPayload {
+  readonly campaignId: string;
+  readonly name: string;
+  readonly startsAtUnix: number;
+  readonly endsAtUnix: number;
+  readonly discountBps?: number;
+  readonly discountPaise?: number;
+  readonly fixedPricePaise?: number;
+  readonly limitedStockAllocated?: number;
+}
+
 export interface UniversalProductListingPayload {
   readonly skuId: string;
   readonly merchantDid: string;
@@ -156,6 +197,12 @@ export interface UniversalProductListingPayload {
     readonly minQuantity: number;
     readonly discountBps: number;
   }>;
+  /**
+   * Omitted entirely when empty rather than sent as []. ScheduledPromotionSchema's parent is
+   * extra="forbid" and each optional discount field is dropped unless it is the one in use, so
+   * the payload carries exactly the keys the backend model declares.
+   */
+  readonly promotions?: ReadonlyArray<ScheduledPromotionPayload>;
   readonly jewelryFacet?: JewelryFacetPayload;
   readonly apparelFacet?: ApparelFacetPayload;
   readonly pharmaFacet?: PharmaFacetPayload;

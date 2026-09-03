@@ -1,8 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   defaultCatalogFormState,
+  defaultPromotionDiscountBps,
+  defaultPromotionLeadSeconds,
+  defaultPromotionWindowSeconds,
   HsnPresetOption,
   meshCatalogProxyEndpoint,
+  millisecondsPerSecond,
 } from "@/constants/merchantCatalogConstants";
 import {
   buildUniversalProductPayload,
@@ -19,9 +23,31 @@ import {
   JewelryFacetFormData,
   MerchantCatalogFormData,
   PharmaFacetFormData,
+  ScheduledPromotionInput,
   UniversalProductListingPayload,
   VolumeTierInput,
 } from "@/types/merchantCatalogTypes";
+
+/**
+ * Drops every validation message belonging to one promotion row.
+ *
+ * Keys are positional (`promotion_2_name`), so a removal would otherwise leave the deleted row's
+ * errors pointing at whichever row slid into its index. Rebuilding the map is cheap and keeps
+ * the numbering honest.
+ */
+function _withoutPromotionErrors(
+  errors: FormValidationErrors,
+  index: number
+): FormValidationErrors {
+  const prefix = `promotion_${index}_`;
+  const remaining: FormValidationErrors = {};
+  for (const [key, message] of Object.entries(errors)) {
+    if (!key.startsWith(prefix)) {
+      remaining[key] = message;
+    }
+  }
+  return remaining;
+}
 
 export interface UseMerchantCatalogFormReturn {
   readonly formData: MerchantCatalogFormData;
@@ -37,6 +63,9 @@ export interface UseMerchantCatalogFormReturn {
   readonly handleAddVolumeTier: () => void;
   readonly handleRemoveVolumeTier: (index: number) => void;
   readonly handleUpdateVolumeTier: (index: number, updated: VolumeTierInput) => void;
+  readonly handleAddPromotion: () => void;
+  readonly handleRemovePromotion: (index: number) => void;
+  readonly handleUpdatePromotion: (index: number, updated: ScheduledPromotionInput) => void;
   readonly handleUpdateBullion: <K extends keyof BullionPricingFormData>(
     field: K,
     value: BullionPricingFormData[K]
@@ -128,6 +157,53 @@ export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
       ...prev,
       volumeTiers: prev.volumeTiers.map((tier, idx) => (idx === index ? updated : tier)),
     }));
+  }, []);
+
+  const handleAddPromotion = useCallback(() => {
+    setFormData((prev) => {
+      // Seeded relative to now rather than left blank, so the window is already valid and a
+      // merchant demonstrating the feature does not have to type two timestamps to see it work.
+      // Computed in the handler, not at module scope: a Date.now() evaluated during render would
+      // differ between the server and the client and break hydration.
+      const startsAtUnix =
+        Math.floor(Date.now() / millisecondsPerSecond) + defaultPromotionLeadSeconds;
+      return {
+        ...prev,
+        promotions: [
+          ...prev.promotions,
+          {
+            campaignId: `CAMPAIGN_${prev.promotions.length + 1}`,
+            name: "",
+            startsAtUnix,
+            endsAtUnix: startsAtUnix + defaultPromotionWindowSeconds,
+            discountKind: "PERCENT",
+            discountBps: defaultPromotionDiscountBps,
+            discountInr: "",
+            fixedPriceInr: "",
+            limitedStockAllocated: 0,
+          },
+        ],
+      };
+    });
+  }, []);
+
+  const handleRemovePromotion = useCallback((index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      promotions: prev.promotions.filter((_, idx) => idx !== index),
+    }));
+    // Cleared, unlike the volume tier handlers above: a stale promotion_N_* message left on a
+    // field the merchant has already fixed -- or on a row they have deleted -- reads as a form
+    // that will not let them publish.
+    setErrors((prev) => _withoutPromotionErrors(prev, index));
+  }, []);
+
+  const handleUpdatePromotion = useCallback((index: number, updated: ScheduledPromotionInput) => {
+    setFormData((prev) => ({
+      ...prev,
+      promotions: prev.promotions.map((promotion, idx) => (idx === index ? updated : promotion)),
+    }));
+    setErrors((prev) => _withoutPromotionErrors(prev, index));
   }, []);
 
   const handleUpdateBullion = useCallback(
@@ -254,6 +330,9 @@ export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
     handleAddVolumeTier,
     handleRemoveVolumeTier,
     handleUpdateVolumeTier,
+    handleAddPromotion,
+    handleRemovePromotion,
+    handleUpdatePromotion,
     handleUpdateBullion,
     handleSelectFacet,
     handleUpdateJewelry,

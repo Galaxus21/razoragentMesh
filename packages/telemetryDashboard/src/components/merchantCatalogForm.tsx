@@ -8,6 +8,7 @@ import { CatalogJsonPreview } from "./merchantSkuStudio/catalogJsonPreview";
 import { DomainFacetSection } from "./merchantSkuStudio/domainFacetSection";
 import { SkuBasicDetailsSection } from "./merchantSkuStudio/skuBasicDetailsSection";
 import { VolumeTierBuilder } from "./merchantSkuStudio/volumeTierBuilder";
+import { PromotionBuilder } from "./merchantSkuStudio/promotionBuilder";
 
 export function MerchantCatalogForm(): React.JSX.Element {
   const form = useMerchantCatalogForm();
@@ -19,6 +20,7 @@ export function MerchantCatalogForm(): React.JSX.Element {
         <div className="lg:col-span-7 space-y-6">
           <SkuBasicDetailsSection formData={form.formData} errors={form.errors} onChangeField={form.handleChangeField} onHsnPresetSelect={form.handleHsnPresetSelect} />
           <VolumeTierBuilder volumeTiers={form.formData.volumeTiers} errors={form.errors} onAddTier={form.handleAddVolumeTier} onRemoveTier={form.handleRemoveVolumeTier} onUpdateTier={form.handleUpdateVolumeTier} />
+          <PromotionBuilder promotions={form.formData.promotions} errors={form.errors} onAddPromotion={form.handleAddPromotion} onRemovePromotion={form.handleRemovePromotion} onUpdatePromotion={form.handleUpdatePromotion} />
           <BullionPricingSection bullionPricing={form.formData.bullionPricing} errors={form.errors} onUpdateBullion={form.handleUpdateBullion} />
           <DomainFacetSection selectedFacet={form.formData.selectedFacet} jewelryFacet={form.formData.jewelryFacet} apparelFacet={form.formData.apparelFacet} pharmaFacet={form.formData.pharmaFacet} fmcgFacet={form.formData.fmcgFacet} errors={form.errors} onSelectFacet={form.handleSelectFacet} onUpdateJewelry={form.handleUpdateJewelry} onUpdateApparel={form.handleUpdateApparel} onUpdatePharma={form.handleUpdatePharma} onUpdateFmcg={form.handleUpdateFmcg} />
         </div>

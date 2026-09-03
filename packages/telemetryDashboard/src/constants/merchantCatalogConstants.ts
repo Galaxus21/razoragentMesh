@@ -12,6 +12,18 @@ export const defaultMinOrderQuantity = 1;
 export const defaultQuoteTtlSeconds = 60;
 export const minVolumeQuantity = 1;
 export const maxDiscountBps = 10000;
+// Mirrors ScheduledPromotionSchema's bounds in merchantApi/src/schemas/universalProductSchema.py.
+// A promotion outside them is a 422 from the route, so the form refuses it first and says which
+// field is wrong, rather than surfacing a pydantic error the merchant has to decode.
+export const minPromotionDiscountBps = 1;
+export const maxPromotionDiscountBps = 10000;
+// A sale is only worth advertising if it lasts long enough for an agent to act on the advice.
+// The backend requires only endsAtUnix > startsAtUnix; this is the form being stricter.
+export const minPromotionWindowSeconds = 300;
+export const defaultPromotionWindowSeconds = 86400;
+export const defaultPromotionLeadSeconds = 3600;
+export const defaultPromotionDiscountBps = 1000;
+export const millisecondsPerSecond = 1000;
 export const minQuoteTtlSeconds = 10;
 export const maxQuoteTtlSeconds = 300;
 export const paisePerInrUnit = 100;
@@ -140,6 +152,7 @@ export const defaultCatalogFormState: MerchantCatalogFormData = {
   currency: "INR",
   minimumOrderQuantity: defaultMinOrderQuantity,
   volumeTiers: [],
+  promotions: [],
   bullionPricing: {
     enabled: false,
     oracleFeedSymbol: "MCX_GOLD_24K_INR_PER_GRAM",
