@@ -102,7 +102,7 @@ export function NegotiationPolicyPanel({
             type="text"
             value={policy.merchantDid}
             onChange={(e) => onUpdatePolicy({ merchantDid: e.target.value })}
-            placeholder="did:agent:merchant_demo_01"
+            placeholder="did:mesh:merchant_razoragent_demo_01"
             className="w-full rounded border border-borderSubtle bg-bgSurface px-2 py-1 font-mono text-xs text-textPrimary focus:border-accentPrimary focus:outline-none focus:ring-1 focus:ring-accentPrimary"
           />
           {errors.merchantDid && (

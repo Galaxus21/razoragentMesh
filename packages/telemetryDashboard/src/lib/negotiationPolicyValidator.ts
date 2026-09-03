@@ -44,7 +44,12 @@ export const minPolicyOrderQuantity = 1;
 export const minPolicyNegotiationTurns = 1;
 export const maxPolicyNegotiationTurns = 10;
 export const paisePerRupee = 100;
-export const merchantDidPattern = /^did:agent:[a-z0-9_\-.:]+$/;
+// Any DID method, not just `did:agent:`. The mesh's own demo merchant is
+// `did:mesh:merchant_razoragent_demo_01` and the fixture indexer publishes under it, so a
+// did:agent-only pattern refused the one merchant the Studio is most likely to be pointed at.
+// NegotiationPolicy.merchantDid is a bare `str` on the backend, so anything stricter than a
+// well-formed DID would be this panel inventing a rule the mesh does not have.
+export const merchantDidPattern = /^did:[a-z0-9]+:[A-Za-z0-9_\-.:]+$/;
 
 /**
  * The gateway's own turn ceiling. A merchant may configure up to 10, but the protocol's escrow
@@ -94,7 +99,7 @@ export function validateNegotiationPolicy(
   if (did.length === 0) {
     errors.merchantDid = "A merchant DID is required — the policy is stored under it.";
   } else if (!merchantDidPattern.test(did)) {
-    errors.merchantDid = "Must look like did:agent:your_merchant_id.";
+    errors.merchantDid = "Must look like did:agent:your_id or did:mesh:your_id.";
   }
 
   if (

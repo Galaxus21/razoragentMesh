@@ -428,8 +428,8 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 | Python backend + Python Buyer SDK | 1370 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
 | MCP discovery server | 243 | `cd packages/mcpServer && npm test` |
 | TypeScript Buyer SDK | 98 | `cd packages/buyerSdkTs && npm test` |
-| Telemetry dashboard + SKU Studio | 347 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **2,058** | `python scripts/countTests.py` |
+| Telemetry dashboard + SKU Studio | 348 | `cd packages/telemetryDashboard && npm test` |
+| **Total** | **2,059** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 

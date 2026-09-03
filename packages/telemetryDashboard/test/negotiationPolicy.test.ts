@@ -100,6 +100,21 @@ describe("Merchant SKU Studio — negotiation policy validation mirrors the back
   it("requires a DID, because the policy is stored under it", () => {
     assert.ok(validateNegotiationPolicy(buildPolicy({ merchantDid: "   " })).errors.merchantDid);
     assert.ok(validateNegotiationPolicy(buildPolicy({ merchantDid: "merchant_1" })).errors.merchantDid);
+    assert.ok(validateNegotiationPolicy(buildPolicy({ merchantDid: "did:agent:" })).errors.merchantDid);
+  });
+
+  it("accepts any DID method, not just did:agent", () => {
+    // The mesh's own demo merchant is did:mesh:merchant_razoragent_demo_01 -- a did:agent-only
+    // pattern refused the one merchant the Studio is most likely to be pointed at, which is how
+    // this was found: the panel prefilled from that merchant's policy and then would not save it.
+    for (const did of [
+      "did:mesh:merchant_razoragent_demo_01",
+      "did:agent:merchant_demo_01",
+      "did:web:example.com",
+    ]) {
+      const result = validateNegotiationPolicy(buildPolicy({ merchantDid: did }));
+      assert.equal(result.isValid, true, `${did} should be accepted: ${JSON.stringify(result.errors)}`);
+    }
   });
 
   it("holds the margin floor inside the model's basis-point bounds", () => {
