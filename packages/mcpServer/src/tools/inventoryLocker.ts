@@ -21,11 +21,19 @@ import {
   defaultInMemoryLocker,
   executeRedisLock
 } from "../inventory/redisLockManager.js";
+import {
+  defaultIssuedQuoteRegistry,
+  errorQuoteCoversDifferentPurchase,
+  errorQuoteLapsedBeforeLock,
+  errorQuoteNotIssued,
+  IssuedQuoteRegistry
+} from "../inventory/issuedQuoteRegistry.js";
 
 export interface LockOptions {
   readonly redisClient?: Redis;
   readonly privateKeyHex?: string;
   readonly catalogStore?: CatalogStore;
+  readonly quoteRegistry?: IssuedQuoteRegistry;
 }
 
 export function normalizeLockRequest(rawInput: unknown): InventoryLockRequest {
@@ -46,6 +54,9 @@ export async function reserveInventoryLock(
   options: LockOptions = {}
 ): Promise<InventoryLockResponse> {
   const { request, store } = _validateLockRequest(rawRequest, options.catalogStore);
+  // Before the reservation, never after: the whole point is that an unverifiable quote_hash must
+  // not cost the merchant stock. A refusal here has taken nothing.
+  _rejectUnissuedQuote(request, options.quoteRegistry);
   const { lockToken, expiresAtUnixMs, fencingToken } = await _executeAtomicReservation(
     request,
     store,
@@ -67,6 +78,39 @@ function _validateLockRequest(
   }
 
   return { request, store };
+}
+
+/**
+ * Refuses a quote_hash this mesh did not issue for this exact purchase.
+ *
+ * quote_hash was a required parameter that nothing checked: it was folded into the lock signature
+ * as supplied, so any string bought a real lock and real stock, and the agent only found out at
+ * create_cart_mandate. The three refusals are deliberately distinct -- "quote first", "quote
+ * again" and "you are locking something else" are three different mistakes with three different
+ * fixes, and only err.message reaches the agent.
+ */
+function _rejectUnissuedQuote(
+  request: InventoryLockRequest,
+  quoteRegistry: IssuedQuoteRegistry = defaultIssuedQuoteRegistry
+): void {
+  const lookup = {
+    quoteHash: request.quote_hash,
+    skuId: request.sku_id,
+    quantity: request.quantity,
+    buyerAgentId: request.buyer_agent_id
+  };
+  const verdict = quoteRegistry.verify(lookup);
+
+  switch (verdict.outcome) {
+    case "issued":
+      return;
+    case "expired":
+      throw new Error(errorQuoteLapsedBeforeLock(verdict.lapsedSeconds));
+    case "parametersDiffer":
+      throw new Error(errorQuoteCoversDifferentPurchase(verdict.issued, lookup));
+    default:
+      throw new Error(errorQuoteNotIssued);
+  }
 }
 
 async function _executeAtomicReservation(

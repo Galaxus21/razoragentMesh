@@ -210,9 +210,14 @@ export const pincodePrefixStateMap: Record<string, string> = {
 export const defaultFallbackState = "KA";
  
  export const discountTypeVolumeTier = "VOLUME_TIER" as const;
+ export const discountTypeScheduledPromotion = "SCHEDULED_PROMOTION" as const;
  export const discountTypeCampaign = "CAMPAIGN" as const;
  export const discountTypePaymentRail = "PAYMENT_RAIL" as const;
  export const discountTypePromoCode = "PROMO_CODE" as const;
+ // A price the merchant agreed to in a negotiation, applied by the quoter when the buyer that
+ // struck it quotes the purchase it was struck for. Distinct from every discount above because
+ // it belongs to one buyer rather than to the SKU.
+ export const discountTypeNegotiated = "NEGOTIATED" as const;
  
  export const festiveCampaignName = "RAZORPAY_FESTIVE_10";
  export const festiveCampaignBps = 1000;

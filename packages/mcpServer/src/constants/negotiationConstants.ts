@@ -48,6 +48,13 @@ export const buyerConcessionRateBps = 3000;
 // Difficulty is per-IP dynamic in the gateway's anti-spam shield, so a solve is not a fixed cost:
 // this bounds the total, and the tool returns the turns it did complete rather than hanging.
 export const powSolveBudgetMs = 15_000;
+// How long a converged agreement stays bindable. The window has to cover the rest of a
+// purchase -- quote, lock, cart, sign, settle -- with room for an agent that stops to think,
+// and it has to be short enough that a price agreed under one set of conditions is not still
+// on offer long after they have changed. The longest complete buy in the 2026-09-03 matrix
+// was just under a minute.
+export const agreedPriceValiditySeconds = 300;
+
 // The gateway's answer when the merchant has not opted in to negotiation. Named rather than
 // inlined because it is the one status this client treats as a commercial answer, not a fault.
 export const httpStatusForbidden = 403;

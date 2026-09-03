@@ -16,7 +16,14 @@ export const skuQuoteRequestSchema = z.object({
 export type SkuQuoteRequest = z.infer<typeof skuQuoteRequestSchema>;
 
 export const appliedDiscountItemSchema = z.object({
-  type: z.enum(["VOLUME_TIER", "CAMPAIGN", "PAYMENT_RAIL", "PROMO_CODE"]),
+  type: z.enum([
+    "VOLUME_TIER",
+    "SCHEDULED_PROMOTION",
+    "CAMPAIGN",
+    "PAYMENT_RAIL",
+    "PROMO_CODE",
+    "NEGOTIATED"
+  ]),
   label: z.string(),
   discountBps: z.number().int().optional(),
   discountPaise: z.number().int().min(0).optional()

@@ -43,7 +43,14 @@ export const mandateToolsManifest = [
       `In ${custodyMeshDemoCustodial} a delegation authorises a SINGLE purchase: the mesh ` +
       "discards the session buyer key once that purchase settles, so its lifetime is the " +
       "purchase and not validity_seconds. Call this tool again for each further purchase -- " +
-      "reusing a settled delegation is refused, whatever budget it has left.",
+      "reusing a settled delegation is refused, whatever budget it has left. " +
+      "Know what that means for the ceiling you are given: max_budget_paise binds ONE " +
+      "delegation, so establishing a second one starts a second budget rather than continuing " +
+      "the first. The mesh cannot tell that two delegations belong to the same person. If your " +
+      "buyer gave you a total to spend, YOU are the one tracking it across delegations -- and " +
+      "before you re-pair to correct a cap or retry, check whether the purchase you are redoing " +
+      "already settled. Settling the same cart twice in one session is refused; settling it " +
+      "twice across sessions is not.",
     inputSchema: {
       type: "object",
       required: ["key_custody", "max_budget_paise", "single_transaction_limit_paise"],

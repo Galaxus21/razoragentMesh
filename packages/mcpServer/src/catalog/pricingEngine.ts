@@ -4,6 +4,7 @@ import {
   intraStateHalfBpsDivisor,
   millisPerSecond,
   discountTypeVolumeTier,
+  discountTypeScheduledPromotion,
   discountTypeCampaign,
   discountTypePaymentRail,
   discountTypePromoCode,
@@ -174,6 +175,57 @@ export function resolveSkuOffers(offers: MerchantAuthoredOffers | undefined): {
   };
 }
 
+/**
+ * Applies the merchant's own scheduled sale, when one is open.
+ *
+ * This step did not exist. `evaluateScheduledPromotions` split promotions into active and
+ * upcoming, `upcomingPromotions` was returned to the agent, and `activePromotions` was read by no
+ * production code -- so a sale was advertised while it was still coming and then never charged
+ * once it arrived. Measured on 2026-09-03: the mesh promised `expectedUnitPricePaise: 1800000`
+ * while upcoming and charged 2397850 thirty minutes into the window.
+ *
+ * It runs FIRST, on the base price, because `expectedUnitPricePaise` is computed from the base
+ * price too. Anything else and the price the mesh promised while the sale was upcoming would not
+ * be the price it charges once the sale opens -- which is the whole defect. Later steps compound
+ * on the promoted price, so a buyer can only end up paying less than was advertised, never more.
+ *
+ * A malformed promotion (inverted window, fixed price above list) throws in the evaluator. It is
+ * swallowed here for the same reason `catalogBrowser` swallows it: a merchant's bad promotion
+ * record must cost that sale's discount, not the ability to quote the SKU at all.
+ */
+function applyScheduledPromotionStep(
+  baseUnitPricePaise: number,
+  promotions: readonly ScheduledPromotion[],
+  currentTimeUnix: number,
+  appliedDiscounts: AppliedDiscountItem[]
+): number {
+  if (promotions.length === 0) return baseUnitPricePaise;
+
+  let active: readonly UpcomingPromotion[];
+  try {
+    active = evaluateScheduledPromotions(baseUnitPricePaise, promotions, currentTimeUnix)
+      .activePromotions;
+  } catch {
+    return baseUnitPricePaise;
+  }
+  if (active.length === 0) return baseUnitPricePaise;
+
+  // Deepest wins. Overlapping windows are a merchant authoring mistake, not a stacking
+  // instruction: charging the sum of two sales can drive a price to zero.
+  const best = active.reduce((deepest, promotion) =>
+    promotion.expected_unit_price_paise < deepest.expected_unit_price_paise ? promotion : deepest
+  );
+  const discountPaise = baseUnitPricePaise - best.expected_unit_price_paise;
+  if (discountPaise <= zeroPaise) return baseUnitPricePaise;
+
+  appliedDiscounts.push({
+    type: discountTypeScheduledPromotion,
+    label: `${best.name ?? best.campaign_id} (merchant sale)`,
+    discountPaise
+  });
+  return best.expected_unit_price_paise;
+}
+
 function applyCampaignDiscountStep(
   unitPricePaise: number,
   offers: MerchantAuthoredOffers | undefined,
@@ -238,7 +290,9 @@ export function computeAutoDiscountStack(
   quantity: number,
   volumeTiers: readonly VolumeTier[],
   promoCode?: string,
-  merchantOffers?: MerchantAuthoredOffers
+  merchantOffers?: MerchantAuthoredOffers,
+  promotions: readonly ScheduledPromotion[] = [],
+  currentTimeUnix: number = Math.floor(Date.now() / millisPerSecond)
 ): DiscountStackResult {
   assertIntegerPaise(baseUnitPricePaise, "baseUnitPricePaise");
   assertIntegerPaise(quantity, "quantity");
@@ -248,7 +302,13 @@ export function computeAutoDiscountStack(
   }
 
   const appliedDiscounts: AppliedDiscountItem[] = [];
-  let currentPrice = applyVolumeTierDiscountStep(baseUnitPricePaise, quantity, volumeTiers, appliedDiscounts);
+  let currentPrice = applyScheduledPromotionStep(
+    baseUnitPricePaise,
+    promotions,
+    currentTimeUnix,
+    appliedDiscounts
+  );
+  currentPrice = applyVolumeTierDiscountStep(currentPrice, quantity, volumeTiers, appliedDiscounts);
   currentPrice = applyCampaignDiscountStep(currentPrice, merchantOffers, appliedDiscounts);
   currentPrice = applyPaymentRailDiscountStep(currentPrice, merchantOffers, appliedDiscounts);
   currentPrice = applyPromoCodeDiscountStep(currentPrice, promoCode, merchantOffers, appliedDiscounts);

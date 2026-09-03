@@ -1,12 +1,26 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { reserveInventoryLock } from "../src/tools/inventoryLocker.js";
+import { executeSkuQuote } from "../src/tools/skuQuoter.js";
 import { CatalogStore } from "../src/catalog/catalogStore.js";
 import { verifyLockSignature } from "../src/crypto/lockSignatureGenerator.js";
 import {
   InsufficientStockException,
   SkuNotFoundException
 } from "../src/types/mcpToolTypes.js";
+
+/** A lock is only granted against a quote this mesh issued, so these tests quote first. */
+function quoteHashFor(
+  store: CatalogStore,
+  skuId: string,
+  quantity: number,
+  buyerAgentId: string
+): string {
+  return executeSkuQuote(
+    { sku_id: skuId, quantity, buyer_agent_id: buyerAgentId, delivery_pincode: "560001" },
+    store
+  ).quote_hash;
+}
 
 function buildLimitedStressCatalog(): CatalogStore {
   return new CatalogStore([
@@ -50,6 +64,8 @@ describe("Challenger 1 — Phase 4 Adversarial Inventory Locker (mcpServer)", ()
   describe("Inventory Locker Semantics & Concurrency", () => {
     it("should handle high-concurrency race condition (10 concurrent requests for 3 units)", async () => {
       const limitedCatalog = buildLimitedStressCatalog();
+      // Every bot quotes legitimately first: the contention under test is over the last units of
+      // stock, not over whether a quote_hash is real.
       const promises = Array.from({ length: 10 }, (_, index) =>
         reserveInventoryLock(
           {
@@ -57,7 +73,7 @@ describe("Challenger 1 — Phase 4 Adversarial Inventory Locker (mcpServer)", ()
             quantity: 1,
             lock_ttl_seconds: 30,
             buyer_agent_id: `did:agent:bot-${index}`,
-            quote_hash: `${index}`.padStart(64, "0")
+            quote_hash: quoteHashFor(limitedCatalog, "SKU-CHALLENGE-001", 1, `did:agent:bot-${index}`)
           },
           { catalogStore: limitedCatalog }
         )
@@ -100,7 +116,10 @@ describe("Challenger 1 — Phase 4 Adversarial Inventory Locker (mcpServer)", ()
     it("should reject tampered signature payload in lock response verification", async () => {
       const store = new CatalogStore();
       const lockResponse = await reserveInventoryLock(
-        { sku_id: "SKU-CHAIR-001", quantity: 1, lock_ttl_seconds: 60, buyer_agent_id: "did:agent:bot-tamper", quote_hash: "1".repeat(64) },
+        {
+          sku_id: "SKU-CHAIR-001", quantity: 1, lock_ttl_seconds: 60, buyer_agent_id: "did:agent:bot-tamper",
+          quote_hash: quoteHashFor(store, "SKU-CHAIR-001", 1, "did:agent:bot-tamper")
+        },
         { catalogStore: store }
       );
 
@@ -122,7 +141,10 @@ describe("Challenger 1 — Phase 4 Adversarial Inventory Locker (mcpServer)", ()
       const beforeTime = Date.now();
       const customTtl = 45;
       const resp = await reserveInventoryLock(
-        { sku_id: "SKU-CHAIR-001", quantity: 1, lock_ttl_seconds: customTtl, buyer_agent_id: "did:agent:bot-ttl", quote_hash: "2".repeat(64) },
+        {
+          sku_id: "SKU-CHAIR-001", quantity: 1, lock_ttl_seconds: customTtl, buyer_agent_id: "did:agent:bot-ttl",
+          quote_hash: quoteHashFor(store, "SKU-CHAIR-001", 1, "did:agent:bot-ttl")
+        },
         { catalogStore: store }
       );
       const afterTime = Date.now();

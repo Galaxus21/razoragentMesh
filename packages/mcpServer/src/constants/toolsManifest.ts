@@ -59,7 +59,11 @@ const discoveryToolsManifest = [
       "before choosing -- it enumerates the live catalog directly rather than ranking it, so a " +
       "product missing from the semantic index still appears here. Returns total_matching so you " +
       "can page with offset, and categories_available so you can widen a filter that matched " +
-      "nothing. Prices are list prices: call get_live_sku_quote for a binding number.",
+      "nothing. Prices are list prices: call get_live_sku_quote for a binding number. Each item " +
+      "also carries next_promotion when its merchant has a sale SCHEDULED, with the start time " +
+      "and expected_savings_paise -- so you can find what is about to get cheaper without " +
+      "quoting every SKU. Filter with has_upcoming_promotion to ask that question directly, and " +
+      "advise your buyer to wait when the saving is worth the delay.",
     inputSchema: {
       type: "object",
       properties: {
@@ -72,6 +76,12 @@ const discoveryToolsManifest = [
           default: 1,
           description: "Defaults to 1, so only orderable stock is listed. Pass 0 to include out-of-stock."
         },
+        has_upcoming_promotion: {
+          type: "boolean",
+          description:
+            "Omit to list everything. True lists only SKUs with a sale scheduled; false only " +
+            "those without one, which is what to buy when waiting is not an option."
+        },
         limit: { type: "integer", minimum: 1, maximum: 100, default: 25 },
         offset: { type: "integer", minimum: 0, default: 0 }
       }
@@ -82,11 +92,13 @@ const discoveryToolsManifest = [
     name: toolGetLiveSkuQuote,
     description:
       "Calculates real-time unit pricing, volume discount tiers, and HSN-compliant GST for a " +
-      "requested SKU and volume. When the merchant has a sale SCHEDULED, the response carries " +
-      "upcoming_promotions with the start time and the expected_savings_paise -- check it before " +
-      "committing, because waiting may be the better advice for your buyer. The field lists " +
-      "FUTURE sales only: a promotion running right now appears neither there nor in " +
-      "offered_unit_price_paise, which reflects volume tiers, campaigns and promo codes only. " +
+      "requested SKU and volume. A merchant sale that is RUNNING is already in " +
+      "offered_unit_price_paise and is named in applied_discounts as SCHEDULED_PROMOTION. A sale " +
+      "that has not started yet is in upcoming_promotions, with its start time and " +
+      "expected_savings_paise. If upcoming_promotions is non-empty you MUST tell the buyer the " +
+      "sale exists, what it would save and when it starts, even if you go on to recommend buying " +
+      "now -- a buyer who later discovers you bought hours before a sale you saw and did not " +
+      "mention has been badly served. Say it in your final answer, not only in your reasoning. " +
       "Which campaign, cashback and promo codes apply is set per SKU by its merchant, so a code " +
       "that discounts one SKU may do nothing on another -- applied_discounts names every one " +
       "that fired.",
@@ -114,9 +126,12 @@ const discoveryToolsManifest = [
       "want to open at and, in max_unit_price_paise, the most you will pay: the bid ladder never " +
       "crosses that ceiling, so a CONVERGED result is always affordable. Worth a call before " +
       "get_live_sku_quote on anything expensive; skip it on cheap items, where the turn fees can " +
-      "exceed the saving (the response reports both, so you can tell). The agreed price is " +
-      "recorded in the gateway's contract AST -- it is NOT applied to your quote automatically, " +
-      "so get_live_sku_quote remains the only source of a bindable quote_hash.",
+      "exceed the saving (the response reports both, so you can tell). A converged price BINDS: " +
+      "quote the same SKU with the same buyer_agent_id and quantity within 5 minutes and " +
+      "get_live_sku_quote applies it as a NEGOTIATED line, so the cart and the settlement charge " +
+      "it. Read savings_realised_paise, not savings_vs_list_paise, when you tell the buyer what " +
+      "the bargaining saved: the first is measured against the discounts they would have got " +
+      "anyway, and the second double-counts them.",
     inputSchema: {
       type: "object",
       required: ["sku_id", "quantity", "buyer_agent_id", "opening_bid_paise", "max_unit_price_paise"],
@@ -143,16 +158,47 @@ const discoveryToolsManifest = [
   {
     name: toolReserveInventoryLock,
     description:
-      "Atomically locks requested inventory stock in Redis with a 60-second TTL and returns a cryptographically signed lock token.",
+      "Atomically reserves stock against a LIVE QUOTE and returns the four values create_cart_mandate " +
+      "needs: lock_token, fencing_token, expires_at_unix_ms, and signature. Call get_live_sku_quote " +
+      "first and pass its quote_hash through unchanged -- a hash this mesh did not issue for this " +
+      "exact SKU, quantity and buyer_agent_id is refused and NO stock is reserved, so a refusal " +
+      "here costs you nothing and tells you what to fix. Note the two clocks: your lock lasts " +
+      "lock_ttl_seconds, but the quote behind it dies 60 seconds after it was issued, and " +
+      "create_cart_mandate needs both alive. Taking a lock longer than the quote does not extend " +
+      "the quote -- go straight from quote to lock to cart, and re-quote if you detour.",
     inputSchema: {
       type: "object",
       required: ["sku_id", "quantity", "lock_ttl_seconds", "buyer_agent_id", "quote_hash"],
       properties: {
-        sku_id: { type: "string" },
-        quantity: { type: "integer", minimum: 1 },
-        lock_ttl_seconds: { type: "integer", minimum: 10, maximum: 120, default: 60 },
-        buyer_agent_id: { type: "string" },
-        quote_hash: { type: "string" }
+        sku_id: {
+          type: "string",
+          description: "Must match the SKU the quote_hash was issued for."
+        },
+        quantity: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "Must match the quantity the quote_hash was issued for. Quote again to lock a different number."
+        },
+        lock_ttl_seconds: {
+          type: "integer",
+          minimum: 10,
+          maximum: 120,
+          default: 60,
+          description:
+            "How long the reservation is held. The 60s default already matches the quote's own " +
+            "lifetime; a longer lock outlives the quote it was taken against and cannot be carted."
+        },
+        buyer_agent_id: {
+          type: "string",
+          description:
+            "The same DID you quoted with. The quote is bound to it, so a lock for a different agent is refused."
+        },
+        quote_hash: {
+          type: "string",
+          description:
+            "From get_live_sku_quote, unchanged. Verified against the quotes this mesh issued before any stock moves."
+        }
       }
     }
   },

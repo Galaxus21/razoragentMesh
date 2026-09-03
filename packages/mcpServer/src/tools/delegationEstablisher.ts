@@ -42,6 +42,12 @@ import {
   saveDelegationSession,
   type SessionStoreOptions
 } from "../session/delegationSessionStore.js";
+import { declareSessionCeiling } from "../session/sessionPurchaseRegistry.js";
+
+export interface DelegationOptions extends SessionStoreOptions {
+  /** The MCP connection this call arrived on -- the principal a budget ceiling is scoped to. */
+  readonly mcpSessionId?: string;
+}
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / millisPerSecond);
@@ -113,9 +119,14 @@ function resolveBuyerIdentity(request: EstablishDelegationRequest): {
 
 export async function establishAgentDelegation(
   rawRequest: unknown,
-  options: SessionStoreOptions = {}
+  options: DelegationOptions = {}
 ): Promise<Record<string, unknown>> {
   const request = establishDelegationRequestSchema.parse(rawRequest);
+  // The session, not the delegation, is the principal that holds a budget. Recorded here because
+  // this is the only place a buyer's stated limit enters the mesh.
+  if (options.mcpSessionId) {
+    declareSessionCeiling(options.mcpSessionId, request.max_budget_paise);
+  }
   const { buyerAgentDid, buyerSecretKeyHex } = resolveBuyerIdentity(request);
 
   // Clamped rather than rejected, matching buildIntentStep in the dashboard driver. Left

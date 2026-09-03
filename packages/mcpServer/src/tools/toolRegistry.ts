@@ -37,7 +37,11 @@ import { defaultCatalogStore } from "../catalog/catalogStore.js";
  * that into -32601 rather than an internal error, because an unknown tool is a protocol-level
  * "no such method", not a fault inside a tool.
  */
-export async function executeTool(toolName: string, toolArguments: unknown): Promise<unknown> {
+export async function executeTool(
+  toolName: string,
+  toolArguments: unknown,
+  mcpSessionId?: string
+): Promise<unknown> {
   if (toolName === toolGetLiveSkuQuote) {
     return executeSkuQuote(toolArguments, defaultCatalogStore);
   }
@@ -57,7 +61,9 @@ export async function executeTool(toolName: string, toolArguments: unknown): Pro
     return await negotiatePrice(toolArguments, defaultCatalogStore);
   }
   if (toolName === toolEstablishAgentDelegation) {
-    return await establishAgentDelegation(toolArguments);
+    // Same session id as the settlement below: it is what makes the buyer's stated budget a
+    // ceiling on the session rather than on one delegation the agent can simply replace.
+    return await establishAgentDelegation(toolArguments, { mcpSessionId });
   }
   if (toolName === toolCreateCartMandate) {
     return await createCartMandateForDelegation(toolArguments);
@@ -66,7 +72,9 @@ export async function executeTool(toolName: string, toolArguments: unknown): Pro
     return await signExecutionMandateForDelegation(toolArguments);
   }
   if (toolName === toolExecuteSettlement) {
-    return await executeSettlementForDelegation(toolArguments);
+    // The session id is what lets the duplicate-purchase guard tell "the agent re-paired and
+    // bought the same thing again" apart from "a different shopper bought the same thing".
+    return await executeSettlementForDelegation(toolArguments, { mcpSessionId });
   }
   throw new Error(`Tool ${toolName} not recognized`);
 }

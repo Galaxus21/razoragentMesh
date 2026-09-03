@@ -78,7 +78,7 @@ export async function dispatchToolCall(
 
   publishToolCall(toolName, toolArguments, sessionId, callId);
   try {
-    const output = await executeTool(toolName, toolArguments);
+    const output = await executeTool(toolName, toolArguments, sessionId);
     publishToolResult(toolName, toolArguments, output, sessionId, callId, Date.now() - startedAtMs);
     return output;
   } catch (error: unknown) {

@@ -51,7 +51,11 @@ export const negotiatePriceResponseSchema = z.object({
   quantity: z.number().int().positive(),
   currency: z.literal(currencyInr),
   /**
-   * CONVERGED -- the two sides met; agreed_unit_price_paise is bindable.
+   * CONVERGED -- the two sides met on agreed_unit_price_paise. get_live_sku_quote will price the
+   *              purchase with it, for the same buyer_agent_id and quantity, until the agreement
+   *              lapses. Read agreed_price_is_bindable before reporting it: the quoter always
+   *              charges the LOWER of the agreed price and the automatic discounts, so an
+   *              agreement that loses to a live sale changes nothing.
    * EXHAUSTED -- the turn budget ran out with a spread still open; nothing was agreed.
    * DECLINED  -- this merchant does not negotiate. Not a failure: their listed price is the
    *              price, and no micro-fee was charged for asking.
@@ -61,7 +65,30 @@ export const negotiatePriceResponseSchema = z.object({
   // Null unless status is CONVERGED. A number here is the seller's final ask, which is at or
   // below the buyer's final bid -- so the buyer never pays more than it offered.
   agreed_unit_price_paise: z.number().int().min(0).nullable(),
+  // The agreed price against the LIST price. Not what the bargaining won: the mesh's automatic
+  // discounts would have come off anyway, so this figure counts them a second time. Reported
+  // because it is what the negotiation achieved on paper against the sticker.
   savings_vs_list_paise: z.number().int().min(0),
+  /**
+   * What the buyer actually keeps: the agreed price measured against what get_live_sku_quote
+   * would have charged anyway, per unit. Zero when the automatic stack already wins.
+   *
+   * Added after a 2026-09-03 run in which nine negotiations converged, all nine paid the ordinary
+   * list-based quote, and one agent told its user "Agreed Price: ₹41,338.50 (Savings: ₹661.50)"
+   * before charging ₹49,584.62. It read zero then, because a bargain bound nothing. Now that one
+   * does, this is the only figure in the response that is money the buyer keeps -- report it, and
+   * not savings_vs_list_paise.
+   */
+  savings_realised_paise: z.number().int().min(0),
+  /**
+   * True when the agreed price is the one the buyer will be charged.
+   *
+   * False in two different situations, and the distinction matters: the negotiation did not
+   * converge, or it converged and lost to the merchant's own automatic discounts. next_step says
+   * which. Either way, quoting the agreed figure to a buyer when this is false names a price
+   * nobody will pay.
+   */
+  agreed_price_is_bindable: z.boolean(),
   turns: z.array(negotiationTurnSchema),
   turns_used: z.number().int().min(0),
   // What the negotiation itself cost, debited from the micro-escrow one turn at a time. Reported

@@ -137,6 +137,47 @@ export const errorDelegationAlreadySettled =
 export const errorUnserviceableAddress =
   "this delivery address cannot be serviced, so no cart was signed.";
 
+/**
+ * Refuses a second settlement of an identical cart inside one MCP session.
+ *
+ * The cumulative budget cap is per delegation, and a new delegation is a new budget, so nothing
+ * else stops an agent that re-pairs and buys the same thing again. The message names the earlier
+ * payment so the agent can tell its user the purchase already happened, and names the flag that
+ * lets a deliberate repeat through.
+ */
+/**
+ * Raised before the bundle reaches the engine, so a refused purchase costs nothing.
+ *
+ * Names the session total rather than the delegation's, because the delegation's own budget will
+ * look untouched -- that is the whole defect. Tells the agent the one thing that will actually
+ * help: it cannot buy its way past this by opening another delegation.
+ */
+export const errorSessionBudgetExceeded = (
+  ceilingPaise: number,
+  spentPaise: number,
+  attemptedPaise: number
+): string =>
+  `Cumulative budget exceeded for this shopping session: ${attemptedPaise} paise would take the ` +
+  `total to ${spentPaise + attemptedPaise} paise against a ceiling of ${ceilingPaise} paise, ` +
+  `already having spent ${spentPaise}. This ceiling is the FIRST max_budget_paise this session ` +
+  "established and a further establish_agent_delegation cannot raise it -- a new delegation is " +
+  "you re-pairing, not the buyer granting more money. Nothing was charged. Tell the buyer what " +
+  "is left and ask before spending more.";
+
+export const errorDuplicatePurchaseInSession = (paymentId: string): string =>
+  `this exact cart was already settled in this session as ${paymentId}: ₹0 charged. The budget ` +
+  "ceiling is per delegation, so a new delegation does not make this a new purchase. If the " +
+  "buyer really wants a second one, call execute_settlement again with " +
+  "allow_repeat_purchase: true.";
+
+/**
+ * Server-side warning, never an agent-facing refusal: by the time the reservation is consumed the
+ * payment is captured, so a failure here costs one unit of stock, not the purchase.
+ */
+export const errorReservationConsumeFailed = (skuId: string, lockToken: string): string =>
+  `settled reservation ${lockToken} on ${skuId} could not be consumed; the expiry sweeper may ` +
+  "credit a sold unit back to stock.";
+
 export const errorNoCartForDelegation = "No cart mandate has been created for this delegation";
 export const errorNoExecutionPayload = "No execution payload has been issued for this delegation";
 export const errorExecutionIdMismatch = "execution_id does not match the payload issued for this delegation";

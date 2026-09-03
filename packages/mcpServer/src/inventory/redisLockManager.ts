@@ -37,6 +37,7 @@ export interface LockRecordPayload {
 export const initialInMemoryFencingCounter = 1000;
 export const failureFencingToken = 0;
 export const luaKeysCount = 5;
+export const consumeLuaKeysCount = 2;
 export const luaSuccessCode = 1;
 
 // Registers the reservation in a sorted set scored by expiry alongside decrementing stock, so
@@ -54,6 +55,20 @@ redis.call('SETEX', KEYS[2], tonumber(ARGV[2]), ARGV[3])
 redis.call('ZADD', KEYS[4], tonumber(ARGV[4]), ARGV[5])
 redis.call('HSET', KEYS[5], ARGV[5], requestedQty)
 return {1, remainingStock, fencingToken}
+`;
+
+// Retires a reservation WITHOUT crediting its quantity back. A settled purchase and an abandoned
+// cart both end with a reservation whose expiry passes; only the sweeper's restore separates
+// them, so the sale has to remove its own entry or the sweeper will hand the unit back and the
+// SKU oversells. Gated on the ZREM return so consuming twice is a no-op. The lock key itself is
+// left to its SETEX to expire -- nothing reads it after the cart is signed.
+export const consumeReservationLuaScript = `
+local entry = ARGV[1]
+local removed = redis.call('ZREM', KEYS[1], entry)
+if removed == 1 then
+  redis.call('HDEL', KEYS[2], entry)
+end
+return removed
 `;
 
 export class InMemoryAtomicLocker {
@@ -90,6 +105,12 @@ export class InMemoryAtomicLocker {
   // that is actually free as unavailable. Callers that merely read stock invoke this first.
   public reclaimExpired(catalogStore: CatalogStore): SweepResult {
     return sweepExpiredInMemoryLocks(catalogStore, this.reservations, Date.now());
+  }
+
+  // Settled counterpart to the sweeper: drops the reservation so its quantity is never credited
+  // back. Returns false when the token is unknown -- already consumed, or already swept.
+  public consumeReservation(lockToken: string): boolean {
+    return this.reservations.delete(lockToken);
   }
 
   public getActiveReservationCount(): number {
@@ -134,4 +155,20 @@ export async function executeRedisLock(
     remainingStock: Number(result[1]),
     fencingToken: Number(result[2])
   };
+}
+
+export async function consumeRedisReservation(
+  redis: Redis,
+  lockToken: string,
+  skuId: string
+): Promise<boolean> {
+  const removed = (await redis.eval(
+    consumeReservationLuaScript,
+    consumeLuaKeysCount,
+    activeReservationsKey,
+    reservationQuantitiesKey,
+    buildReservationEntry(lockToken, skuId)
+  )) as number;
+
+  return Number(removed) === luaSuccessCode;
 }

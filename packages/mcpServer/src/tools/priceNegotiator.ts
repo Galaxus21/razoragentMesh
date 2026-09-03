@@ -21,14 +21,21 @@ import {
   powSolveBudgetMs,
   sellerConcessionRateBps
 } from "../constants/negotiationConstants.js";
-import { currencyInr } from "../constants/protocolConstants.js";
 import { defaultCatalogStore, CatalogStore } from "../catalog/catalogStore.js";
 import {
   negotiatePriceRequestSchema,
-  negotiatePriceResponseSchema,
+  type NegotiatePriceRequest,
   type NegotiatePriceResponse,
   type NegotiationTurn
 } from "../schemas/negotiatePriceSchema.js";
+import { computeAutoDiscountStack } from "../catalog/pricingEngine.js";
+import type { CatalogSkuItem } from "../types/mcpToolTypes.js";
+import {
+  AgreedPrice,
+  AgreedPriceRegistry,
+  defaultAgreedPriceRegistry
+} from "../negotiation/agreedPriceRegistry.js";
+import { buildNegotiationResponse } from "../negotiation/negotiationResponse.js";
 import {
   createEscrowSession,
   fetchPowChallenge,
@@ -92,7 +99,8 @@ interface NegotiationLoopState {
  */
 export async function negotiatePrice(
   rawArguments: unknown,
-  catalogStore: CatalogStore = defaultCatalogStore
+  catalogStore: CatalogStore = defaultCatalogStore,
+  agreedPriceRegistry: AgreedPriceRegistry = defaultAgreedPriceRegistry
 ): Promise<NegotiatePriceResponse> {
   const request = negotiatePriceRequestSchema.parse(rawArguments);
 
@@ -127,7 +135,58 @@ export async function negotiatePrice(
     refundedPaise = await _releaseQuietly(escrow.sessionToken);
   }
 
-  return _buildResponse(request, listUnitPricePaise, state, refundedPaise);
+  // Recorded before the response is built, because the response reports whether the agreed price
+  // is the one the buyer will be charged -- and that is only knowable once the agreement exists.
+  const agreement = _recordAgreement(request, state, agreedPriceRegistry);
+  return buildNegotiationResponse({
+    request,
+    listUnitPricePaise,
+    automaticUnitPricePaise: _automaticUnitPricePaise(sku, request.quantity),
+    outcome: state,
+    refundedPaise,
+    agreement
+  });
+}
+
+/**
+ * Records a converged bargain so get_live_sku_quote can price with it.
+ *
+ * Recorded whatever the automatic price happens to be right now: a merchant sale beating the
+ * agreement this minute may have closed by the time the agent quotes, and the quoter takes the
+ * lower of the two at that moment rather than at this one. Only a convergence the gateway itself
+ * reported reaches here -- nothing an agent sends can put a price in the registry.
+ */
+function _recordAgreement(
+  request: NegotiatePriceRequest,
+  state: NegotiationLoopState,
+  registry: AgreedPriceRegistry
+): AgreedPrice | undefined {
+  if (state.agreedUnitPricePaise === null) {
+    return undefined;
+  }
+  return registry.record({
+    skuId: request.sku_id,
+    quantity: request.quantity,
+    buyerAgentId: request.buyer_agent_id,
+    agreedUnitPricePaise: state.agreedUnitPricePaise,
+    contractAstHash: state.contractAstHash
+  });
+}
+
+/**
+ * What the quoter would offer with no agreement in play. The realised saving is measured against
+ * this rather than against the list price, so a sale the buyer would have received anyway is
+ * never counted as something the bargaining won.
+ */
+function _automaticUnitPricePaise(sku: CatalogSkuItem, quantity: number): number {
+  return computeAutoDiscountStack(
+    sku.baseUnitPricePaise,
+    quantity,
+    sku.volumeTiers,
+    undefined,
+    sku.merchantOffers,
+    sku.promotions
+  ).offeredUnitPricePaise;
 }
 
 async function _runNegotiationLoop(
@@ -209,77 +268,4 @@ async function _releaseQuietly(escrowToken: string): Promise<number> {
   } catch {
     return 0;
   }
-}
-
-function _buildResponse(
-  request: ReturnType<typeof negotiatePriceRequestSchema.parse>,
-  listUnitPricePaise: number,
-  state: NegotiationLoopState,
-  refundedPaise: number
-): NegotiatePriceResponse {
-  const converged = state.agreedUnitPricePaise !== null;
-  const savings = converged
-    ? Math.max(0, listUnitPricePaise - (state.agreedUnitPricePaise as number))
-    : 0;
-  const status = state.declinedReason !== null ? "DECLINED" : converged ? "CONVERGED" : "EXHAUSTED";
-
-  return negotiatePriceResponseSchema.parse({
-    sku_id: request.sku_id,
-    quantity: request.quantity,
-    currency: currencyInr,
-    status,
-    list_unit_price_paise: listUnitPricePaise,
-    agreed_unit_price_paise: state.agreedUnitPricePaise,
-    savings_vs_list_paise: savings,
-    turns: state.turns,
-    turns_used: state.turns.length,
-    micro_fees_paid_paise: state.cumulativeFeesPaise,
-    escrow_refunded_paise: refundedPaise,
-    contract_ast_hash: state.contractAstHash,
-    declined_reason: state.declinedReason,
-    next_step: _describeNextStep(
-      converged,
-      savings,
-      state.cumulativeFeesPaise,
-      state.declinedReason
-    )
-  });
-}
-
-/**
- * Said in the result rather than left to the agent to work out, because the useful next move
- * differs by outcome and the unhelpful one -- quoting anyway and paying list -- is the default an
- * agent falls into when a tool just reports a status code.
- */
-function _describeNextStep(
-  converged: boolean,
-  savingsPaise: number,
-  feesPaise: number,
-  declinedReason: string | null
-): string {
-  if (declinedReason !== null) {
-    return (
-      `${declinedReason} Nothing was charged for asking. Call get_live_sku_quote and buy at the ` +
-      "listed price; negotiating this SKU again will get the same answer until the merchant " +
-      "enables it."
-    );
-  }
-  if (!converged) {
-    return (
-      "No agreement: the turn budget ran out with a spread still open. Either raise " +
-      "max_unit_price_paise and negotiate again, or call get_live_sku_quote to buy at list price."
-    );
-  }
-  if (savingsPaise <= feesPaise) {
-    return (
-      `Converged, but the ${savingsPaise} paise saved did not cover the ${feesPaise} paise of ` +
-      "negotiation fees. get_live_sku_quote still prices at list; this SKU was not worth " +
-      "negotiating. Proceed only if you want the agreed price on record."
-    );
-  }
-  return (
-    "Agreed. get_live_sku_quote is still the only source of a bindable quote_hash, so call it " +
-    "next to price the cart -- the negotiated price is recorded in the gateway's contract AST, " +
-    "not applied to the quote automatically."
-  );
 }

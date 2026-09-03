@@ -221,8 +221,11 @@ test("an opening bid at the list price converges on turn one without burning fee
   assert.equal(result.turns_used, 1);
   assert.equal(result.agreed_unit_price_paise, listUnitPricePaise);
   // Converged at list, so there is nothing to celebrate -- and the tool says so rather than
-  // reporting a "successful" negotiation that cost ₹0.50 and achieved nothing.
-  assert.match(result.next_step, /did not cover/);
+  // reporting a "successful" negotiation that cost ₹0.50 and achieved nothing. The agreement is
+  // recorded, but it does not bind: the automatic discounts already price below it.
+  assert.equal(result.agreed_price_is_bindable, false);
+  assert.equal(result.savings_realised_paise, 0);
+  assert.match(result.next_step, /it changes nothing/);
 });
 
 test("the escrow hold is always released, so a negotiation cannot park the buyer's money", async () => {

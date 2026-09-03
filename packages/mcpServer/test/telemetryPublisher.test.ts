@@ -128,6 +128,18 @@ test("a refusal is published as success:false rather than dropped", async () => 
 
 test("a lock reports the TTL that was requested, not a null", async () => {
   const requestedTtlSeconds = 45;
+  // Quote first: a lock is only granted against a quote_hash this mesh issued.
+  const quote = (await dispatchToolCall(
+    "get_live_sku_quote",
+    {
+      sku_id: testSkuId,
+      quantity: 1,
+      buyer_agent_id: testBuyerDid,
+      delivery_pincode: testPincode
+    },
+    { sessionId: testSessionId }
+  )) as { quote_hash: string };
+
   await dispatchToolCall(
     "reserve_inventory_lock",
     {
@@ -135,7 +147,7 @@ test("a lock reports the TTL that was requested, not a null", async () => {
       quantity: 1,
       lock_ttl_seconds: requestedTtlSeconds,
       buyer_agent_id: testBuyerDid,
-      quote_hash: "test-hash"
+      quote_hash: quote.quote_hash
     },
     { sessionId: testSessionId }
   );

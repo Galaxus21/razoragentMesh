@@ -11,7 +11,11 @@ export const executeSettlementRequestSchema = z.object({
   // Required in agent_held mode, rejected in mesh_demo_custodial mode, so the two custody
   // modes cannot be mixed into a chain whose signer is ambiguous.
   agent_signature: z.string().length(signatureHexLength).optional(),
-  merchant_account: z.string().min(1).optional()
+  merchant_account: z.string().min(1).optional(),
+  // Opt-in escape from the same-session duplicate guard. Buying the identical cart twice in one
+  // session is nearly always an agent that lost track of a settlement it already made, so it is
+  // refused by default and the agent has to say it meant it.
+  allow_repeat_purchase: z.boolean().optional()
 });
 
 export type ExecuteSettlementRequest = z.infer<typeof executeSettlementRequestSchema>;
@@ -78,7 +82,13 @@ export const executeSettlementResponseSchema = z.object({
   amountPaise: z.number().int().min(0),
   transfers: z.array(settlementTransferSchema),
   invoice: settlementInvoiceSchema,
-  settledAt: z.number().int().positive()
+  settledAt: z.number().int().positive(),
+  /**
+   * The one field here the engine does NOT produce -- the mesh adds it, and only when the SKU
+   * just bought has a sale opening soon. It sits on the receipt because that is the part of a
+   * settlement agents reliably read back to their buyer; a sale stated in the quote is not.
+   */
+  buyerNotice: z.string().min(1).optional()
 });
 
 export type ExecuteSettlementResponse = z.infer<typeof executeSettlementResponseSchema>;

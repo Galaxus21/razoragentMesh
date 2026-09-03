@@ -13,7 +13,13 @@ export interface TaxBreakdown {
 }
 
 export interface AppliedDiscountItem {
-  readonly type: "VOLUME_TIER" | "CAMPAIGN" | "PAYMENT_RAIL" | "PROMO_CODE";
+  readonly type:
+    | "VOLUME_TIER"
+    | "SCHEDULED_PROMOTION"
+    | "CAMPAIGN"
+    | "PAYMENT_RAIL"
+    | "PROMO_CODE"
+    | "NEGOTIATED";
   readonly label: string;
   readonly discountBps?: number;
   readonly discountPaise?: number;
