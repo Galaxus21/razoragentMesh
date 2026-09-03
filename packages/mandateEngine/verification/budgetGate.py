@@ -43,6 +43,14 @@ def validateBudgetGate(
     # inside the total recomputation could be inverted with no observable effect -- CGST+SGST
     # and IGST sum to the same total -- so one of the two determinations was unfalsifiable.
     isIntraState = cartMandate.merchantStateCode == cartMandate.buyerDeliveryStateCode
+
+    # Before the enclave comparison: wrong heads usually trip that too, and its diagnosis is the
+    # useless one. Intra-state floors twice and inter-state once, so the totals differ by a paise
+    # exactly when (taxable * rateBps) mod 20000 >= 10000 -- one misconfiguration therefore read
+    # as "must declare cgst=..." at some quantities and "recomputed=X" at others. Both refuse
+    # with Rs.0 charged, so this picks only the diagnosis; the specific one should win.
+    _verifyTaxHeads(cartMandate, isIntraState)
+
     enclaveTotal = _recomputeEnclaveTotal(cartMandate, isIntraState)
     settlementAmt = executionMandate.settlementAmountPaise
     if enclaveTotal != settlementAmt or cartMandate.totalPaise != settlementAmt:
@@ -52,7 +60,6 @@ def validateBudgetGate(
         )
 
     _verifyBudgetCaps(intentMandate, settlementAmt)
-    _verifyTaxHeads(cartMandate, isIntraState)
     _verifyCategoryAuthorization(intentMandate, skuCategories)
     return True
 
@@ -105,11 +112,9 @@ def _verifyTaxHeads(cartMandate: CartMandate, isIntraState: bool) -> None:
 
     Surfaced by mutation testing: flipping `merchantStateCode == buyerDeliveryStateCode` to `!=`
     survived the entire suite, because nothing downstream of the total recomputation can observe
-    the difference. It is caught here instead, which is why `validateBudgetGate`determines the
-    place of supply once and hands it to both.
-
-    The place/rate rule is not restated here -- `computeGstBreakdown` owns it and this reuses it,
-    accumulating per line because tax is floored per line.
+    the difference. It is caught here instead, which is why `validateBudgetGate` determines the
+    place of supply once and hands it to both. The place/rate rule is not restated here --
+    `computeGstBreakdown` owns it and this reuses it, accumulating per line as tax is floored.
     """
     expectedCgst = 0
     expectedSgst = 0

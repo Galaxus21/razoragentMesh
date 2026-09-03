@@ -246,3 +246,63 @@ def testASingleWrongTaxHeadIsEnoughToReject() -> None:
             intentM, skewedCart, execM, currentTimestamp=1700000000,
             skuCategories=["electronics"],
         )
+
+
+def testTaxHeadMismatchWinsOverTheArithmeticEnclave() -> None:
+    """A cart that is wrong in both ways must be diagnosed by the specific check.
+
+    Intra-state floors twice (CGST and SGST separately) and inter-state floors once, so the two
+    differ by exactly a paise when (taxable * rateBps) mod 20000 >= 10000. The SAME
+    misconfiguration -- an intra-state cart declaring IGST -- therefore gave a legible
+    "declare cgst=..., sgst=..." at some quantities and an opaque "recomputed=X, cartTotal=Y" at
+    others, purely because the enclave comparison ran first and caught the one-paise divergence.
+
+    Both paths still refuse with Rs.0 charged; this pins WHICH diagnosis the agent receives.
+    """
+    uSigner = Ed25519Signer(generateKeyPair()[0])
+    mSigner = Ed25519Signer(generateKeyPair()[0])
+    aSigner = Ed25519Signer(generateKeyPair()[0])
+
+    # 9 * 350006 mod 100 == 54, which is >= 50, so the intra- and inter-state totals differ.
+    unitPricePaise = 350006
+    lineTaxable = computeLineItemTotal(unitPricePaise, 1)
+    intraGst = computeGstBreakdown(lineTaxable, 18, isIntraState=True)
+    interGst = computeGstBreakdown(lineTaxable, 18, isIntraState=False)
+    assert interGst.totalTaxPaise != intraGst.totalTaxPaise, (
+        "this fixture only exercises the ordering if the two placements disagree"
+    )
+
+    intentM = createSignedIntentMandate(
+        mandateId="M-I-TAXORDER", userSigner=uSigner, delegatedAgentDid=aSigner.getAgentDid(),
+        maxBudgetPaise=5000000, upiCircleDelegationToken="upi_tok",
+        singleTransactionLimitPaise=5000000, authorizedCategories=[],
+        validUntilTimestamp=2000000000,
+    )
+    item = CartItemSchema(
+        skuId="SKU-ELEC-01", quantity=1, unitPricePaise=unitPricePaise,
+        hsnCode="84713010", gstRatePercent=18, lineTotalPaise=lineTaxable,
+    )
+    # Intra-state delivery (29 -> 29) declaring the whole amount as IGST: the wrong statutory
+    # head, and a total that also fails the enclave's recomputation by one paise.
+    wrongHeads = TaxBreakdownSchema(
+        cgstPaise=0, sgstPaise=0,
+        igstPaise=interGst.igstPaise, totalTaxPaise=interGst.totalTaxPaise,
+    )
+    totalPaise = computeCartSettlementTotal(
+        lineTaxable, interGst.totalTaxPaise, shippingPaise=0, discountPaise=0
+    )
+    cartM = createSignedCartMandate(
+        cartId="M-C-TAXORDER", merchantSigner=mSigner, merchantGstin="29AAAAA0000A1ZY",
+        merchantStateCode="29", buyerDeliveryPincode="560001", buyerDeliveryStateCode="29",
+        items=[item], taxableSubtotalPaise=lineTaxable, taxBreakdown=wrongHeads,
+        shippingPaise=0, discountPaise=0, totalPaise=totalPaise,
+        inventoryLockToken="lock_tok", inventoryLockExpiresAt=2000000000,
+    )
+    execM = createSignedExecutionMandate(
+        executionId="M-E-TAXORDER", buyerAgentSigner=aSigner, intentMandate=intentM,
+        cartMandate=cartM, settlementAmountPaise=totalPaise, upiCircleToken="upi_tok",
+    )
+
+    with pytest.raises(TaxHeadMismatchException) as raised:
+        validateBudgetGate(intentM, cartM, execM, currentTimestamp=1700000000)
+    assert "must declare" in str(raised.value)
