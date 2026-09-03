@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..catalog.qdrantPointDispatch import pointIdForSku
 from ..constants.merchantConstants import redisCatalogHashKeyPrefix
 from .dependencies import getRedisClient, getVectorizer
 from .healingTelemetry import publishOosHealed
@@ -42,7 +43,10 @@ oosHealingRouter = APIRouter(prefix="/api/v1/catalog", tags=["oos-healing"])
 
 millisecondsPerSecond: float = 1000.0
 
-# Kept in step with packages/vectorHealer/src/constants/healerConstants.py.
+# The similarity floor matches packages/vectorHealer/src/constants/healerConstants.py. The
+# price band deliberately does NOT: the healer's own fallback is 5%, which is too tight to
+# find a substitute in a real catalog. This route always passes its own value, so the
+# healer's constant is never the one in force here.
 defaultSimilarityFloor: float = 0.85
 defaultMaxPriceDeltaPercent: float = 15.0
 
@@ -109,6 +113,8 @@ async def healOutOfStockSku(
     if not any(entry.get("skuId") == request.failedSkuId for entry in catalogStore):
         return _failure(request, startedAt, embeddingMode, unknownSkuReason)
 
+    _useIndexedQueryVector(catalogStore, request.failedSkuId, vectorizer)
+
     # The real Layer 3 class, constructed against the live Qdrant client the Merchant API
     # already builds for its auto-vectorizer.
     interceptor = interceptorClass(
@@ -144,6 +150,75 @@ async def healOutOfStockSku(
         healingDurationMs=durationMs,
         embeddingMode=embeddingMode,
     )
+
+
+def _useIndexedQueryVector(
+    catalogStore: List[Dict[str, Any]], failedSkuId: str, vectorizer: Any
+) -> None:
+    """Searches the index with the index's own vector for the failed SKU.
+
+    `OosInterceptor._findViableSubstitute` takes its query vector from the Redis listing's
+    `embeddingVector`. Only `scripts/seedCatalog.py` ever writes that field: the 22 compiled
+    fixtures and every SKU a merchant publishes from the Studio have none, so the ANN query ran
+    with `[]` and Layer 3 could heal none of them.
+
+    Measured on 2026-09-04 against the running stack: `SKU-TEST-DESK-OOS` answered
+    `no_qualifying_substitute` at a similarity floor of 0.0 and a 500% price band, while Qdrant
+    held five in-stock desks under its exact HSN -- the nearest, `SKU-TEST-DESK-LASTONE`, at
+    cosine 0.8697, above the shipped 0.85 floor. The right answer was one query away.
+
+    Where a listing does carry a vector, the index's is still the one to use. The two come from
+    different producers and are not comparable: searching with SKU-001's listing vector scored its
+    best candidate at 0.0488, where the index's own nearest neighbour for that SKU is 0.0954.
+    Querying a space with a vector from outside it is the defect, not the fallback.
+
+    Best-effort, like every other Qdrant touch in this service: a lookup that fails leaves the
+    listing's vector in place and the search degrades to what it did before.
+    """
+    indexedVector = _pointVectorFromIndex(vectorizer, failedSkuId)
+    if not indexedVector:
+        return
+    for entry in catalogStore:
+        if entry.get("skuId") == failedSkuId:
+            entry["embeddingVector"] = indexedVector
+            return
+
+
+def _pointVectorFromIndex(vectorizer: Any, skuId: str) -> Optional[List[float]]:
+    """Reads back the vector this SKU was actually indexed with, or None."""
+    client = getattr(vectorizer, "qdrantClient", None)
+    collectionName = getattr(vectorizer, "collectionName", None)
+    if client is None or collectionName is None or not hasattr(client, "retrieve"):
+        # Said out loud: a silent return here is indistinguishable from "the index had no such
+        # point", and the two call for completely different fixes.
+        logger.warning(
+            "No vector index to read '%s' from (client=%s collection=%s); falling back to the "
+            "listing's own embeddingVector, which only seeded SKUs carry.",
+            skuId,
+            type(client).__name__ if client is not None else None,
+            collectionName,
+        )
+        return None
+
+    try:
+        points = client.retrieve(
+            collection_name=collectionName,
+            ids=[pointIdForSku(skuId)],
+            with_vectors=True,
+        )
+    except Exception as lookupError:
+        logger.warning("Could not read the indexed vector for '%s': %s", skuId, lookupError)
+        return None
+
+    for point in points or []:
+        vector = getattr(point, "vector", None)
+        # A collection with named vectors hands back a mapping; this one has a single unnamed
+        # vector, so take the only entry rather than guessing at a name.
+        if isinstance(vector, dict):
+            vector = next(iter(vector.values()), None)
+        if isinstance(vector, list) and vector:
+            return [float(component) for component in vector]
+    return None
 
 
 def _loadHealer() -> tuple:

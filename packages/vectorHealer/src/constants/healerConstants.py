@@ -8,7 +8,12 @@ targetSlaMs: float = 300.0
 # Vector Embedding Configuration
 defaultVectorDimension: int = 384
 modelNameMiniLm: str = "sentence-transformers/all-MiniLM-L6-v2"
-qdrantCollectionName: str = "merchantCatalog"
+# MUST equal merchantApi/src/constants/merchantConstants.py:defaultCollectionName, which is
+# what AutoVectorizer.upsertListing actually writes to. This said "merchantCatalog" and
+# nothing has ever written a collection by that name, so every Layer 3 search queried a
+# collection that did not exist and found nothing -- the reason no OOS_HEALED has ever been
+# published by a real heal. Measured 2026-09-04 against the running stack.
+qdrantCollectionName: str = "razoragent_catalog"
 
 # Amendment Metadata & Codes
 reasonInsufficientStock: str = "INSUFFICIENT_STOCK_OOS_HEALED"

@@ -130,6 +130,11 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      # Layer 3 publishes OOS_HEALED here. Unset, healingTelemetry.py falls back to
+      # http://localhost:8000 -- which inside THIS container is nothing at all, so every heal
+      # was published into the void and logged at DEBUG. The dashboard's self-healing tile could
+      # only ever show the seeder's synthetic 214ms.
+      - MANDATE_ENGINE_URL=http://mandate-engine:8000
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
     healthcheck:

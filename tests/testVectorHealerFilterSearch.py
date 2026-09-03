@@ -3,6 +3,9 @@
 from typing import Any, Dict, List
 import pytest
 
+from razoragentMesh.packages.vectorHealer.src.constants.healerConstants import (
+    qdrantCollectionName,
+)
 from razoragentMesh.packages.vectorHealer.src.constraints import (
     NegativeConstraintFilter,
     NegativeConstraintManifest,
@@ -113,7 +116,9 @@ def testVectorSearcherNativeQdrantFilterQuery() -> None:
     assert candidates[0].skuId == "SKU-NATIVE-1"
     assert len(capturedCalls) == 1
     call = capturedCalls[0]
-    assert call["collection_name"] == "merchantCatalog"
+    # The name the Merchant API indexes into, not a literal: the healer spent its whole life
+    # querying "merchantCatalog", which nothing ever wrote, and this assertion pinned it.
+    assert call["collection_name"] == qdrantCollectionName
     qFilter = call["query_filter"]
     assert qFilter is not None
     # Check must conditions contains availableStock FieldCondition

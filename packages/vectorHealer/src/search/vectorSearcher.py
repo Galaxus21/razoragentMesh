@@ -112,58 +112,112 @@ class VectorSearcher:
         limit: int,
         scoreThreshold: float,
     ) -> List[Any]:
-        """Executes search against Qdrant client if available, falling back to in-memory search."""
-        if self._qdrant is not None and hasattr(self._qdrant, "search"):
+        """Queries the vector index, falling back to an in-memory cosine when it cannot.
+
+        `query_points` is tried first because `QdrantClient.search` was REMOVED in qdrant-client
+        1.19, which is the version the merchant API image installs. The old guard here was
+        `hasattr(self._qdrant, "search")`, so against a modern client the whole Qdrant branch was
+        skipped and every substitution search silently became the in-memory path -- a cosine over
+        whatever `embeddingVector` happened to be in the Redis listing.
+
+        That is why Layer 3 had never healed anything outside its own tests. Only
+        `scripts/seedCatalog.py` writes `embeddingVector`, so the in-memory path could see 25 of
+        47 listings and none of the SKUs a merchant publishes. Measured 2026-09-04:
+        `SKU-TEST-DESK-OOS` returned no substitute at a 0.0 similarity floor and a 500% price
+        band, while the index itself ranked `SKU-TEST-DESK-LASTONE` at cosine 0.8697 for it.
+
+        The legacy `search` paths are kept below because the healer's own tests drive fakes that
+        expose `search` and nothing else, and because a client older than 1.19 is still valid.
+        """
+        if self._qdrant is not None:
+            points = self._queryPointsSearch(
+                queryVector, hsnCode, excludeSkuId, limit, scoreThreshold
+            )
+            if points is not None:
+                return points
+            points = self._legacySearch(queryVector, hsnCode, excludeSkuId, limit, scoreThreshold)
+            if points is not None:
+                return points
+        return self._inMemorySearch(queryVector, hsnCode, excludeSkuId, scoreThreshold, limit)
+
+    def _buildQueryFilter(self, hsnCode: str, excludeSkuId: Optional[str]) -> Any:
+        """In-stock, same HSN, and never the SKU that just failed."""
+        models = _getQdrantModels()
+        mustConditions: List[Any] = [
+            models.FieldCondition(key="availableStock", range=models.Range(gte=1)),
+        ]
+        if hsnCode:
+            mustConditions.append(
+                models.FieldCondition(key="hsnCode", match=models.MatchValue(value=hsnCode))
+            )
+        mustNotConditions: List[Any] = []
+        if excludeSkuId:
+            mustNotConditions.append(
+                models.FieldCondition(key="skuId", match=models.MatchValue(value=excludeSkuId))
+            )
+        return models.Filter(
+            must=mustConditions,
+            must_not=mustNotConditions if mustNotConditions else None,
+        )
+
+    def _queryPointsSearch(
+        self,
+        queryVector: List[float],
+        hsnCode: str,
+        excludeSkuId: Optional[str],
+        limit: int,
+        scoreThreshold: float,
+    ) -> Optional[List[Any]]:
+        """The current Qdrant API. None means "could not run", never "found nothing"."""
+        if not hasattr(self._qdrant, "query_points") or not queryVector:
+            return None
+        try:
+            response = self._qdrant.query_points(
+                collection_name=qdrantCollectionName,
+                query=queryVector,
+                query_filter=self._buildQueryFilter(hsnCode, excludeSkuId),
+                limit=limit,
+                score_threshold=scoreThreshold,
+                with_payload=True,
+            )
+        except Exception:
+            return None
+        points = getattr(response, "points", response)
+        return list(points) if isinstance(points, (list, tuple)) else None
+
+    def _legacySearch(
+        self,
+        queryVector: List[float],
+        hsnCode: str,
+        excludeSkuId: Optional[str],
+        limit: int,
+        scoreThreshold: float,
+    ) -> Optional[List[Any]]:
+        """qdrant-client < 1.19, and the test fakes that mimic it."""
+        if not hasattr(self._qdrant, "search"):
+            return None
+        try:
+            return self._qdrant.search(
+                collectionName=qdrantCollectionName,
+                queryVector=queryVector,
+                limit=limit,
+                scoreThreshold=scoreThreshold,
+                filterHsnCode=hsnCode,
+                excludeSkuId=excludeSkuId,
+            )
+        except TypeError:
             try:
                 return self._qdrant.search(
-                    collectionName=qdrantCollectionName,
-                    queryVector=queryVector,
+                    collection_name=qdrantCollectionName,
+                    query_vector=queryVector,
+                    query_filter=self._buildQueryFilter(hsnCode, excludeSkuId),
                     limit=limit,
-                    scoreThreshold=scoreThreshold,
-                    filterHsnCode=hsnCode,
-                    excludeSkuId=excludeSkuId,
+                    score_threshold=scoreThreshold,
                 )
-            except TypeError:
-                try:
-                    models = _getQdrantModels()
-
-                    mustConditions: List[Any] = [
-                        models.FieldCondition(
-                            key="availableStock",
-                            range=models.Range(gte=1),
-                        ),
-                    ]
-                    if hsnCode:
-                        mustConditions.append(
-                            models.FieldCondition(
-                                key="hsnCode",
-                                match=models.MatchValue(value=hsnCode),
-                            )
-                        )
-                    mustNotConditions: List[Any] = []
-                    if excludeSkuId:
-                        mustNotConditions.append(
-                            models.FieldCondition(
-                                key="skuId",
-                                match=models.MatchValue(value=excludeSkuId),
-                            )
-                        )
-                    queryFilter = models.Filter(
-                        must=mustConditions,
-                        must_not=mustNotConditions if mustNotConditions else None,
-                    )
-                    return self._qdrant.search(
-                        collection_name=qdrantCollectionName,
-                        query_vector=queryVector,
-                        query_filter=queryFilter,
-                        limit=limit,
-                        score_threshold=scoreThreshold,
-                    )
-                except Exception:
-                    pass
             except Exception:
-                pass
-        return self._inMemorySearch(queryVector, hsnCode, excludeSkuId, scoreThreshold, limit)
+                return None
+        except Exception:
+            return None
 
     def _qualifyCandidate(
         self,

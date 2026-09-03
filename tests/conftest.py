@@ -69,10 +69,18 @@ async def mockRedisClient(
     await client.flushdb()
 
 
+# Imported rather than repeated: this fixture stands in for the collection the Merchant
+# API actually writes, and a literal here let the healer's constant drift away from it
+# undetected for the whole life of the package.
+from razoragentMesh.packages.vectorHealer.src.constants.healerConstants import (
+    qdrantCollectionName,
+)
+
+
 @pytest.fixture
 def mockQdrantClient(catalogFixtures: List[Dict[str, Any]]) -> MockQdrantClient:
     client = MockQdrantClient()
-    client.createCollection("merchantCatalog")
+    client.createCollection(qdrantCollectionName)
     points = [
         {
             "id": item["skuId"],
@@ -91,7 +99,7 @@ def mockQdrantClient(catalogFixtures: List[Dict[str, Any]]) -> MockQdrantClient:
         }
         for item in catalogFixtures
     ]
-    client.upsert("merchantCatalog", points)
+    client.upsert(qdrantCollectionName, points)
     return client
 
 
