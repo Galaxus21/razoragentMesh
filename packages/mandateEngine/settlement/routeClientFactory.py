@@ -19,28 +19,40 @@ from .razorpayRouteClient import RazorpayRouteClient
 
 logger = logging.getLogger(__name__)
 
-liveTransportMessage: str = (
-    "Razorpay Route: LIVE transport selected (key id %s); settlements will reach the API"
+ordersLiveMessage: str = "Razorpay Orders: LIVE test mode (key id %s); order creation will reach the API"
+ordersMockMessage: str = (
+    "Razorpay Orders: MOCK (set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to use Test Mode); "
+    "no order creation will reach the API"
 )
-mockTransportMessage: str = (
-    "Razorpay Route: MOCK ledger selected; no settlement will reach the Razorpay API. "
-    "Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to use Test Mode."
+
+routeTransfersLiveMessage: str = (
+    "Razorpay Route transfers: LIVE transport selected (key id %s); split transfers will reach the API"
+)
+routeTransfersMockMessage: str = (
+    "Razorpay Route transfers: MOCK ledger (set RAZORPAY_ROUTE_LIVE=true once Route is activated and "
+    "linked accounts exist); no split transfer will reach the API"
 )
 
 
 def buildRouteClient(
     settings: MandateEngineSettings = defaultMandateSettings,
 ) -> RazorpayRouteClient:
-    """Builds a Route client bound to live credentials when they are present."""
-    if not settings.hasRazorpayCredentials:
-        logger.warning(mockTransportMessage)
-        return RazorpayRouteClient(isMockMode=True)
+    """Builds a Route client decoupling the Orders API from Route transfers."""
+    if settings.hasRazorpayCredentials:
+        logger.info(ordersLiveMessage, settings.razorpayKeyId)
+    else:
+        logger.warning(ordersMockMessage)
 
-    logger.info(liveTransportMessage, settings.razorpayKeyId)
+    if settings.routeTransportLive:
+        logger.info(routeTransfersLiveMessage, settings.razorpayKeyId)
+    else:
+        logger.warning(routeTransfersMockMessage)
+
     return RazorpayRouteClient(
         apiKey=settings.razorpayKeyId,
         apiSecret=settings.razorpayKeySecret,
-        isMockMode=False,
+        isMockMode=not settings.routeTransportLive,
+        ordersLive=settings.hasRazorpayCredentials,
     )
 
 

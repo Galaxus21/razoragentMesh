@@ -15,9 +15,14 @@ export interface LayerCardProps {
   readonly onSelect: (layerId: string) => void;
 }
 
-const upBadgeClass = "bg-statusSuccess/10 text-statusSuccess border-statusSuccess/30";
-const downBadgeClass = "bg-statusError/10 text-statusError border-statusError/30";
-const unknownBadgeClass = "bg-bgSurface text-textMuted border-borderSubtle";
+// A healthy service is the expected case, so it gets no colour: it is named in muted text and
+// nothing else. Green pills on every row meant six of them were lit at all times, which made the
+// one that mattered -- a service that had actually fallen over -- no more visible than the five
+// that were fine. Colour is spent on the exception now, not the norm.
+const downServiceClass = "text-statusError";
+const settledServiceClass = "text-textMuted";
+const probingSuffix = "...";
+const unknownSuffix = "?";
 
 function findStatus(
   statuses: readonly MeshServiceStatus[],
@@ -54,11 +59,7 @@ export function LayerCard({
           {layer.serviceIds.map((serviceId) => {
             const status = findStatus(statuses, serviceId);
             const service = meshServicesById[serviceId];
-            const badgeClass = !status
-              ? unknownBadgeClass
-              : status.health === "UP"
-                ? upBadgeClass
-                : downBadgeClass;
+            const isDown = Boolean(status) && status?.health !== "UP";
             return (
               <span
                 key={serviceId}
@@ -66,15 +67,13 @@ export function LayerCard({
                   status?.detail ??
                   `${service.displayName} ${service.healthPath} - ${status?.latencyMs ?? 0}ms`
                 }
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${badgeClass}`}
+                className={`inline-flex items-center gap-1 text-[10px] ${
+                  isDown ? downServiceClass : settledServiceClass
+                }`}
               >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    status?.health === "UP" ? "bg-statusSuccess" : "bg-statusError"
-                  }`}
-                />
+                {isDown && <span className="h-1.5 w-1.5 rounded-full bg-statusError" />}
                 {service.displayName}
-                {status ? ` ${status.health}` : isProbing ? " ..." : " ?"}
+                {isDown ? ` ${status?.health}` : !status ? (isProbing ? probingSuffix : unknownSuffix) : ""}
               </span>
             );
           })}

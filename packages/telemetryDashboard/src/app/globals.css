@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Palette: Razorpay blue, not indigo.
+ *
+ * The accent is lifted straight off the product mark's own gradient stops (#3395FF into #00F2FE
+ * over a #0A1E4A ground), so the logo sits in the interface instead of on top of it. The
+ * previous indigo/violet ramp matched nothing in the mark and nothing on Razorpay's own
+ * surfaces.
+ *
+ * The two hues carry different jobs and must not be swapped: BLUE is interactive and brand --
+ * links, selected rows, primary buttons. CYAN is informational only, which is why --status-info
+ * moved off the sky blue it used to share with the accent; when both were blue an "info" chip
+ * read as a control the reader could press.
+ */
 @layer base {
   :root {
     --bg-base: 248 250 252;
@@ -11,13 +24,13 @@
     --text-primary: 15 23 42;
     --text-secondary: 71 85 105;
     --text-muted: 148 163 184;
-    --accent-primary: 79 70 229;
-    --accent-subtle: 238 242 255;
+    --accent-primary: 13 92 200;
+    --accent-subtle: 232 241 253;
     --status-success: 22 163 74;
     --status-warning: 217 119 6;
     --status-error: 220 38 38;
-    --status-info: 2 132 199;
-    --primary: 79 70 229;
+    --status-info: 8 145 178;
+    --primary: 13 92 200;
     --surface-container: 241 245 249;
     --surface-container-high: 226 232 240;
     --on-surface: 30 41 59;
@@ -35,19 +48,19 @@
     --text-primary: 250 250 250;
     --text-secondary: 161 161 170;
     --text-muted: 82 82 91;
-    --accent-primary: 99 102 241;
-    --accent-subtle: 30 27 75;
+    --accent-primary: 51 149 255;
+    --accent-subtle: 11 37 71;
     --status-success: 34 197 94;
     --status-warning: 245 158 11;
     --status-error: 239 68 68;
-    --status-info: 56 189 248;
-    --primary: 192 193 255;
+    --status-info: 34 211 238;
+    --primary: 143 197 255;
     --surface-container: 31 31 39;
     --surface-container-high: 41 41 50;
-    --on-surface: 228 225 237;
-    --on-surface-variant: 199 196 215;
-    --outline: 144 143 160;
-    --outline-variant: 70 69 84;
+    --on-surface: 226 232 240;
+    --on-surface-variant: 196 205 218;
+    --outline: 142 152 168;
+    --outline-variant: 67 76 90;
   }
 
   body {
@@ -221,7 +234,7 @@
 }
 
 /* rehype-autolink-headings wraps each heading's text in an anchor so it can be linked to.
-   Without this, the rule above paints every heading accent-purple and underlined, which makes
+   Without this, the rule above paints every heading in the accent colour and underlines it, which makes
    the whole page read as a wall of links. The heading keeps its own styling; the anchor only
    announces itself on hover. */
 .markdown-content h1 > a,
@@ -266,7 +279,7 @@
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-operator {
-  color: #6366f1;
+  color: #0d5cc8;
   font-weight: 500;
 }
 
@@ -298,7 +311,7 @@
 .hljs-variable,
 .hljs-template-variable,
 .hljs-attr {
-  color: #8b5cf6;
+  color: #0891b2;
 }
 
 .hljs-built_in,
@@ -309,7 +322,7 @@
 .dark .hljs-keyword,
 .dark .hljs-selector-tag,
 .dark .hljs-operator {
-  color: #818cf8;
+  color: #5fa8ff;
 }
 
 .dark .hljs-string,
@@ -338,10 +351,27 @@
 .dark .hljs-variable,
 .dark .hljs-template-variable,
 .dark .hljs-attr {
-  color: #c084fc;
+  color: #22d3ee;
 }
 
 .dark .hljs-built_in,
 .dark .hljs-type {
   color: #f472b6;
+}
+
+/*
+ * Placeholders must not read as values.
+ *
+ * Nothing styled placeholder text, so it inherited the browser default, which against this
+ * theme's dark surfaces sits close enough to `text-textPrimary` to look like real input. A
+ * merchant added a scheduled promotion, read the greyed "Diwali Flash Sale" hint as a filled
+ * display name, and only found out it was empty when Publish refused the whole form.
+ *
+ * Set on the element rather than a utility class so every input and textarea in the dashboard
+ * gets it, including ones added later.
+ */
+input::placeholder,
+textarea::placeholder {
+  color: rgb(var(--text-muted) / 0.65);
+  opacity: 1; /* Firefox dims placeholders again on top of the colour. */
 }

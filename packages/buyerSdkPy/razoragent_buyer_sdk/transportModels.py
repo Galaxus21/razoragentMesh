@@ -241,6 +241,7 @@ class SettlementResult(BaseModel):
     transfers: list[RouteTransferResponse] = Field(min_length=1)
     invoice: GstrInvoicePayload
     settledAt: int = Field(gt=0)
+    razorpayOrderId: Optional[str] = Field(default=None)
 
 
 class PriceDropAlertRegisterRequest(BaseModel):

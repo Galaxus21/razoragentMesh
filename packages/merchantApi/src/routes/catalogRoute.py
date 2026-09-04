@@ -4,11 +4,20 @@ import logging
 from typing import Any
 from fastapi import APIRouter, Depends, status
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from ..catalog.catalogManager import catalogManager
 from ..exceptions.merchantExceptions import CatalogNotFoundException
 from ..catalog.ingressSanitizer import sanitizeListingText
 from ..schemas.universalProductSchema import UniversalProductListing
 from .dependencies import getRedisClient, getVectorizer
+
+# Imported rather than re-implemented on purpose. `mesh:catalog:*` holds four value shapes under
+# one prefix -- the listing, its `{merchantDid}:{skuId}` duplicate, a bare stock integer -- and
+# _loadCatalogStore is the one place that knows how to read past all of them. A second scan
+# written here would be a second, quietly divergent definition of "the catalog", and the two
+# would disagree the first time that keyspace changed.
+from .oosHealingRoute import _loadCatalogStore
 
 catalogRouter = APIRouter(prefix="/api/v1/merchant", tags=["merchant-catalog"])
 
@@ -40,6 +49,67 @@ async def _deindexListing(vectorizer: Any, skuId: str) -> None:
         logger.warning("Vector de-indexing failed for SKU '%s': %s", skuId, err)
 
 
+
+
+class CatalogSummaryItem(BaseModel):
+    """A listing reduced to what a picker needs to show and to charge for."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    skuId: str
+    title: str
+    baseUnitPricePaise: int = Field(ge=0)
+    gstRatePercent: int = Field(ge=0)
+    availableStock: int = Field(ge=0)
+
+
+class CatalogSummaryResponse(BaseModel):
+    """The merchant's published SKUs, newest-agnostic and ordered by skuId."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    merchantDid: str
+    items: list[CatalogSummaryItem]
+
+
+@catalogRouter.get(
+    "/{merchantDid}/catalog",
+    response_model=CatalogSummaryResponse,
+    summary="List every SKU this merchant has published to the mesh",
+)
+async def listSkus(
+    merchantDid: str,
+    redis: Any = Depends(getRedisClient),
+) -> CatalogSummaryResponse:
+    """Enumerates the merchant's catalog.
+
+    Deliberately a summary rather than the full UniversalProductListing: this endpoint exists so
+    a human checkout page can offer the SKUs a merchant just published, and returning the strict
+    model would make one stale or partially-seeded record fail the whole listing with a 500. A
+    record missing any of the five fields is skipped, so a bad row costs its own line and not
+    the page.
+    """
+    entries = await _loadCatalogStore(redis)
+
+    items: list[CatalogSummaryItem] = []
+    for entry in entries:
+        if entry.get("merchantDid") != merchantDid:
+            continue
+        try:
+            items.append(
+                CatalogSummaryItem(
+                    skuId=entry["skuId"],
+                    title=entry["title"],
+                    baseUnitPricePaise=int(entry["baseUnitPricePaise"]),
+                    gstRatePercent=int(entry["gstRatePercent"]),
+                    availableStock=int(entry.get("availableStock", 0)),
+                )
+            )
+        except (KeyError, TypeError, ValueError) as err:
+            logger.warning("Skipping malformed catalog record for merchant %s: %s", merchantDid, err)
+
+    items.sort(key=lambda item: item.skuId)
+    return CatalogSummaryResponse(merchantDid=merchantDid, items=items)
 
 
 @catalogRouter.post(

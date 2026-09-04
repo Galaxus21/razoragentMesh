@@ -291,6 +291,31 @@ export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
 
   const payload = useMemo(() => buildUniversalProductPayload(formData), [formData]);
 
+  /**
+   * Brings the first field-level error into view after a refused publish.
+   *
+   * The Studio is taller than the viewport, and the Publish button sits at the bottom beside the
+   * JSON preview. A merchant working in the promotion or negotiation sections sees only the
+   * generic "correct the highlighted errors" banner; the highlighted error itself can be several
+   * screens up, so the banner names a problem the reader cannot find.
+   *
+   * Selects `p.text-statusError` deliberately: field errors render as paragraphs, while the
+   * required-field asterisks beside labels are spans and the submission banner's own paragraph
+   * takes its colour from its parent. So this matches error messages and nothing else.
+   *
+   * Deferred a frame because `setErrors` above has not painted yet -- without it the query runs
+   * against the previous render, which has no error to scroll to.
+   */
+  const _scrollToFirstFieldError = (): void => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      const firstError = document.querySelector("p.text-statusError");
+      firstError?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
   const handlePublishToMesh = useCallback(async () => {
     const validation = validateMerchantCatalogForm(formData);
     if (!validation.isValid) {
@@ -299,6 +324,7 @@ export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
         status: "error",
         message: "Form validation failed. Please correct the highlighted errors.",
       });
+      _scrollToFirstFieldError();
       return;
     }
     setIsSubmitting(true);

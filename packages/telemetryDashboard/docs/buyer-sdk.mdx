@@ -1,15 +1,18 @@
 ---
-title: "AI Buyer Agent SDK & AP2 Protocol Guide"
-description: "Explains how to use the buyer agent SDK for mandate signing, live SKU quoting, inventory locking, and 2PC settlement execution."
+title: "Buyer SDK"
+description: "Build a buyer agent with the TypeScript or Python SDK: client setup, quotes and discounts, negotiation, inventory locks, signing and verifying the AP2 mandate chain, and settlement."
 navLabel: "Buyer SDK"
-navDescription: "TypeScript & Python SDK Guide"
+navDescription: "TypeScript and Python client guide"
 order: 4
+section: "Guides"
 icon: "Bot"
 audience: "developer"
 ---
 
-A developer guide for integrating autonomous AI buyer agents with Ed25519 mandate signing, live
-discount stacking, and fenced inventory reservation.
+For developers building the buyer side: an agent that discovers a product, agrees a price,
+reserves stock, signs an AP2 mandate chain and settles -- without a human at a checkout.
+The TypeScript and Python clients expose the same protocol, and the last section lists
+every place they differ.
 
 Every snippet on this page is checked against the SDK's generated symbol table by
 `npm run docs:verify`, run locally -- this repository has no CI by design, so the checks are
@@ -19,7 +22,7 @@ does not have fails that command. Link targets are checked separately by
 
 ---
 
-## 1. SDK Installation
+## Installation
 
 Install the standalone buyer agent SDK for your target runtime:
 
@@ -35,7 +38,7 @@ pip install razoragent_buyer_sdk
 
 ---
 
-## 2. Client Initialization & Key Management
+## Client setup and keys
 
 The client takes a key manager and the addresses of the mesh services it talks to. There is no
 single base URL: quotes and locks come from the MCP Server, settlement from the Mandate Engine,
@@ -76,12 +79,12 @@ buyerAgent = RazorAgentClient(
 ```
 
 The budget ceiling is not a client setting in either runtime. It is a field of the Intent Mandate
-(`maxBudgetPaise`), signed by the human principal — see section 6 — so the limit travels with the
+(`maxBudgetPaise`), signed by the human principal — see [signing the chain](#signing-the-chain) — so the limit travels with the
 authorization instead of living in the agent's own configuration, where the agent could change it.
 
 ---
 
-## 3. The AP2 Mandate Chain (INV-02)
+## The AP2 mandate chain
 
 Every transaction executes across a cryptographic mandate chain:
 
@@ -100,11 +103,11 @@ Every transaction executes across a cryptographic mandate chain:
 
 ---
 
-## 4. Live SKU Quotes & Discount Stacking
+## Quotes and discounts
 
 A quote prices one SKU at one quantity for one delivery pincode, with the discount tiers already
-stacked and the GST already split. The `quoteHash` it returns is what the inventory lock in
-section 8 is bound to.
+stacked and the GST already split. The `quoteHash` it returns is what the
+[inventory lock](#inventory-locks-and-fencing-tokens) is bound to.
 
 ```typescript
 const quote = await buyerAgent.getLiveSkuQuote("sku_cotton_oxford_shirt", 2, {
@@ -134,11 +137,12 @@ print(f"Unit price: {quote.offered_unit_price_paise}, saved: {quote.total_saving
 
 The casing split is not arbitrary. Python transport models are snake_case because they follow the
 MCP tool schema, while mandate models are camelCase in both languages because field names are
-inside the bytes that get signed -- see section 10 before renaming anything.
+inside the bytes that get signed -- see [where the two runtimes diverge](#where-the-two-runtimes-diverge)
+before renaming anything.
 
 ---
 
-## 5. Bilateral Negotiation Bounds & Amendment Mandates (INV-06)
+## Negotiation and amendments
 
 Negotiation is bounded by construction rather than by convention: the SDK ships the turn ceiling
 and the per-turn micro-fee as constants, so a client cannot quietly bargain forever.
@@ -188,7 +192,7 @@ print(f"Alert {alert.alertId} is {alert.status}")
 
 ---
 
-## 6. Signing the Mandate Chain
+## Signing the chain
 
 The buyer agent signs exactly one link of the chain: the Execution Mandate. The Intent Mandate is
 signed by the human principal's key and the Cart Mandate by the merchant's, which is why each
@@ -196,9 +200,10 @@ helper takes its signer as a separate argument rather than reading one off the c
 
 The three snippets below are not written out here. They are regions of
 `examples/typescript/mandateChain.ts` and `examples/python/mandateChain.py`, two standalone
-programs that CI compiles and then *runs* on every push. Neither touches the network — signing and
-hash-chaining are local Ed25519 operations — so the whole of INV-02 is exercised without a single
-service running, and this page cannot drift from code that is proven to work.
+programs that `python scripts/verifyExamples.py --check` compiles and then *runs*. Neither touches
+the network — signing and hash-chaining are local Ed25519 operations — so the whole mandate
+chain is exercised without a single service running, and this page cannot drift from code that is
+proven to work.
 
 <Snippet file="examples/typescript/mandateChain.ts" region="intent">
 The Intent Mandate carries the budget ceiling, signed by the human principal. The limit travels
@@ -231,7 +236,7 @@ over, and recomputation catches it without needing to have seen the original.
 
 ---
 
-## 7. Verifying the Chain
+## Verifying the chain
 
 Verification recomputes both hashes and compares them with what the execution mandate recorded.
 The examples do it twice — once on the chain as signed, once on a cart discounted after the fact —
@@ -258,7 +263,7 @@ PYTHONPATH=packages/buyerSdkPy python examples/python/mandateChain.py
 
 ---
 
-## 8. Atomic Inventory Reservation & Fencing Tokens (INV-07)
+## Inventory locks and fencing tokens
 
 Reserve stock against the quote, with a monotonic fencing token so a lock that expired mid-flight
 cannot be used to settle later:
@@ -287,14 +292,11 @@ print(f"Locked: {lock.lock_token}, FencingToken: {lock.fencing_token}")
 The lock route is metered under HTTP 402. Both clients solve the proof-of-work challenge for you —
 the Python client only while `autoSolvePow` is left on in `MeshSlaConfig`.
 
-Both clients solve the challenge transparently; the Python client only while `autoSolvePow` is
-left on in `MeshSlaConfig`.
-
 ---
 
-## 9. AP2 Two-Phase Commit Settlement Saga Execution
+## Settlement
 
-Submit the whole mandate chain to the Mandate Engine for the 3-way split transfer. This is the
+Submit the whole mandate chain to the Mandate Engine for the four-way split transfer. This is the
 final step of the `happyPath` scenario, described below by the driver that runs it:
 
 <RunStep scenario="happyPath" step="settle" />
@@ -335,7 +337,7 @@ be inspected or retried on its own.
 
 ---
 
-## 10. Where the Two Runtimes Diverge
+## Where the two runtimes diverge
 
 The two SDKs are not mirror images, and pretending otherwise is how people write code that
 typechecks and then fails in production. The divergences fall into three groups, and only the
@@ -370,7 +372,7 @@ either side is a breaking change for anyone already on it, so they are recorded 
 | `getBuyerKeyManager` | `getKeyManager` | the client's own signer |
 | `AgentKeyManager.fromSecretKey` | `AgentKeyManager.fromPrivateKeyHex` | construct from a key |
 | `getSecretKeyHex` | `getPrivateKeyHex` | read the key back |
-| `verifyMandateChain` | `verifyMandateHashChain` | check the chain (see section 7 — the contracts differ too) |
+| `verifyMandateChain` | `verifyMandateHashChain` | check the chain (see [verifying the chain](#verifying-the-chain) — the contracts differ too) |
 | `solvePowChallenge` | `solvePoWChallenge` | solve the HTTP 402 challenge |
 | `verifyPowSolution` | `verifyPoWSolution` | check a solution |
 | `formatAgentDid` | `formatDid` | render a `did:agent:` string |
@@ -390,8 +392,8 @@ does not expose.
 
 ### The routes both clients call
 
-Both SDKs now target the same four MCP routes: `/api/v1/quote`, `/api/v1/lock`, `/api/v1/sla` and
-`/api/v1/settlement/execute`. That is worth stating because it was not true until recently. The
+Both SDKs now target the same four routes: `/api/v1/quote`, `/api/v1/lock` and `/api/v1/sla` on
+the MCP server, and `/api/v1/settlement/execute` on the Mandate Engine. That is worth stating because it was not true until recently. The
 Python client asked for `/api/v1/quotes/live` and `/api/v1/inventory/lock`, which nothing served, and
 POSTed the quote where the adapter expects a `GET`. Every such call failed against a running mesh
 while the SDK's own suite stayed green, because it mocks the transport, and its test asserted the

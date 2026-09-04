@@ -18,11 +18,10 @@ import {
 import { DashboardHeader } from "../src/components/dashboardHeader.js";
 import { resolveStreamMode } from "../src/lib/streamModeResolver.js";
 import OverviewPage from "../src/app/(dashboard)/overview/page.js";
-import AgentObservabilityPage from "../src/app/(dashboard)/agent-observability/page.js";
-import NegotiationHubPage from "../src/app/(dashboard)/negotiation-hub/page.js";
-import SecurityAuditPage from "../src/app/(dashboard)/security-audit/page.js";
-import SelfHealingPage from "../src/app/(dashboard)/self-healing/page.js";
-import InfrastructurePage from "../src/app/(dashboard)/infrastructure/page.js";
+import VisualisePage from "../src/app/(dashboard)/visualise/page.js";
+import VisualiseRunPage from "../src/app/(dashboard)/visualise/run/page.js";
+import AdversarialPage from "../src/app/(dashboard)/visualise/adversarial/page.js";
+import SettlePage from "../src/app/(dashboard)/visualise/settle/page.js";
 import MerchantStudioPage from "../src/app/(dashboard)/merchant-studio/page.js";
 import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 import RootPage from "../src/app/page.js";
@@ -38,23 +37,15 @@ import { isRouteMatching } from "../src/constants/sidebarNavigationConfig.js";
 
 const expectedRoutes: ReadonlyArray<string> = [
   "/overview",
-  "/self-healing",
-  "/infrastructure",
-  "/protocol",
-  "/playground/layers",
-  "/playground",
-  "/playground/adversarial",
-  "/playground/live-agent",
-  "/sdk-console",
-  "/agent-observability",
-  "/negotiation-hub",
-  "/security-audit",
   "/merchant-studio",
+  "/visualise",
+  "/docs",
   "/docs/setup",
   "/docs/agent-quickstart",
   "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
+  "/docs/tool-reference",
   "/docs/telemetry",
   "/docs/gstr1-invoice",
 ];
@@ -81,15 +72,14 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
     }
   });
 
-  it("should export functional React components for all 7 non-doc route pages", () => {
+  it("should export functional React components for all non-doc route pages", () => {
     const routeComponents = [
       { name: "OverviewPage", component: OverviewPage },
-      { name: "AgentObservabilityPage", component: AgentObservabilityPage },
-      { name: "NegotiationHubPage", component: NegotiationHubPage },
-      { name: "SecurityAuditPage", component: SecurityAuditPage },
-      { name: "SelfHealingPage", component: SelfHealingPage },
-      { name: "InfrastructurePage", component: InfrastructurePage },
       { name: "MerchantStudioPage", component: MerchantStudioPage },
+      { name: "SettlePage", component: SettlePage },
+      { name: "VisualisePage", component: VisualisePage },
+      { name: "VisualiseRunPage", component: VisualiseRunPage },
+      { name: "AdversarialPage", component: AdversarialPage },
     ];
 
     for (const { name, component } of routeComponents) {
@@ -114,8 +104,8 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
 });
 
 describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route Resolution", () => {
-  it("should verify 100% route alignment between navigationItems and expected 20 routes", () => {
-    assert.equal(navigationItems.length, 20);
+  it("should verify 100% route alignment between navigationItems and the expected sidebar routes", () => {
+    assert.equal(navigationItems.length, 12);
 
     const actualRoutes = navigationItems.map((item) => item.route);
     assert.deepEqual(actualRoutes, expectedRoutes);
@@ -171,12 +161,12 @@ describe("Challenger 2 Empirical Verification: AppSidebar & DashboardHeader UI C
     const elementExpanded = React.createElement(AppSidebar, {
       isCollapsed: false,
       onToggle: () => {},
-      activeRoute: "/security-audit",
+      activeRoute: "/visualise",
     });
 
     assert.ok(React.isValidElement(elementExpanded));
     assert.equal(elementExpanded.props.isCollapsed, false);
-    assert.equal(elementExpanded.props.activeRoute, "/security-audit");
+    assert.equal(elementExpanded.props.activeRoute, "/visualise");
   });
 
   it("should verify DashboardHeader props contract across connection states and themes", () => {
@@ -197,6 +187,8 @@ describe("Challenger 2 Empirical Verification: AppSidebar & DashboardHeader UI C
           streamMode: resolveStreamMode(connectionState, []),
           provenanceCounts: { liveCount: 0, syntheticCount: 0, unknownCount: 0 },
           totalEventsCount: 42,
+          pageTitle: "Live Agent",
+          pageSection: "Visualise",
           onClearEvents: () => {},
           theme,
           onToggleTheme: () => {},

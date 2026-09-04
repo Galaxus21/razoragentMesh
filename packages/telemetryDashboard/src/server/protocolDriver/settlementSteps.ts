@@ -18,7 +18,7 @@ export const stepSettle: ExecutableStep = {
       "The verified mandate bundle goes to the settlement coordinator, which re-checks every signature, splits the payment across the merchant, logistics, and protocol-fee accounts under two-phase commit, and issues the statutory invoice.",
     protocolLayer: layerSettlement,
     implementedBy: `${packageMandateEngine}settlementOrchestrator.py`,
-    invariant: "INV-04",
+    invariant: "Two-phase commit across Route recipients",
     sdkCall: { methodName: "executeSettlement", argumentSummary: {}, isPureCrypto: false }
   },
   execute: async (context) => {

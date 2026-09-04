@@ -2,7 +2,7 @@
 // tools' schemas live here rather than inline beside their tools.
 
 import { z } from "zod";
-import { defaultMerchantAccount, signatureHexLength } from "../constants/mandateToolConstants.js";
+import { signatureHexLength } from "../constants/mandateToolConstants.js";
 import { currencyInr } from "../constants/protocolConstants.js";
 
 export const executeSettlementRequestSchema = z.object({
@@ -11,6 +11,11 @@ export const executeSettlementRequestSchema = z.object({
   // Required in agent_held mode, rejected in mesh_demo_custodial mode, so the two custody
   // modes cannot be mixed into a chain whose signer is ambiguous.
   agent_signature: z.string().length(signatureHexLength).optional(),
+  // Accepted but never authoritative. The payout destination is resolved from the SIGNED cart's
+  // merchantDid (merchant/merchantPayoutRegistry.ts); a value here that differs from that
+  // resolution is refused. It used to be the opposite -- this field overrode the account bound at
+  // cart creation, and nothing checked it against anything the merchant had signed, so any
+  // `acc_...` string redirected the merchant leg of the split.
   merchant_account: z.string().min(1).optional(),
   // Opt-in escape from the same-session duplicate guard. Buying the identical cart twice in one
   // session is nearly always an agent that lost track of a settlement it already made, so it is

@@ -15,6 +15,9 @@ import {
   degradedEmbeddingMode
 } from "../constants/catalogSearchConstants.js";
 import { catalogSearchRequestSchema } from "../schemas/catalogSearchSchema.js";
+import { defaultCatalogStore, CatalogStore } from "../catalog/catalogStore.js";
+import { resolveNextPromotion } from "../catalog/promotionResolver.js";
+import { millisPerSecond } from "../constants/protocolConstants.js";
 
 interface UpstreamSearchResponse {
   readonly results?: ReadonlyArray<Record<string, unknown>>;
@@ -31,7 +34,11 @@ interface UpstreamSearchResponse {
  * down" are different answers, and an agent told the former would conclude the product does
  * not exist and give up.
  */
-export async function searchCatalog(rawArguments: unknown): Promise<Record<string, unknown>> {
+export async function searchCatalog(
+  rawArguments: unknown,
+  catalogStore: CatalogStore = defaultCatalogStore,
+  currentTimeUnix: number = Math.floor(Date.now() / millisPerSecond)
+): Promise<Record<string, unknown>> {
   const { queryText, limit } = catalogSearchRequestSchema.parse(rawArguments);
   const url = `${resolveMerchantApiUrl()}${catalogSearchPath}`;
 
@@ -57,7 +64,7 @@ export async function searchCatalog(rawArguments: unknown): Promise<Record<strin
 
   return {
     query_text: queryText,
-    results: body.results ?? [],
+    results: _withScheduledSales(body.results ?? [], catalogStore, currentTimeUnix),
     result_count: body.resultCount ?? (body.results?.length ?? 0),
     // Passed through deliberately. An agent choosing what to buy should know when the ranking
     // came from a character hash rather than a language model, because in that mode the order
@@ -66,4 +73,36 @@ export async function searchCatalog(rawArguments: unknown): Promise<Record<strin
     ranking_quality: body.rankingQuality ?? "",
     index_available: body.indexAvailable ?? false
   };
+}
+
+/**
+ * Attaches each hit's soonest scheduled sale, in the field name browse_catalog already uses.
+ *
+ * Measured, an agent shown a sale on the SKU it buys relays it: `execute_settlement` puts that on
+ * the receipt and the receipt is the part agents repeat verbatim. The case the receipt cannot
+ * reach is the one that actually happens -- the agent is shown a sale on SKU A, buys SKU B, and
+ * never mentions A, because by then nothing it can see says A is about to get cheaper. A sale is
+ * a property of the result, so it travels with the result, including the results the agent
+ * rejects (AUDIT_ARCHIVE item 48).
+ *
+ * The ranking comes from merchantApi, which reads Redis and Qdrant; the promotions come from the
+ * in-process CatalogStore, which is what get_live_sku_quote will price against. A hit the store
+ * does not know is passed through untouched rather than dropped: search ranks a wider index than
+ * this process holds, and hiding a result because it has no local sale would be worse than
+ * saying nothing about its sales.
+ */
+function _withScheduledSales(
+  results: ReadonlyArray<Record<string, unknown>>,
+  catalogStore: CatalogStore,
+  currentTimeUnix: number
+): ReadonlyArray<Record<string, unknown>> {
+  return results.map((hit) => {
+    const skuId = hit.skuId;
+    if (typeof skuId !== "string" || skuId.length === 0) {
+      return hit;
+    }
+    const sku = catalogStore.getSku(skuId);
+    const nextPromotion = sku ? resolveNextPromotion(sku, currentTimeUnix) : undefined;
+    return nextPromotion === undefined ? hit : { ...hit, next_promotion: nextPromotion };
+  });
 }

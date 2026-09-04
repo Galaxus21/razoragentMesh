@@ -44,7 +44,7 @@ export function StepDetailPanel({ step }: StepDetailPanelProps): React.JSX.Eleme
             </span>
             <span className="text-[11px] font-mono text-textMuted">{step.durationMs}ms</span>
             {step.invariant && (
-              <span className="rounded-full border border-borderSubtle bg-surfaceContainer px-2 py-0.5 text-[10px] font-mono font-semibold text-textSecondary">
+              <span className="rounded-full border border-borderSubtle bg-surfaceContainer px-2 py-0.5 text-[10px] font-semibold text-textSecondary">
                 {step.invariant}
               </span>
             )}
@@ -78,8 +78,8 @@ export function StepDetailPanel({ step }: StepDetailPanelProps): React.JSX.Eleme
             </p>
             {step.refusal.invariantViolated && (
               <p className="mt-2 text-[11px] text-textMuted">
-                Caught by invariant{" "}
-                <span className="font-mono font-semibold text-textSecondary">
+                Caught by{" "}
+                <span className="font-semibold text-textSecondary">
                   {step.refusal.invariantViolated}
                 </span>
               </p>

@@ -1,178 +1,122 @@
 ---
-title: "RazorAgent Mesh v2.0 — Developer Onboarding Guide"
-description: "Provides an integration guide for merchants and buyer agents covering key management, catalog ingestion, AP2 mandates, 2PC settlement, and code examples."
+title: "Developer onboarding"
+description: "The path from a running stack to a settled purchase: the protocol's shape, keys and identities, what a merchant publishes, what a buyer agent calls, and how a settlement is verified."
 navLabel: "Developer Onboarding"
-navDescription: "End-to-End Integration Guide"
+navDescription: "End-to-end integration guide"
 order: 3
+section: "Guides"
 icon: "Rocket"
 audience: "developer"
 ---
 
-An end-to-end, production-grade technical manual for software engineers, merchant platform developers, and autonomous agent architects integrating with **RazorAgent Mesh v2.0**.
+This guide is the path from a running stack to a settled purchase. It covers the
+protocol's shape, the identities and keys every actor needs, what a merchant publishes, what a
+buyer agent calls, and how a settlement is verified -- in the order you meet them.
 
----
+It is deliberately the narrative route. Where a topic has its own reference, this page gives you
+enough to keep moving and links there rather than restating it:
 
-## Table of Contents
+| If you want | Read |
+| --- | --- |
+| To get the stack running | [Setup & installation](/docs/setup) |
+| To point an existing agent at the mesh | [Agent quickstart](/docs/agent-quickstart) |
+| Every argument of every MCP tool | [Tool reference](/docs/tool-reference) |
+| To publish and price a catalog | [Merchant guide](/docs/merchant-guide) |
+| To build a buyer with the SDK | [Buyer SDK](/docs/buyer-sdk) |
+| The event stream and its schemas | [Telemetry](/docs/telemetry) |
+| How tax and invoices are computed | [GSTR-1 invoicing](/docs/gstr1-invoice) |
 
-1. [Executive Overview & Protocol Topology](#1-executive-overview--protocol-topology)
-2. [System Prerequisites & Environment Setup](#2-system-prerequisites--environment-setup)
-3. [Cryptographic Key Management & DID Minting](#3-cryptographic-key-management--did-minting)
-4. [Step-by-Step Merchant Onboarding](#4-step-by-step-merchant-onboarding)
-   - [Step 1: Merchant DID & Razorpay Route Registration](#step-1-merchant-did--razorpay-route-registration)
-   - [Step 2: Autonomous Negotiation Policy Configuration](#step-2-autonomous-negotiation-policy-configuration)
-   - [Step 3: Multi-Channel Catalog Ingestion](#step-3-multi-channel-catalog-ingestion)
-   - [Step 4: Universal Product Protocol & Domain Facets](#step-4-universal-product-protocol--domain-facets)
-   - [Step 5: Dynamic Bullion Pricing & MCX Spot Oracle](#step-5-dynamic-bullion-pricing--mcx-spot-oracle)
-   - [Step 6: Statutory HSN Chapter Resolution & GST Tax Rules](#step-6-statutory-hsn-chapter-resolution--gst-tax-rules)
-   - [Step 7: Programmatic SKU Authoring & Publishing](#step-7-programmatic-sku-authoring--publishing)
-5. [Step-by-Step Buyer Agent Onboarding](#5-step-by-step-buyer-agent-onboarding)
-   - [Step 1: Buyer SDK Installation](#step-1-buyer-sdk-installation)
-   - [Step 2: Key Management & AP2 Budget Gate Limits](#step-2-key-management--ap2-budget-gate-limits)
-   - [Step 3: User Spending Intent Mandate ($M_I$) Creation](#step-3-user-spending-intent-mandate-m_i-creation)
-   - [Step 4: MCP Product Discovery & 4-Tier Discount Stacking](#step-4-mcp-product-discovery--4-tier-discount-stacking)
-   - [Step 5: HTTP 402 PoW Challenge Resolution & B2B Bargaining](#step-5-http-402-pow-challenge-resolution--b2b-bargaining)
-   - [Step 6: Atomic Stock Reservation with Monotonic Fencing](#step-6-atomic-stock-reservation-with-monotonic-fencing)
-   - [Step 7: Cart ($M_C$), Execution ($M_E$), and Amendment ($M_A$) Mandates](#step-7-cart-m_c-execution-m_e-and-amendment-m_a-mandates)
-   - [Step 8: Two-Phase Commit (2PC) Settlement Saga Execution](#step-8-two-phase-commit-2pc-settlement-saga-execution)
-6. [Complete Executable End-to-End Implementations](#6-complete-executable-end-to-end-implementations)
-   - [TypeScript Implementation](#typescript-implementation)
-   - [Python Implementation](#python-implementation)
-7. [Error Handling, HTTP Status Codes & Troubleshooting](#7-error-handling-http-status-codes--troubleshooting)
-
----
-
-## 1. Executive Overview & Protocol Topology
+## How the mesh fits together
 
 **RazorAgent Mesh v2.0** is an open, decentralized agentic commerce protocol designed for autonomous machine-to-machine transactions over Indian sovereign payment rails (UPI Circle, Razorpay Route) and tax frameworks (GST Rule 46 / GSTR-1).
 
-### Protocol Architecture
+### The six layers
 
-The protocol operates across 5 distinct cryptographic, discovery, negotiation, and settlement layers:
+The protocol operates across 6 distinct cryptographic, discovery, negotiation, settlement and
+observability layers, numbered L0 to L5 exactly as the canonical map in
+`packages/telemetryDashboard/src/constants/protocolLayerMap.ts` defines them:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                                 RAZORAGENT MESH TOPOLOGY                               │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
 │ Layer 0: Ingress Anti-Spam & Sybil Shield                                              │
-│   └── SHA-256 Dynamic Proof-of-Work (PoW) difficulty challenges + Anti-Replay Ledger  │
+│   └── SHA-256 Dynamic Proof-of-Work (PoW) difficulty challenges + Anti-Replay Ledger   │
 │                                                                                        │
 │ Layer 1: Deterministic Discovery Enclave (MCP Server)                                  │
-│   └── Anthropic JSON-RPC 2.0 Tools: search_catalog, get_live_sku_quote,               │
-│       reserve_inventory_lock, verify_shipping_sla, establish_agent_delegation,         │
-│       create_cart_mandate, sign_execution_mandate, execute_settlement                  │
+│   └── Anthropic JSON-RPC 2.0 Tools: browse_catalog, search_catalog,                    │
+│       get_live_sku_quote, verify_shipping_sla, negotiate_price,                        │
+│       reserve_inventory_lock, establish_agent_delegation, create_cart_mandate,         │
+│       sign_execution_mandate, execute_settlement                                       │
 │       + 4-Tier Auto-Discount Engine + HMAC-SHA256 Quote Digest                         │
 │                                                                                        │
 │ Layer 2: HTTP 402-INR Dynamic Negotiation Gateway                                      │
-│   └── Micro-escrow pre-auth + Rubinstein-Ståhl game-theoretic bilateral bargaining │
-│   └── Monotonic concessions + AST Commercial Contract compilation                     │
+│   └── Micro-escrow pre-auth + Rubinstein-Ståhl game-theoretic bilateral bargaining     │
+│   └── Monotonic concessions + AST Commercial Contract compilation                      │
 │                                                                                        │
 │ Layer 3: Sub-300ms Vector Healing Enclave                                              │
 │   └── Qdrant ANN cosine similarity vector search + AutoVectorizer                      │
 │                                                                                        │
 │ Layer 4: AP2 Cryptographic Settlement Enclave                                          │
 │   └── Ed25519 triple-mandate chain (M_I -> M_C -> M_E -> M_A) + RFC 8785 JCS           │
-│   └── Deterministic Integer Paise Math (INV-01) + GST Floor Division (INV-02)         │
-│   └── 2PC Settlement Saga Coordinator + 3-Way Razorpay Route Split + LIFO Rollback     │
+│   └── Deterministic Integer Paise Math + GST Floor Division                            │
+│   └── 2PC Settlement Saga Coordinator + 4-Way Razorpay Route Split + LIFO Rollback     │
 │   └── GSTR-1 Rule 46 Tax Invoice Generation with SHA-256 Audit Seal                    │
+│                                                                                        │
+│ Layer 5: Telemetry & Observability Bus                                                 │
+│   └── Server-Sent Events broadcast of every protocol event + provenance stamping       │
+│   └── This dashboard: live protocol stack, agent sessions, and settlement evidence     │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Core Mathematical & Cryptographic Invariants
+### Guarantees the mesh enforces
 
-| Invariant | Name | Formulation / Specification | Enforcement Point |
-|---|---|---|---|
-| **INV-01** | Integer Paise Arithmetic | All monetary values represented in positive integers ($\mathbb{Z}^+$ paise, where ₹1.00 = 100 paise). Floating-point floats are strictly rejected. | `arithmeticEnclave.py`, `jcsCanonicalizer.ts` |
-| **INV-02** | Equal-Half GST Division | Intra-state: $\text{CGST} = \text{SGST} = \lfloor (\text{Taxable} \times \text{Rate}) / 200 \rfloor$ and $\text{IGST} = 0$. Inter-state: $\text{IGST} = \lfloor (\text{Taxable} \times \text{Rate}) / 100 \rfloor$ and $\text{CGST} = \text{SGST} = 0$. Total tax is *defined* as the sum of the levies. Both halves come from the identical expression, so they are equal by construction; deriving one as the remainder of the other would produce an illegal 2%/3% split on odd slabs such as 5%. | `arithmeticEnclave.py`, `pricingEngine.ts` |
-| **INV-03** | Ed25519 Canonical Signatures | Detached 64-byte Ed25519 cryptographic signatures generated over RFC 8785 JSON Canonicalization Scheme (JCS) byte buffers. | `AgentKeyManager`, `Ed25519Verifier` |
-| **INV-04** | AP2 Budget Gate Invariant | $\text{SettlementAmountPaise} \le \min(\text{MaxBudgetPaise}, \text{SingleTransactionLimitPaise})$ with category whitelisting. | `budgetGate.py`, `agentMandateBuilder.ts` |
-| **INV-05** | Anti-Replay Monotonic Nonces | Nonces are single-use UUIDv4/hex strings recorded via Redis atomic `SETNX` with a 120s TTL and a tight clock drift window $[T - 5\text{s}, T + 60\text{s}]$. | `nonceLedger.py` |
-| **INV-06** | Negotiation Monotonicity | Buyer bids are strictly non-decreasing ($B_t \ge B_{t-1}$); seller asks are strictly non-increasing ($A_t \le A_{t-1}$), bounded by seller margin floor. | `bidStateMachine.py` |
-| **INV-07** | Atomic Inventory Fencing | Redis Lua script executes atomic stock decrement and increments a monotonic fencing token, preventing concurrent double-allocation. | `inventoryLocker.ts`, `redisLockManager.ts` |
+Seven properties hold for every transaction. They are enforced in code, not asserted in prose, and
+each row names the module that enforces it.
+
+| Guarantee | What it means | Enforced in |
+| --- | --- | --- |
+| **Integer paise arithmetic** | Every monetary value is a positive integer number of paise. A float anywhere on a money path raises `ArithmeticDriftException` rather than rounding. | `arithmeticEnclave.py`, `jcsCanonicalizer.ts` |
+| **Equal-half GST division** | CGST and SGST are separate levies at half the combined rate each, so both come from the same expression and are equal by construction. Deriving one as the remainder of the other yields an illegal split on odd slabs such as 5%. See [GSTR-1 invoicing](/docs/gstr1-invoice). | `arithmeticEnclave.py`, `pricingEngine.ts` |
+| **Ed25519 canonical signatures** | Detached 64-byte signatures over RFC 8785 (JCS) canonical bytes, so the same document serialises identically on both runtimes. | `AgentKeyManager`, `Ed25519Verifier` |
+| **AP2 budget gate** | A settlement may not exceed the delegated budget or the per-transaction ceiling, whichever is lower, and its category must be one the user authorised. | `budgetGate.py`, `agentMandateBuilder.ts` |
+| **Anti-replay nonces** | Each nonce is single-use, recorded with a Redis `SETNX` and a 120s TTL, and accepted only within 5s behind to 60s ahead of server time. | `nonceLedger.py` |
+| **Negotiation monotonicity** | Buyer bids never decrease and seller asks never increase, and the seller's floor is the merchant's policy, never the buyer's request. | `bidStateMachine.py` |
+| **Atomic inventory fencing** | Stock decrement and fencing-token increment happen in one Redis Lua script, so two agents cannot be sold the same unit. | `inventoryLocker.ts`, `redisLockManager.ts` |
 
 ---
 
-## 2. System Prerequisites & Environment Setup
+## Repository layout
 
-### 2.1 Hardware & Runtime Requirements
-
-- **Node.js**: v20.10.0+ (LTS) with `npm` v10+
-- **Python**: v3.11.0+ (compatible with Python 3.12 and 3.13) with `pip` and `virtualenv`
-- **Docker & Docker Compose**: Docker v24+ (Compose v2.20+)
-- **Redis**: v7.0+ (standalone or clustered with Pub/Sub support)
-- **Qdrant**: v1.7.0+ (Vector Search Engine running on port 6333)
-
-### 2.2 Repository Layout
+Eight packages, each owning one layer's worth of the protocol. The ports are the ones
+`docker-compose.yml` binds.
 
 ```
 razoragentMesh/
 ├── packages/
-│   ├── buyerSdkTs/         # TypeScript Buyer SDK (@razorpay/agent-buyer-sdk)
-│   ├── buyerSdkPy/         # Python Buyer SDK (razoragent_buyer_sdk)
-│   ├── catalogSanitizer/   # Input normalization & currency validation
-│   ├── mandateEngine/      # AP2 Settlement Enclave & GSTR-1 Invoicing (Port 8000)
-│   ├── mcpServer/          # Model Context Protocol JSON-RPC Server (Port 4001 / Stdio)
-│   ├── merchantApi/        # Merchant Registration, Policy & Ingestion (Port 4002)
-│   ├── vectorHealer/       # Vector substitution & healing engine (Port 6333 Qdrant)
-│   └── x402Gateway/        # PoW Ingress & Negotiation State Machine (Port 4003)
-├── docker-compose.yml      # Infrastructure orchestration (Redis, Qdrant, Microservices)
-└── .env.example            # Environment configuration template
+│   ├── buyerSdkTs/         # TypeScript buyer SDK
+│   ├── buyerSdkPy/         # Python buyer SDK
+│   ├── catalogSanitizer/   # Input normalisation and currency validation
+│   ├── mandateEngine/      # AP2 settlement, tax and GSTR-1 invoicing   :8000
+│   ├── mcpServer/          # MCP tools over Streamable HTTP and stdio   :4001
+│   ├── merchantApi/        # Registration, policy and catalog ingestion :4002
+│   ├── vectorHealer/       # Vector substitution for out-of-stock lines
+│   └── x402Gateway/        # Proof-of-work ingress and negotiation      :4003
+├── docker-compose.yml
+└── .env.example
 ```
 
-### 2.3 Environment Variable Template (`.env`)
-
-Create a `.env` file in `razoragentMesh/` based on the template below:
-
-```bash
-# ==============================================================================
-# RAZORAGENT MESH — ENVIRONMENT CONFIGURATION
-# ==============================================================================
-
-# Razorpay Test Mode Credentials
-RAZORPAY_KEY_ID=rzp_test_MockApiKey12345
-RAZORPAY_KEY_SECRET=MockApiSecretKey67890
-
-# Infrastructure Endpoints
-REDIS_URL=redis://localhost:6379/0
-QDRANT_HOST=localhost
-QDRANT_PORT=6333
-MERCHANT_API_URL=http://localhost:4002
-
-# Ed25519 signing key for the merchant enclave. The buyer agent and the user principal are not
-# configured here: both SDKs generate those keypairs at runtime with AgentKeyManager.generate(),
-# which is what the examples in examples/ do.
-MERCHANT_PRIVATE_KEY_HEX=ac262c2b5daf3f4272ed052f7b331cbb6152588ae58dfb022f71c7b8a2c45364
-
-# Layer 1 MCP Quote HMAC Signing Key
-HMAC_SECRET_KEY=razoragent_mesh_hmac_secret_key_2026
-```
-
-### 2.4 Launching Local Infrastructure
-
-Start Redis and Qdrant via Docker Compose:
-
-```bash
-# From razoragentMesh directory
-docker compose up -d redis qdrant
-```
-
-Verify service health:
-```bash
-# Redis Ping
-docker compose exec redis redis-cli ping
-# Output: PONG
-
-# Qdrant Health Check
-curl http://localhost:6333/healthz
-# Output: {"title":"qdrant - vector search engine","version":"..."}
-```
+Prerequisites, the `.env` template and the command that starts all of this live in
+[Setup & installation](/docs/setup). Come back here once `docker compose ps` shows seven healthy
+services.
 
 ---
 
-## 3. Cryptographic Key Management & DID Minting
+## Keys and identities
 
 All actors in the mesh (Merchants, Buyer Agents, CFO/Users) are identified by Decentralized Identifiers (DIDs) rooted in Ed25519 public verification keys.
 
-### 3.1 DID Specifications
+### DID formats
 
 | Actor Type | DID Format | Public Key Component | Example |
 |---|---|---|---|
@@ -180,7 +124,7 @@ All actors in the mesh (Merchants, Buyer Agents, CFO/Users) are identified by De
 | **Buyer Agent** | `did:razoragent:buyer:<hex16>` | First 16 hex characters of Ed25519 Verify Key | `did:razoragent:buyer:ad1b82a9cce6d365` |
 | **User / CFO** | `did:razoragent:user:<hex16>` | First 16 hex characters of Ed25519 Verify Key | `did:razoragent:user:ec89f8790fa0bc33` |
 
-### 3.2 Keypair Generation & Signing (Python / PyNaCl)
+### Generating a keypair in Python
 
 ```python
 import json
@@ -215,7 +159,7 @@ def canonicalizeAndSign(payload: dict, privateKeyHex: str) -> str:
     return signed.signature.hex()
 ```
 
-### 3.3 Keypair Generation & Signing (TypeScript / TweetNaCl)
+### Generating a keypair in TypeScript
 
 ```typescript
 import nacl from "tweetnacl";
@@ -255,20 +199,20 @@ export class AgentKeyManager {
 
 ---
 
-## 4. Step-by-Step Merchant Onboarding
+## Onboarding a merchant
 
 The Merchant Onboarding flow registers regulatory credentials, provisions autonomous negotiation parameters, ingests multi-vertical product catalogs, configures dynamic bullion pricing rules, and publishes SKUs to the mesh.
 
-### Step 1: Merchant DID & Razorpay Route Registration
+### Step 1: Register the merchant
 
 Merchants submit statutory GSTIN details, their registered Razorpay Route linked account (`acc_...`), contact email, and dispatch origin pincode to the `merchantApi` service on port `4002`.
 
-#### Validation Rules
+#### Validation rules
 1. **GSTIN Checksum**: Verified via Indian GST Luhn Mod-36 algorithm (`^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$`).
 2. **Razorpay Route Account**: Must match prefix `acc_` with minimum length 14.
 3. **Origin Pincode**: 6 digits starting with 1-9 (`^[1-9][0-9]{5}$`).
 
-#### Registration Request
+#### Registration request
 ```bash
 curl -X POST http://localhost:4002/api/v1/merchant/register \
   -H "Content-Type: application/json" \
@@ -281,10 +225,11 @@ curl -X POST http://localhost:4002/api/v1/merchant/register \
   }'
 ```
 
-#### Registration Response (HTTP 201 Created)
+#### Registration response
 ```json
 {
   "merchantDid": "did:razoragent:merchant:9f8e7d6c5b4a3210",
+    "negotiationEnabled": true,
   "publicKeyHex": "9f8e7d6c5b4a3210fedcba9876543210fedcba9876543210fedcba9876543210",
   "businessName": "Tanishq Flagship Enclave",
   "gstin": "27AAACG0123M1Z5",
@@ -297,17 +242,21 @@ curl -X POST http://localhost:4002/api/v1/merchant/register \
 
 ---
 
-### Step 2: Autonomous Negotiation Policy Configuration
+### Step 2: Set the negotiation policy
 
 Merchants define their automated concession limits for bilateral bargaining with AI buyer agents. The negotiation state machine enforces these boundaries server-side.
 
-#### Policy Parameters
+#### Policy parameters
+- `negotiationEnabled`: The opt-in. Defaults to `false`, so a policy that omits it is a policy
+  that refuses to bargain -- every other parameter here only describes *how* you negotiate.
 - `marginFloorBps`: Maximum discount floor in basis points (e.g., `800` = 8.00% max discount).
 - `minimumOrderQuantity`: Minimum order quantity eligible for dynamic bargaining.
 - `autoAcceptSpreadPaise`: Spread in paise below which a counter-offer is automatically accepted.
-- `maxNegotiationTurns`: Maximum allowable Rubinstein-Ståhl bargaining turns ($N \le 10$, default `5`).
+- `maxNegotiationTurns`: Ceiling on bargaining turns. The policy accepts 1 to 10, but the
+  gateway clamps every session to `maxNegotiationTurns = 5`, so a higher number has no effect
+  until that constant moves.
 
-#### Policy Request
+#### Policy request
 ```bash
 curl -X PUT http://localhost:4002/api/v1/merchant/did:razoragent:merchant:9f8e7d6c5b4a3210/policy \
   -H "Content-Type: application/json" \
@@ -324,11 +273,11 @@ curl -X PUT http://localhost:4002/api/v1/merchant/did:razoragent:merchant:9f8e7d
 
 ---
 
-### Step 3: Multi-Channel Catalog Ingestion
+### Step 3: Ingest the catalog
 
 RazorAgent Mesh provides four distinct programmatic ingestion adapters:
 
-#### A. Direct Single-SKU REST Ingestion
+#### A single SKU over REST
 Endpoint: `POST /api/v1/merchant/{merchantDid}/catalog`
 
 ```bash
@@ -361,7 +310,7 @@ curl -X POST http://localhost:4002/api/v1/merchant/did:razoragent:merchant:9f8e7
   }'
 ```
 
-#### B. Bulk CSV Catalog Batch Upload (Up to 500 rows/batch)
+#### Bulk CSV upload, up to 500 rows a batch
 Endpoint: `POST /api/v1/merchant/{merchantDid}/bulk-csv`
 
 Create `catalog_batch.csv`:
@@ -379,12 +328,12 @@ curl -X POST http://localhost:4002/api/v1/merchant/did:razoragent:merchant:9f8e7
   -F "file=@catalog_batch.csv"
 ```
 
-#### C. Shopify Webhook Ingestion
+#### Shopify webhook
 Endpoint: `POST /api/v1/merchant/{merchantDid}/shopify-sync`
 
 Receives standard Shopify `products/create` and `products/update` webhooks. Variants are automatically mapped to SKU format `SHOPIFY-{productId}-{variantId}` and Shopify tags are parsed into domain facets (`promo:...`, `allergens:...`, `salt:...`, `18k`/`22k`/`24k`).
 
-#### D. ERP Delta Stock & Price Sync
+#### ERP stock and price sync
 Endpoint: `POST /api/v1/merchant/{merchantDid}/erp-sync`
 
 ```bash
@@ -405,7 +354,7 @@ curl -X POST http://localhost:4002/api/v1/merchant/did:razoragent:merchant:9f8e7
 
 ---
 
-### Step 4: Universal Product Protocol & Domain Facets
+### Step 4: Add domain facets
 
 RazorAgent Mesh supports 4 multi-industry domain facets:
 
@@ -440,11 +389,11 @@ RazorAgent Mesh supports 4 multi-industry domain facets:
 
 ---
 
-### Step 5: Dynamic Bullion Pricing & MCX Spot Oracle
+### Step 5: Price bullion from the spot oracle
 
 For precious metals (Gold 24K, Gold 22K, Silver), merchants can attach a `DynamicPricingRule` to evaluate real-time quotations linked directly to MCX spot feeds.
 
-#### Mathematical Valuation Formula
+#### The pricing formula
 
 $$\text{GoldCostPaise} = \lfloor \text{NetWeightGrams} \times \text{SpotRatePaisePerGram} \times \text{PurityMultiplier} \rfloor$$
 
@@ -454,7 +403,7 @@ $$\text{GSTPaise} = \lfloor (\text{TaxableAmountPaise} \times \text{GstRatePerce
 
 $$\text{UnitPricePaise} = \text{TaxableAmountPaise} + \text{GSTPaise}$$
 
-#### Bullion SKU Payload with Dynamic Pricing Attachment
+#### A bullion SKU payload
 ```json
 {
   "skuId": "SKU-GOLD-CHAIN-22K-10G",
@@ -487,7 +436,7 @@ $$\text{UnitPricePaise} = \text{TaxableAmountPaise} + \text{GSTPaise}$$
 
 ---
 
-### Step 6: Statutory HSN Chapter Resolution & GST Tax Rules
+### Step 6: Resolve the HSN code and GST rate
 
 RazorAgent Mesh enforces statutory GST rates based on Indian HSN/SAC classifications:
 
@@ -503,7 +452,7 @@ RazorAgent Mesh enforces statutory GST rates based on Indian HSN/SAC classificat
 
 ---
 
-### Step 7: Programmatic SKU Authoring & Publishing
+### Step 7: Publish a SKU
 
 Merchants can use a lightweight Python or Node.js publishing script to automate catalog registration and live updates:
 
@@ -546,13 +495,13 @@ if __name__ == "__main__":
 
 ---
 
-## 5. Step-by-Step Buyer Agent Onboarding
+## Onboarding a buyer agent
 
 AI Buyer Agents execute automated purchasing workflows within principal-delegated spending constraints.
 
-### Step 1: Buyer SDK Installation
+### Step 1: Install the SDK
 
-#### TypeScript / Node.js
+#### TypeScript
 ```bash
 npm install @razorpay/agent-buyer-sdk tweetnacl uuid
 ```
@@ -564,7 +513,7 @@ pip install razoragent_buyer_sdk pynacl httpx pydantic
 
 ---
 
-### Step 2: Key Management & AP2 Budget Gate Limits
+### Step 2: Hold a key and declare a budget
 
 Initialize the `AgentKeyManager` and configure the human principal's spending delegation limits:
 
@@ -586,7 +535,7 @@ const client = new RazorAgentClient({
 
 ---
 
-### Step 3: User Spending Intent Mandate ($M_I$) Creation
+### Step 3: Create the Intent Mandate
 
 The user signs an immutable **Intent Mandate ($M_I$)** establishing strict financial and category limits:
 
@@ -608,11 +557,11 @@ const intentMandate = createSignedIntentMandate(
 
 ---
 
-### Step 4: MCP Product Discovery & 4-Tier Discount Stacking
+### Step 4: Discover a product and read its price
 
 The buyer agent queries the Layer 1 MCP tool `get_live_sku_quote` and receives a dynamic quote with automated discount stacking and tax breakdown.
 
-#### 4-Tier Auto-Discount Pipeline
+#### The four-tier discount pipeline
 1. **Tier 1: Volume Discount**: Basis points based on requested quantity.
 2. **Tier 2: Campaign Promo**: A percentage off, optionally capped.
 3. **Tier 3: UPI Rail Incentive**: A flat cashback on the UPI Circle rail.
@@ -639,7 +588,7 @@ const sla = await client.verifyShippingSla("560001", 100);
 
 ---
 
-### Step 5: HTTP 402 PoW Challenge Resolution & B2B Bargaining
+### Step 5: Clear the proof of work and bargain
 
 If the SKU requires dynamic negotiation, the gateway challenges the buyer with an HTTP 402 Payment Required status containing a cryptographic SHA-256 Proof-of-Work puzzle.
 
@@ -654,7 +603,7 @@ import { solvePowChallenge, generatePowHeaders } from "@razorpay/agent-buyer-sdk
 
 ---
 
-### Step 6: Atomic Stock Reservation with Monotonic Fencing
+### Step 6: Reserve stock
 
 The buyer locks stock for 60 seconds via `reserve_inventory_lock`. The enclave executes an atomic Redis Lua script, returning a lock token and monotonic fencing token:
 
@@ -670,7 +619,7 @@ console.log("Monotonic Fencing Token:", lock.fencingToken);
 
 ---
 
-### Step 7: Cart ($M_C$), Execution ($M_E$), and Amendment ($M_A$) Mandates
+### Step 7: Sign the cart and execution mandates
 
 ```typescript
 import { createSignedCartMandate, createSignedExecutionMandate } from "@razorpay/agent-buyer-sdk";
@@ -717,7 +666,7 @@ const executionMandate = createSignedExecutionMandate(
 
 ---
 
-### Step 8: Two-Phase Commit (2PC) Settlement Saga Execution
+### Step 8: Settle
 
 The buyer agent submits the mandate chain to `POST /api/v1/settlement/execute`.
 
@@ -733,7 +682,7 @@ The buyer agent submits the mandate chain to `POST /api/v1/settlement/execute`.
 │                                                                                        │
 │ PHASE 2: Route Split Transfers (Sequential)                                            │
 │   ├── 1. Merchant Net Payout: (CartTotal - ProtocolFee - Shipping) -> acc_...          │
-│   ├── 2. Protocol Fee: ₹0.50 (50 paise) -> acc_mesh_protocol_fee                      │
+│   ├── 2. Protocol Fee: ₹0.50 (50 paise) -> acc_mesh_protocol_fee                       │
 │   └── 3. Logistics Payout: ShippingPaise -> acc_logistics_express                      │
 │                                                                                        │
 │ COMPENSATION ROLLBACK (If Transfer 2 or 3 Fails):                                      │
@@ -746,242 +695,65 @@ The buyer agent submits the mandate chain to `POST /api/v1/settlement/execute`.
 
 ---
 
-## 6. Complete Executable End-to-End Implementations
+## Runnable end-to-end examples
 
-### TypeScript Implementation
+Two complete programs build and verify a full mandate chain, one per runtime:
 
-```typescript
-import {
-  AgentKeyManager,
-  RazorAgentClient,
-  createSignedIntentMandate,
-  createSignedCartMandate,
-} from "@razorpay/agent-buyer-sdk";
-
-async function runAutonomousPurchaseFlow() {
-  // 1. Initialize Actor Cryptographic Key Managers
-  const userSigner = AgentKeyManager.generate();
-  const buyerAgentSigner = AgentKeyManager.generate();
-  const merchantSigner = AgentKeyManager.generate();
-
-  // 2. Initialize Client
-  const client = new RazorAgentClient({
-    mcpServerUrl: "http://localhost:4001",
-    mandateEngineUrl: "http://localhost:8000",
-    x402GatewayUrl: "http://localhost:4003",
-    buyerKeyManager: buyerAgentSigner,
-  });
-
-  // 3. Human User delegates spending authorization via Signed Intent Mandate (M_I)
-  const intentMandate = createSignedIntentMandate(
-    {
-      delegatedAgentDid: buyerAgentSigner.getAgentDid(),
-      maxBudgetPaise: 10000000,             // ₹1,00,000.00
-      singleTransactionLimitPaise: 7000000, // ₹70,000.00
-      upiCircleDelegationToken: "upi_circle_del_tok_991823",
-      authorizedCategories: ["jewelry", "apparel"],
-      validUntilTimestamp: Math.floor(Date.now() / 1000) + 86400,
-    },
-    userSigner
-  );
-
-  // 4. Query live SKU quote with automated discount stacking
-  const quote = await client.getLiveSkuQuote("SKU-GOLD-CHAIN-22K-10G", 1, {
-    deliveryPincode: "560001",
-    promoCode: "FESTIVE10",
-  });
-
-  // 5. Query Shipping SLA
-  const sla = await client.verifyShippingSla("560001", 100);
-
-  // 6. Acquire atomic 60-second Redis stock lock
-  const lock = await client.reserveInventoryLock("SKU-GOLD-CHAIN-22K-10G", 1, {
-    lockTtlSeconds: 60,
-    quoteHash: quote.quoteHash,
-  });
-
-  // 7. Merchant issues signed Cart Mandate (M_C)
-  const cartMandate = createSignedCartMandate(
-    {
-      merchantGstin: "27AAACG0123M1Z5",
-      merchantStateCode: "27",
-      buyerDeliveryPincode: "560001",
-      buyerDeliveryStateCode: "29",
-      items: [
-        {
-          skuId: "SKU-GOLD-CHAIN-22K-10G",
-          hsnCode: "7113",
-          quantity: 1,
-          unitPricePaise: quote.finalUnitPricePaise,
-          gstRatePercent: 3,
-          lineTotalPaise: quote.finalUnitPricePaise * 1,
-        },
-      ],
-      taxableSubtotalPaise: quote.finalUnitPricePaise,
-      taxBreakdown: quote.taxBreakdown,
-      shippingPaise: sla.shippingFeePaise,
-      discountPaise: quote.totalSavingsPaise,
-      totalPaise: quote.finalUnitPricePaise + quote.taxBreakdown.totalTaxPaise + sla.shippingFeePaise,
-      inventoryLockToken: lock.lockToken,
-      inventoryLockExpiresAt: lock.expiresAtUnixMs,
-    },
-    merchantSigner
-  );
-
-  // 8. Execute 2PC Settlement Saga
-  const settlementResult = await client.executeAutonomousPurchase({
-    skuId: "SKU-GOLD-CHAIN-22K-10G",
-    quantity: 1,
-    intentMandate,
-    cartMandate,
-    merchantAccount: "acc_N0xMerchantGold99",
-    paymentId: "pay_RzpLiveTest99812",
-    serverTime: Math.floor(Date.now() / 1000),
-  });
-
-  console.log("✅ Settlement Saga Complete!");
-  console.log("Status:", settlementResult.status);
-  console.log("GSTR-1 Invoice Number:", settlementResult.invoice.invoiceNumber);
-  console.log("Cryptographic Audit Seal:", settlementResult.invoice.cryptographicAuditHash);
-}
-
-runAutonomousPurchaseFlow().catch(console.error);
 ```
+examples/typescript/mandateChain.ts
+examples/python/mandateChain.py
+```
+
+Neither touches the network -- signing and hash-chaining are local Ed25519 operations -- so both
+run against nothing but the SDK:
+
+```bash
+python scripts/verifyExamples.py --check
+```
+
+That command compiles both, runs both, and fails if either drifts from the snippets embedded in
+these docs. It is the reason the code below is trustworthy: it is not a transcription, it is the
+program.
+
+Here is the last step of each -- recomputing the hashes and checking that the chain the buyer
+signed is the chain the merchant priced:
+
+<Snippet file="examples/typescript/mandateChain.ts" region="verify" />
+
+<Snippet file="examples/python/mandateChain.py" region="verify" />
+
+The [Buyer SDK guide](/docs/buyer-sdk) walks the same chain stage by stage, with the discovery,
+negotiation, locking and settlement calls that surround it.
 
 ---
 
-### Python Implementation
+## Errors and troubleshooting
 
-```python
-import asyncio
-import time
-from razoragent_buyer_sdk import (
-    AgentKeyManager,
-    CartItemSchema,
-    CartMandate,
-    ExecutionMandate,
-    IntentMandate,
-    MeshSlaConfig,
-    RazorAgentClient,
-    TaxBreakdownSchema,
-    createCartMandate,
-    createExecutionMandate,
-    createIntentMandate,
-)
-
-async def runPythonBuyerFlow():
-    # 1. Initialize Actor Key Managers
-    userSigner = AgentKeyManager.generate()
-    buyerAgentSigner = AgentKeyManager.generate()
-    merchantSigner = AgentKeyManager.generate()
-
-    config = MeshSlaConfig(gatewayBaseUrl="http://localhost:8000")
-
-    async with RazorAgentClient(config=config, keyManager=buyerAgentSigner) as client:
-        # 2. Human user signs Intent Mandate (M_I)
-        intentMandate = createIntentMandate(
-            mandateId="M-I-001",
-            userKeyManager=userSigner,
-            delegatedAgentDid=buyerAgentSigner.getAgentDid(),
-            maxBudgetPaise=10000000,
-            singleTransactionLimitPaise=7000000,
-            upiCircleDelegationToken="upi_circle_tok_py_9921",
-            authorizedCategories=["jewelry", "apparel"],
-            validUntilTimestamp=int(time.time()) + 86400,
-        )
-
-        # 3. Discover Quote & Reserve Stock
-        quote = await client.getLiveSkuQuote("SKU-GOLD-CHAIN-22K-10G", quantity=1, deliveryPincode="560001")
-        lock = await client.reserveInventoryLock("SKU-GOLD-CHAIN-22K-10G", quantity=1, quoteHash=quote.quote_hash)
-
-        # 4. Merchant signs Cart Mandate (M_C)
-        cartMandate = createCartMandate(
-            cartId="M-C-001",
-            merchantKeyManager=merchantSigner,
-            merchantGstin="27AAACG0123M1Z5",
-            merchantStateCode="27",
-            buyerDeliveryPincode="560001",
-            buyerDeliveryStateCode="29",
-            items=[
-                CartItemSchema(
-                    skuId="SKU-GOLD-CHAIN-22K-10G",
-                    hsnCode="7113",
-                    quantity=1,
-                    unitPricePaise=quote.offered_unit_price_paise,
-                    gstRatePercent=3,
-                    lineTotalPaise=quote.offered_unit_price_paise * 1,
-                )
-            ],
-            taxableSubtotalPaise=quote.offered_unit_price_paise,
-            taxBreakdown=TaxBreakdownSchema(
-                cgstPaise=quote.tax_breakdown.cgst_paise,
-                sgstPaise=quote.tax_breakdown.sgst_paise,
-                igstPaise=quote.tax_breakdown.igst_paise,
-                totalTaxPaise=quote.tax_breakdown.total_tax_paise,
-            ),
-            shippingPaise=7000,
-            discountPaise=quote.total_savings_paise,
-            totalPaise=quote.offered_unit_price_paise + quote.tax_breakdown.total_tax_paise + 7000,
-            inventoryLockToken=lock.lock_token,
-            inventoryLockExpiresAt=lock.expires_at_unix_ms,
-        )
-
-        # 5. Buyer agent signs Execution Mandate (M_E)
-        executionMandate = createExecutionMandate(
-            executionId="M-E-001",
-            buyerKeyManager=buyerAgentSigner,
-            intentMandate=intentMandate,
-            cartMandate=cartMandate,
-            settlementAmountPaise=cartMandate.totalPaise,
-            upiCircleToken=intentMandate.upiCircleDelegationToken,
-        )
-
-        # 6. Submit to 2PC Settlement Enclave
-        settlementResult = await client.executeSettlement(
-            intentMandate=intentMandate,
-            cartMandate=cartMandate,
-            executionMandate=executionMandate,
-            merchantAccount="acc_N0xMerchantGold99",
-            paymentId="pay_RzpPyTest99812",
-            serverTime=int(time.time()),
-        )
-
-        print(f"✅ Settlement Success: {settlementResult.status}")
-        print(f"Invoice Number: {settlementResult.invoice.invoiceNumber}")
-        print(f"Audit Hash: {settlementResult.invoice.cryptographicAuditHash}")
-
-if __name__ == "__main__":
-    asyncio.run(runPythonBuyerFlow())
-```
-
----
-
-## 7. Error Handling, HTTP Status Codes & Troubleshooting
-
-### 7.1 Common HTTP Status Codes
+### Status codes
 
 | HTTP Code | Error Condition | Root Cause & Resolution |
 |---|---|---|
 | **`400 Bad Request`** | `InvalidGstinException` | GSTIN fails Indian Luhn Mod-36 checksum. Verify format `27AAACG0123M1Z5`. |
-| **`400 Bad Request`** | `BudgetExceededViolation` | Cart total exceeds $M_I.\text{maxBudgetPaise}$. Adjust intent budget or request price concession. |
+| **`400 Bad Request`** | `BudgetExceededViolation` | Cart total exceeds the Intent Mandate's `maxBudgetPaise`. Raise the delegated budget, or bargain the price down. |
 | **`400 Bad Request`** | `SignatureVerificationFailedException` | Ed25519 signature invalid over RFC 8785 canonical bytes. Re-check signing key and payload canonicalizer. |
 | **`402 Payment Required`** | `Http402RequiredError` | Ingress PoW challenge or micro-escrow debit required. Ensure SDK has `autoSolvePow=true`. |
 | **`404 Not Found`** | `CatalogNotFoundException` | Requested `skuId` does not exist for the specified `merchantDid`. |
-| **`409 Conflict`** | `NonceReplayException` | The nonce in $M_E$ was previously used or timestamp drifted outside $[T-5\text{s}, T+60\text{s}]$. |
+| **`409 Conflict`** | `NonceReplayException` | The Execution Mandate's nonce was already spent, or its timestamp fell outside the accepted window of 5s behind to 60s ahead. |
 | **`409 Conflict`** | `InsufficientStockException` | Inventory count is below requested quantity. Intercept and route to Vector Healer. |
 | **`502 Bad Gateway`** | `SettlementCompensationTriggeredException` | Razorpay Route split payout failed. Automatic LIFO rollback was executed and queued to DLQ. |
 
-### 7.2 Troubleshooting Guide
+### Common failures
 
-#### 1. "Nonce replay detected or timestamp drift"
+#### "Nonce replay detected or timestamp drift"
 - **Cause**: Server timestamp and client timestamp differ by more than 5 seconds in the past or 60 seconds in the future.
 - **Fix**: Synchronize client host clocks using NTP (`sudo apt install chrony && chronyd -q`).
 
-#### 2. "Floating point values rejected in JCS canonicalizer"
+#### "Floating point values rejected in JCS canonicalizer"
 - **Cause**: Monetary inputs contain floats (e.g. `99.50` instead of `9950`).
-- **Fix**: Adhere strictly to **INV-01**: Pass all prices, taxes, and discounts in integer paise.
+- **Fix**: Pass all prices, taxes, and discounts as integer paise -- the arithmetic enclave
+  accepts nothing else.
 
-#### 3. "StalePriceQuoteException: Price quote is stale"
+#### "StalePriceQuoteException: Price quote is stale"
 - **Cause**: Dynamic bullion quote exceeded its `maxQuoteTtlSeconds` (default 60s).
-- **Fix**: Refresh quote via `get_live_sku_quote` immediately prior to issuing $M_C$ and $M_E$.
+- **Fix**: Call `get_live_sku_quote` again immediately before building the cart and execution mandates.
 

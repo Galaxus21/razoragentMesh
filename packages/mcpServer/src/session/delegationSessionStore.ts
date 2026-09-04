@@ -36,8 +36,11 @@ export interface DelegationSession {
   readonly buyerSecretKeyHex?: string;
   readonly cartMandate?: CartMandate;
   readonly cartMandateHash?: string;
-  /** Chosen when the cart was built, so settlement cannot be redirected to another account. */
-  readonly merchantAccount?: string;
+  // No merchantAccount. It used to be stored here, described as the reason "settlement cannot be
+  // redirected to another account" -- which was never true, because execute_settlement preferred
+  // its own `merchant_account` field over this one. The payout destination is now derived from
+  // cartMandate.merchantDid by merchant/merchantPayoutRegistry.ts, so there is no session copy to
+  // disagree with the signed cart.
   /** The exact payload sign_execution_mandate issued; a signature may only be attached to it. */
   readonly unsignedExecutionPayload?: UnsignedExecutionPayload;
   readonly executionCanonicalJson?: string;
@@ -100,8 +103,12 @@ let redisResolutionAttempted = false;
  * Resolves a Redis client once per process. A failure is not fatal -- the in-memory store is a
  * working fallback for the single-container demo -- but it is reported, because the difference
  * is visible to the agent as a delegation that will not survive a restart.
+ *
+ * Exported because the merchant payout registry needs the same client and nothing passes one in:
+ * `redisClient` on the options is a test seam, so a second lazy connector there would open a
+ * second connection per process to read one key.
  */
-async function resolveRedisClient(): Promise<Redis | null> {
+export async function resolveSharedRedisClient(): Promise<Redis | null> {
   if (redisResolutionAttempted) {
     return cachedRedisClient;
   }
@@ -130,7 +137,7 @@ async function resolveRedisClient(): Promise<Redis | null> {
 export async function resolveSessionStoreBackend(
   options: SessionStoreOptions = {}
 ): Promise<SessionStoreBackend> {
-  const client = options.redisClient ?? (await resolveRedisClient());
+  const client = options.redisClient ?? (await resolveSharedRedisClient());
   return client ? sessionStoreRedis : sessionStoreMemory;
 }
 
@@ -138,7 +145,7 @@ export async function saveDelegationSession(
   session: DelegationSession,
   options: SessionStoreOptions = {}
 ): Promise<void> {
-  const client = options.redisClient ?? (await resolveRedisClient());
+  const client = options.redisClient ?? (await resolveSharedRedisClient());
   if (!client) {
     defaultInMemorySessionStore.set(session);
     return;
@@ -163,7 +170,7 @@ export async function loadDelegationSession(
   delegationId: string,
   options: SessionStoreOptions = {}
 ): Promise<DelegationSession | undefined> {
-  const client = options.redisClient ?? (await resolveRedisClient());
+  const client = options.redisClient ?? (await resolveSharedRedisClient());
   if (client) {
     try {
       const raw = await client.get(`${sessionKeyPrefix}${delegationId}`);

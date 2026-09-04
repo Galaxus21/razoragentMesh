@@ -44,10 +44,15 @@ describe("Adversarial Challenger — Sidebar Active Route & Matching Edge Cases"
   });
 
   it("should return undefined parent category for unregistered route strings", () => {
-    const unknownRoutes = ["/unknown-page", "/docs/unknown", "/admin", "/login", "/api/v1/telemetry"];
+    const unknownRoutes = ["/unknown-page", "/admin", "/login", "/api/v1/telemetry"];
     for (const unknownRoute of unknownRoutes) {
       assert.equal(findCategoryForRoute(unknownRoute), undefined);
     }
+
+    // /docs/unknown is the exception, and deliberately so since /docs became a real route:
+    // a missing guide is still somewhere in the documentation, and leaving the sidebar with
+    // nothing lit told the reader they had left the section rather than mistyped a page.
+    assert.equal(findCategoryForRoute("/docs/unknown")?.id, "documentation");
   });
 });
 
@@ -120,9 +125,19 @@ describe("Adversarial Challenger — Documentation Content Invariants", () => {
 
   it("should verify the buyer SDK guide contains required AP2 protocol and SLA content", () => {
     const body = readDocBody("buyer-sdk");
-    assert.ok(body.includes("INV-02"), "Missing INV-02 lifecycle reference");
-    assert.ok(body.includes("INV-06"), "Missing INV-06 monotonic concession reference");
-    assert.ok(body.includes("INV-07"), "Missing INV-07 vector healing reference");
+    // Was three INV-xx codes. Two of them named the wrong guarantee against the invariant table
+    // this page's reader would have looked them up in, and the test still passed -- a substring
+    // match on an identifier says nothing about whether the subject is still covered. These
+    // assert the sections themselves.
+    assert.ok(body.includes("The AP2 mandate chain"), "Missing the mandate chain section");
+    assert.ok(
+      body.includes("Negotiation and amendments"),
+      "Missing the monotonic concession section"
+    );
+    assert.ok(
+      body.includes("Inventory locks and fencing tokens"),
+      "Missing the inventory fencing section"
+    );
   });
 
   it("should verify the merchant guide contains required statutory HSN and bullion content", () => {
@@ -130,8 +145,11 @@ describe("Adversarial Challenger — Documentation Content Invariants", () => {
     for (const hsnCode of ["7113", "6109", "3004", "8471"]) {
       assert.ok(body.includes(hsnCode), `Missing HSN ${hsnCode}`);
     }
-    assert.ok(body.includes("INV-04"), "Missing INV-04 tax reference");
-    assert.ok(body.includes("INV-05"), "Missing INV-05 bullion formula reference");
+    assert.ok(
+      body.includes("HSN codes and tax rates"),
+      "Missing the statutory tax rules section"
+    );
+    assert.ok(body.includes("Bullion pricing"), "Missing the bullion pricing section");
   });
 
   it("should give every guide the frontmatter the pipeline depends on", () => {

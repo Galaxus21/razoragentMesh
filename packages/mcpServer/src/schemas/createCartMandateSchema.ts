@@ -3,7 +3,6 @@
 
 import { z } from "zod";
 import {
-  defaultMerchantAccount,
   defaultPackageWeightGrams,
   stateCodeRegex
 } from "../constants/mandateToolConstants.js";
@@ -29,7 +28,11 @@ export const createCartMandateRequestSchema = z.object({
   fencing_token: z.number().int().min(1),
   lock_expires_at_unix_ms: z.number().int().min(1),
   lock_signature: z.string().min(1),
-  merchant_account: z.string().min(1).default(defaultMerchantAccount)
+  // Optional and NOT defaulted. The payout destination is resolved from the merchant identity
+  // that signs the cart (merchant/merchantPayoutRegistry.ts); this field can only agree with that
+  // resolution or be refused. Defaulting it would inject a value the caller never sent and refuse
+  // a perfectly innocent call the moment the mesh is re-keyed to a merchant registered elsewhere.
+  merchant_account: z.string().min(1).optional()
 });
 
 export type CreateCartMandateRequest = z.infer<typeof createCartMandateRequestSchema>;

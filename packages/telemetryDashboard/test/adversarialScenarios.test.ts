@@ -202,14 +202,14 @@ describe("Replay defence records the ledger's rejection as a refusal", () => {
     return error;
   }
 
-  it("records a 409 from the nonce ledger as REFUSED against INV-05", async () => {
+  it("records a 409 from the nonce ledger as REFUSED against the anti-replay guarantee", async () => {
     const context = buildReplayContext(
       buildHttpError(replayRejectedStatusCode, nonceConsumedMessage)
     );
     const outcome = await stepReplaySettlement.execute(context);
 
     assert.equal(outcome.status, "REFUSED", "a stopped replay is the defence working, not a crash");
-    assert.equal(outcome.refusal?.invariantViolated, "INV-05");
+    assert.equal(outcome.refusal?.invariantViolated, "Anti-replay nonce ledger");
     assert.equal(outcome.refusal?.statusCode, replayRejectedStatusCode);
   });
 

@@ -11,7 +11,6 @@ import { AgentKeyManager, createSignedCartMandate, computeMandateHash } from "@r
 import {
   cartDiscountPaise,
   cartDiscountRationale,
-  defaultMerchantAccount,
   demoMerchantGstin,
   demoMerchantStateCode,
   errorDelegationAlreadySettled,
@@ -42,6 +41,11 @@ import {
   type DelegationSession,
   type SessionStoreOptions
 } from "../session/delegationSessionStore.js";
+import {
+  assertRequestedMerchantAccountMatches,
+  meshMerchantDid,
+  resolveMerchantPayoutAccount
+} from "../merchant/merchantPayoutRegistry.js";
 
 /**
  * Re-quotes and compares. `verifyQuoteHash` is HMAC over the same fields the quote tool signed,
@@ -133,6 +137,24 @@ function reconcileLock(request: CreateCartMandateRequest): void {
   }
 }
 
+/**
+ * Refuses a `merchant_account` that is not where the signing merchant is actually paid.
+ *
+ * The field is kept rather than removed so this can be a refusal with a reason. Dropping it from
+ * the schema would have zod strip it silently, and an agent that deliberately named another
+ * account would be told its purchase succeeded -- the one outcome worse than refusing.
+ */
+async function _rejectRedirectedPayout(
+  request: CreateCartMandateRequest,
+  options: SessionStoreOptions
+): Promise<void> {
+  if (request.merchant_account === undefined) {
+    return;
+  }
+  const payout = await resolveMerchantPayoutAccount(meshMerchantDid(), options);
+  assertRequestedMerchantAccountMatches(request.merchant_account, payout);
+}
+
 export async function createCartMandateForDelegation(
   rawRequest: unknown,
   options: SessionStoreOptions = {}
@@ -148,6 +170,14 @@ export async function createCartMandateForDelegation(
   if (session.settled) {
     throw new Error(errorDelegationAlreadySettled);
   }
+
+  // Before the quote and the lock are reconciled, and well before the merchant key signs: a cart
+  // that names a payout the merchant is not paid at must never come into existence, because the
+  // merchant signature would then attest to a document the mesh has already decided it will
+  // refuse. The DID is the mesh's own here -- this tool is the only thing that signs carts -- so
+  // this resolves to the demo merchant's account and the guard fires only on a caller that
+  // supplied a different one.
+  await _rejectRedirectedPayout(request, options);
 
   const quote = reconcileQuote(request, session.buyerAgentDid);
   reconcileLock(request);
@@ -240,8 +270,11 @@ async function _signAndStoreCart(params: SignCartParams): Promise<Record<string,
     signedExecutionMandate: _signedExecutionMandate,
     ...carriedForward
   } = session;
+  // No merchantAccount is stored. The cart itself carries merchantDid, and that is what
+  // execute_settlement resolves the payout from -- a session copy could only ever agree with the
+  // signed cart or contradict it, and contradicting it is how the redirect worked.
   await saveDelegationSession(
-    { ...carriedForward, cartMandate, cartMandateHash, merchantAccount: request.merchant_account },
+    { ...carriedForward, cartMandate, cartMandateHash },
     params.options
   );
 

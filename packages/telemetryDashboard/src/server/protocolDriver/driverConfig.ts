@@ -9,17 +9,20 @@ export const mcpServerUrlEnvVar = "MCP_SERVER_URL";
 export const mandateEngineUrlEnvVar = "MANDATE_ENGINE_URL";
 export const x402GatewayUrlEnvVar = "X402_GATEWAY_URL";
 export const merchantApiUrlEnvVar = "MERCHANT_API_URL";
+export const qdrantUrlEnvVar = "QDRANT_URL";
 
 export const fallbackMcpServerUrl = "http://localhost:4001";
 export const fallbackMandateEngineUrl = "http://localhost:8000";
 export const fallbackX402GatewayUrl = "http://localhost:4003";
 export const fallbackMerchantApiUrl = "http://localhost:4002";
+export const fallbackQdrantUrl = "http://localhost:6333";
 
 export interface DriverServiceUrls {
   readonly mcpServerUrl: string;
   readonly mandateEngineUrl: string;
   readonly x402GatewayUrl: string;
   readonly merchantApiUrl: string;
+  readonly qdrantUrl: string;
 }
 
 export function resolveServiceUrls(): DriverServiceUrls {
@@ -30,7 +33,11 @@ export function resolveServiceUrls(): DriverServiceUrls {
     // The driver itself never calls the merchant API -- a buyer agent talks to the MCP server,
     // not to the merchant's ingestion surface -- but the protocol map probes it, so its URL is
     // resolved the same way as the rest rather than being hardcoded in the probe.
-    merchantApiUrl: process.env[merchantApiUrlEnvVar] || fallbackMerchantApiUrl
+    merchantApiUrl: process.env[merchantApiUrlEnvVar] || fallbackMerchantApiUrl,
+    // The vector index, read directly by /api/mesh/vectors so the map is drawn from the
+    // collection itself rather than from anything the mesh reports about it. Reading Qdrant
+    // through a service that also writes it would make the picture unfalsifiable.
+    qdrantUrl: process.env[qdrantUrlEnvVar] || fallbackQdrantUrl
   };
 }
 
@@ -70,7 +77,12 @@ export const defaultRunParameters: RunParameters = {
 export const merchantGstin = "29AAACR5055K1Z3";
 export const merchantStateCode = "29";
 export const upiCircleDelegationToken = "upi_circle_del_tok_demo_0001";
-export const authorizedCategories: readonly string[] = ["furniture", "office"];
+// Matched against the category the MERCHANT put on the SKU, casefolded on both sides by
+// mandateEngine/verification/budgetGate.py::_verifyCategoryAuthorization. The previous pair --
+// "furniture" and "office" -- matched no catalog row: the demo SKU SKU-CHAIR-001 is filed under
+// "Office Furniture", which is neither. Adding a category here is a change to what the user
+// delegates, so it must name a real catalog category rather than a convenient prefix.
+export const authorizedCategories: readonly string[] = ["office furniture", "furniture"];
 export const demoMerchantAccount = "acc_demoMerchantChairs";
 export const demoPaymentId = "pay_demoRunLocal0001";
 export const millisPerSecond = 1000;

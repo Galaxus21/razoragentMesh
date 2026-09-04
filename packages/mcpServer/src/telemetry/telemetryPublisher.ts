@@ -42,6 +42,12 @@ const eventTypeInventoryLocked = "INVENTORY_LOCKED";
 const eventTypeMandateSigned = "MANDATE_SIGNED";
 const eventTypeBidTurnCompleted = "BID_TURN_COMPLETED";
 const eventTypeNegotiationConverged = "NEGOTIATION_CONVERGED";
+const eventTypePowChallengeSolved = "POW_CHALLENGE_SOLVED";
+
+/** The agent sent a call this tool's schema rejects -- a misdial, not the mesh saying no. */
+export const failureKindInvalidRequest = "invalid_request";
+/** The call was well formed and the mesh turned it down anyway. This is the interesting one. */
+export const failureKindRefusal = "refusal";
 const unknownAgentId = "unknown";
 
 /**
@@ -135,9 +141,17 @@ export function publishToolResult(
 }
 
 /**
- * A refusal is still a result: success=false rather than a missing event. The dashboard shows
+ * A failed call is still a result: success=false rather than a missing event. The dashboard shows
  * a refusal as the protocol working, so dropping these would hide the most convincing thing
  * an external agent can demonstrate.
+ *
+ * But not every failure is a refusal, and conflating the two overstates the mesh. An agent
+ * meeting these tools for the first time routinely gets a required argument wrong and retries --
+ * a live run produced eleven such misses across five tools, every one of which the dashboard
+ * then reported as "refused, protocol worked". A schema violation is the agent misdialling, not
+ * a guard firing, and a reader who opens the log finds "invalid_type / Required" where a refusal
+ * was claimed. `failureKind` keeps the two apart at the source so the dashboard never has to
+ * guess: a thrown ZodError carries `issues`, everything else is the mesh deciding to say no.
  */
 export function publishToolRefusal(
   toolName: string,
@@ -146,7 +160,8 @@ export function publishToolRefusal(
   callId: string,
   durationMs: number
 ): void {
-  const err = error as Error & { code?: string | number };
+  const err = error as Error & { code?: string | number; issues?: unknown };
+  const isSchemaViolation = Array.isArray(err?.issues);
   publishEvent({
     eventId: `${callId}-result`,
     eventType: eventTypeToolResult,
@@ -157,6 +172,7 @@ export function publishToolRefusal(
       toolName,
       callId,
       success: false,
+      failureKind: isSchemaViolation ? failureKindInvalidRequest : failureKindRefusal,
       result: { error: err?.message ?? String(error), exceptionCode: err?.code ?? null },
       durationMs
     }
@@ -222,6 +238,41 @@ function publishInventoryLocked(
  * unlike the other derived publishers here, which emit at most one. The chart plots bid against
  * ask per turn, so the turns have to arrive separately or there is nothing to draw.
  */
+/**
+ * Reports one solved proof-of-work challenge.
+ *
+ * The Ingress Shield does real work in every negotiation -- one PoW solve per turn, against the
+ * gateway's per-IP dynamic difficulty -- and published nothing, so it sat dark on the protocol
+ * stack through runs it was gating. Every field here is measured at the solve site:
+ * the digest and the elapsed time come back from the solver, and the difficulty from the
+ * challenge. None of it is derivable after the fact, which is why this is published from inside
+ * the loop rather than reconstructed from the tool's result like the negotiation turns are.
+ */
+export function publishPowChallengeSolved(args: {
+  readonly challengeToken: string;
+  readonly nonce: number;
+  readonly computedDigest: string;
+  readonly elapsedMs: number;
+  readonly difficultyZeros: number;
+  readonly sessionId: string;
+  readonly turnNumber: number;
+}): void {
+  publishEvent({
+    eventId: `pow-${args.sessionId}-${args.turnNumber}-${args.nonce}`,
+    eventType: eventTypePowChallengeSolved,
+    timestampMs: nowMs(),
+    sessionId: args.sessionId,
+    provenance: liveProvenanceValue,
+    payload: {
+      challenge: args.challengeToken,
+      nonce: args.nonce,
+      hash: args.computedDigest,
+      solveDurationMs: args.elapsedMs,
+      leadingZeros: args.difficultyZeros
+    }
+  });
+}
+
 function publishNegotiationTurns(
   result: Record<string, unknown>,
   sessionId: string,

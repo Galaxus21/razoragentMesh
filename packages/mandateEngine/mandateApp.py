@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 import redis.asyncio as aioredis
 
+from .checkout import registerCheckoutRoutes
 from .config import getMandateEngineSettings
 from .constants.settlementConstants import (
     defaultEngineTitle, defaultEngineVersion, millisecondsPerSecond, transferIdPrefix,
@@ -26,15 +27,12 @@ from .settlement.compensationDlq import CompensationDlq
 from .settlement.routeClientFactory import buildRouteClient
 from .settlement.settlementExceptions import (
     ArithmeticDriftException, ArithmeticEnclaveMismatchException,
-    BudgetExceededViolation, CategoryNotAuthorizedException,
-    FutureTimestampException, InvalidPincodeException, MandateEngineException,
-    MandateExpiredException, MandateHashChainMismatchException,
-    CartAlreadySettledException, CumulativeBudgetExceededException,
-    InventoryLockExpiredException,
-    NonceReplayException, PaymentBlockedException,
+    BudgetExceededViolation, CartAlreadySettledException, CategoryNotAuthorizedException,
+    CumulativeBudgetExceededException, FutureTimestampException, InvalidPincodeException,
+    InventoryLockExpiredException, MandateEngineException, MandateExpiredException,
+    MandateHashChainMismatchException, NonceReplayException, PaymentBlockedException,
     SettlementCompensationTriggeredException, SignatureVerificationFailedException,
-    SingleTransactionLimitExceededException, TimestampExpiredException,
-    UnauthorizedAgentException,
+    SingleTransactionLimitExceededException, TimestampExpiredException, UnauthorizedAgentException,
 )
 from .settlement.settlementOrchestrator import SettlementOrchestrator, SettlementResult
 from .settlement.splitManifestBuilder import (
@@ -43,6 +41,7 @@ from .settlement.splitManifestBuilder import (
 from .telemetryEmitter import (
     TelemetryEventEmitter, TelemetryEventModel, globalTelemetryEmitter, provenanceLive,
 )
+from .webhooks import registerWebhookRoutes
 from .verification.clockOverrideGuard import (
     ClockOverrideRejectedException,
     rejectOutOfWindowServerTime,
@@ -93,6 +92,8 @@ def createMandateApp() -> FastAPI:
     _registerHealthRoutes(app)
     _registerSettlementRoutes(app)
     _registerTelemetryRoutes(app)
+    registerCheckoutRoutes(app)
+    registerWebhookRoutes(app)
     return app
 
 
@@ -149,11 +150,7 @@ async def _handleSettlementException(
     if isinstance(err, (BudgetExceededViolation, CumulativeBudgetExceededException, PaymentBlockedException, CategoryNotAuthorizedException, SingleTransactionLimitExceededException)):
         await emitBudgetBlockedTelemetry(emitter, payload, str(err))
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err))
-    if isinstance(err, (
-        TimestampExpiredException, FutureTimestampException, MandateExpiredException,
-        SignatureVerificationFailedException, MandateHashChainMismatchException,
-        ArithmeticEnclaveMismatchException, ArithmeticDriftException, InvalidPincodeException, MandateEngineException,
-    )):
+    if isinstance(err, (TimestampExpiredException, FutureTimestampException, MandateExpiredException, SignatureVerificationFailedException, MandateHashChainMismatchException, ArithmeticEnclaveMismatchException, ArithmeticDriftException, InvalidPincodeException, MandateEngineException)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(err))
     raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Internal settlement error: {err}")
 
@@ -190,7 +187,9 @@ async def emitPaymentCapturedTelemetry(
         eventId=f"evt_{uuid.uuid4().hex[:12]}", eventType=eventTypePaymentCaptured,
         timestampMs=int(time.time() * millisecondsPerSecond), sessionId=payload.paymentId,
         payload={
-            "paymentId": result.paymentId, "orderId": payload.executionMandate.executionId,
+            "paymentId": result.paymentId,
+            "orderId": result.razorpayOrderId or payload.executionMandate.executionId,
+            "razorpayOrderId": result.razorpayOrderId,
             "amountPaise": result.amountPaise, "currency": "INR", "status": "captured",
             "transfers": transfersList, "gstrInvoiceHash": result.invoice.cryptographicAuditHash,
             "cgstPaise": result.invoice.totalCgstPaise, "sgstPaise": result.invoice.totalSgstPaise,

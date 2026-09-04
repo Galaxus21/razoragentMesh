@@ -44,6 +44,7 @@ import {
   submitNegotiationTurn
 } from "../negotiation/negotiationClient.js";
 import { solvePowChallengeAsync } from "@razorpay/agent-buyer-sdk";
+import { publishPowChallengeSolved } from "../telemetry/telemetryPublisher.js";
 
 /**
  * How far one side moves this turn: a share of what is still open, but never less than the
@@ -100,7 +101,11 @@ interface NegotiationLoopState {
 export async function negotiatePrice(
   rawArguments: unknown,
   catalogStore: CatalogStore = defaultCatalogStore,
-  agreedPriceRegistry: AgreedPriceRegistry = defaultAgreedPriceRegistry
+  agreedPriceRegistry: AgreedPriceRegistry = defaultAgreedPriceRegistry,
+  // Optional, and the PoW events are simply not published without it. A telemetry event whose
+  // sessionId is invented cannot be grouped with the run that produced it, so publishing one
+  // under a placeholder would be worse than publishing nothing.
+  options: { readonly mcpSessionId?: string } = {}
 ): Promise<NegotiatePriceResponse> {
   const request = negotiatePriceRequestSchema.parse(rawArguments);
 
@@ -121,7 +126,13 @@ export async function negotiatePrice(
 
   let refundedPaise = 0;
   try {
-    await _runNegotiationLoop(request, listUnitPricePaise, escrow.sessionToken, state);
+    await _runNegotiationLoop(
+      request,
+      listUnitPricePaise,
+      escrow.sessionToken,
+      state,
+      options.mcpSessionId
+    );
   } catch (error: unknown) {
     // A merchant declining to negotiate is an answer, not a fault. Letting it out as a tool error
     // would tell an agent the mesh is broken when what it should do is buy at the listed price --
@@ -193,7 +204,8 @@ async function _runNegotiationLoop(
   request: ReturnType<typeof negotiatePriceRequestSchema.parse>,
   listUnitPricePaise: number,
   escrowToken: string,
-  state: NegotiationLoopState
+  state: NegotiationLoopState,
+  mcpSessionId?: string
 ): Promise<void> {
   // Turn 1 is the opening exchange, so both sides state their position before either concedes.
   // An opening bid at or above the list price converges immediately, which is correct: there is
@@ -223,6 +235,20 @@ async function _runNegotiationLoop(
       challenge.challengeToken,
       challenge.powDifficultyZeros
     );
+
+    // Fire-and-forget, like every other publish in this server: a telemetry bus that is down
+    // must not fail a negotiation turn that succeeded.
+    if (mcpSessionId) {
+      publishPowChallengeSolved({
+        challengeToken: challenge.challengeToken,
+        nonce: solution.nonce,
+        computedDigest: solution.computedDigest,
+        elapsedMs: solution.elapsedMs,
+        difficultyZeros: challenge.powDifficultyZeros,
+        sessionId: mcpSessionId,
+        turnNumber
+      });
+    }
 
     const outcome = await submitNegotiationTurn({
       skuId: request.sku_id,

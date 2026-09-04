@@ -1,16 +1,23 @@
 ---
-title: "Statutory GSTR-1 Tax Invoice Specification & Deterministic Integer Tax Engine"
-description: "Defines the legal framework, integer paise GST calculations, HTML invoice rendering, cryptographic audit digests, and state codes for GSTR-1 compliance."
+title: "GSTR-1 invoicing"
+description: "How the mesh computes Indian GST in integer paise, allocates discounts without losing a paise, withholds TCS under Section 52, and seals each invoice with a canonical audit hash."
 navLabel: "GSTR-1 Invoicing"
-navDescription: "Statutory Tax Specification"
-order: 7
+navDescription: "Statutory tax specification"
+order: 8
+section: "Reference"
 icon: "Receipt"
 audience: "compliance"
 ---
 
+Every settlement produces a tax invoice that has to stand up under Indian GST law. This
+page is for anyone who has to trust those numbers: it covers what Rule 46 requires, how
+the engine computes GST in integer paise without losing a paise to rounding, how a global
+discount is allocated across line items, and how each invoice is sealed so a later edit is
+detectable.
+
 ---
 
-## 1. Regulatory Invoicing Mandate & Statutory Framework
+## What the law requires
 
 Under the Indian Goods and Services Tax (GST) regime, autonomous multi-agent commerce must produce non-repudiable, statutory tax invoices that comply with all applicable legal standards governing electronic invoicing and digital marketplace transactions.
 
@@ -27,8 +34,8 @@ Under the Indian Goods and Services Tax (GST) regime, autonomous multi-agent com
 │                                              ▼                                                   │
 │                        ┌───────────────────────────────────────────┐                             │
 │                        │    GstrInvoiceEngine & HTML Renderer      │                             │
-│                        │  - Pure integer paise math (INV-01)       │                             │
-│                        │  - Deterministic floor tax splits (INV-02)│                             │
+│                        │  - Pure integer paise math                │                             │
+│                        │  - Deterministic floor tax splits         │                             │
 │                        │  - Section 52 TCS withholding breakdown   │                             │
 │                        │  - Canonical JCS SHA-256 audit stamp      │                             │
 │                        └─────────────────────┬─────────────────────┘                             │
@@ -42,7 +49,7 @@ Under the Indian Goods and Services Tax (GST) regime, autonomous multi-agent com
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.1 Statutory Legal Basis
+### Legal basis
 
 1. **Section 31 of Central Goods and Services Tax (CGST) Act, 2017:**
    Mandates that every registered taxable person supplying taxable goods or services must issue a tax invoice showing the description, quantity, value of goods, tax charged thereon, and other prescribed particulars.
@@ -67,16 +74,16 @@ Under the Indian Goods and Services Tax (GST) regime, autonomous multi-agent com
 
 ---
 
-## 2. Deterministic Integer Paise Tax Engine
+## The tax engine
 
 Financial calculations in RazorAgent Mesh are strictly isolated inside the **Arithmetic Enclave** (`mandateEngine/verification/arithmeticEnclave.py`). This enclave guarantees mathematical precision and prevents floating-point drift, fractional penny discrepancies, and non-deterministic rounding errors across multi-party settlements.
 
-### 2.1 Invariant INV-01: Pure Integer Paise Arithmetic
+### Integer paise arithmetic
 
 - All financial values (prices, unit costs, discounts, shipping fees, tax components, and settlement splits) are represented strictly as **integer paise** ($1\text{ INR} = 100\text{ paise}$).
 - The use of floating-point types (`float`, `double`) in any financial calculation path is strictly forbidden and triggers an immediate `ArithmeticDriftException`.
 
-### 2.2 Invariant INV-02: Deterministic Statutory GST Calculation
+### GST calculation
 
 GST is computed independently per itemized line item using statutory floor division. CGST and SGST are two separate levies, each charged at exactly half the combined rate, so both components are computed with the identical expression and are therefore always equal. The line total is defined as their sum, which makes penny conservation structural rather than something a rounding rule has to recover.
 
@@ -100,10 +107,10 @@ GST is computed independently per itemized line item using statutory floor divis
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Place of Supply Classification
+#### Place of supply
 $$\text{isIntraState} \iff \text{merchantStateCode} \equiv \text{buyerDeliveryStateCode}$$
 
-#### Intra-State Formulation (CGST + SGST)
+#### Intra-state supply (CGST + SGST)
 For supplies where the merchant and delivery location share the same two-digit GST state code:
 $$\text{cgstPaise} = \text{sgstPaise} = \left\lfloor \frac{\text{taxableAmountPaise} \times \text{gstRatePercent}}{200} \right\rfloor$$
 $$\text{totalTaxPaise} = \text{cgstPaise} + \text{sgstPaise}$$
@@ -115,7 +122,7 @@ $$\text{igstPaise} = 0$$
 >
 > The single division by $200$ (equivalently, by $20{,}000$ when the rate is expressed in basis points) is deliberate: halving the rate first and then flooring twice would discard up to one paise per line item and put this engine one paise out of step with the TypeScript MCP quoter.
 
-#### Inter-State Formulation (IGST)
+#### Inter-state supply (IGST)
 For supplies across differing state jurisdictions:
 $$\text{cgstPaise} = 0$$
 $$\text{sgstPaise} = 0$$
@@ -124,24 +131,24 @@ $$\text{totalTaxPaise} = \text{igstPaise}$$
 
 ---
 
-### 2.3 Section 52 TCS Withholding Formulation
+### Section 52 TCS withholding
 
 Section 52 Tax Collection at Source (TCS) is computed on the net taxable base across the order:
 
-#### Intra-State TCS (100 bps = 50 bps CGST + 50 bps SGST)
+#### Intra-state TCS
 $$\text{tcsCgstPaise} = \left\lfloor \frac{\text{taxableSubtotalPaise} \times 50}{10000} \right\rfloor$$
 $$\text{tcsSgstPaise} = \left\lfloor \frac{\text{taxableSubtotalPaise} \times 50}{10000} \right\rfloor$$
 $$\text{tcsIgstPaise} = 0$$
 $$\text{totalTcsPaise} = \text{tcsCgstPaise} + \text{tcsSgstPaise}$$
 
-#### Inter-State TCS (100 bps IGST)
+#### Inter-state TCS
 $$\text{tcsCgstPaise} = 0, \quad \text{tcsSgstPaise} = 0$$
 $$\text{tcsIgstPaise} = \left\lfloor \frac{\text{taxableSubtotalPaise} \times 100}{10000} \right\rfloor$$
 $$\text{totalTcsPaise} = \text{tcsIgstPaise}$$
 
 ---
 
-### 2.4 Conserved Global Discount Allocation (Largest Remainder Method)
+### Allocating a global discount
 
 When a global promotional discount ($D_{\text{global}}$) is applied across $N$ line items with taxable values $v_1, v_2, \dots, v_N$ (where $V = \sum_{i=1}^N v_i$), the discount is apportioned using the **Hare-Niemeyer (Largest Remainder)** algorithm to prevent fractional penny loss:
 
@@ -154,7 +161,7 @@ When a global promotional discount ($D_{\text{global}}$) is applied across $N$ l
 
 ---
 
-### 2.5 Statutory HSN Tax Slabs
+### HSN tax slabs
 
 The engine supports all 5 official GST tax rate tiers:
 
@@ -169,7 +176,7 @@ The engine supports all 5 official GST tax rate tiers:
 
 ---
 
-## 3. Print-Ready HTML Invoice Generator
+## The invoice renderer
 
 The HTML generation subsystem (`mandateEngine/tax/gstrInvoiceHtmlRenderer.py`) converts structured `GstrInvoicePayload` models into self-contained, responsive, print-ready HTML documents.
 
@@ -197,7 +204,7 @@ The HTML generation subsystem (`mandateEngine/tax/gstrInvoiceHtmlRenderer.py`) c
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.1 Document Layout & Component Structure
+### Document layout
 
 The rendered HTML document contains five distinct sections structured to satisfy Rule 46:
 
@@ -221,109 +228,27 @@ The rendered HTML document contains five distinct sections structured to satisfy
 
 ---
 
-### 3.2 Responsive & Print-Optimized Stylesheet
+### Styling
 
-The inline stylesheet (`gstrInvoiceHtmlStyles.py`) provides responsive desktop presentation and A4 portrait print styling:
-
-```css
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: #0f172a;
-  background-color: #f8fafc;
-  padding: 24px;
-  line-height: 1.5;
-}
-
-.invoice-card {
-  max-width: 880px;
-  margin: 0 auto;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 32px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 24px;
-  font-size: 12px;
-}
-
-.data-table th {
-  background-color: #0f172a;
-  color: #ffffff;
-  font-weight: 600;
-  text-align: right;
-  padding: 8px 10px;
-}
-
-.data-table th:first-child,
-.data-table th:nth-child(2),
-.data-table th:nth-child(3) {
-  text-align: left;
-}
-
-.audit-hash-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  word-break: break-all;
-  background: #dcfce7;
-  padding: 4px 8px;
-  border-radius: 4px;
-  display: block;
-  margin-top: 4px;
-}
-
-@media print {
-  body {
-    background: #ffffff !important;
-    padding: 0 !important;
-    font-size: 10pt !important;
-    color: #000000 !important;
-  }
-  .invoice-card {
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    max-width: 100% !important;
-  }
-  @page {
-    size: A4 portrait;
-    margin: 12mm 15mm;
-  }
-  tr, .section-box, .tcs-card, .summary-card, .audit-stamp {
-    page-break-inside: avoid;
-  }
-  .data-table th {
-    background-color: #0f172a !important;
-    color: #ffffff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .tcs-card, .audit-stamp {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
-```
+The renderer inlines its stylesheet from `gstrInvoiceHtmlStyles.py`, so an invoice is a single
+self-contained HTML file with no external requests -- which is what makes it safe to email or
+archive. The sheet lays the document out for screen and carries an `@media print` block that fixes
+it to A4 portrait and forces background colours to survive printing, so a printed copy and an
+archived copy are the same document.
 
 ---
 
-### 3.3 Security & XSS Sanitization
+### Escaping and sanitisation
 
 To prevent Cross-Site Scripting (XSS) or HTML tag breakout from untrusted merchant or product metadata, all dynamic strings (SKU identifiers, product titles, invoice numbers, merchant legal names, GSTINs, and timestamps) are sanitized using `html.escape(value, quote=True)` prior to string template interpolation.
 
 ---
 
-## 4. Cryptographic Audit Digest & Non-Repudiation
+## The audit hash
 
 For complete e-invoicing audit compliance and tamper-evidence, every generated tax invoice computes a **Canonical JSON SHA-256 Digest** following **RFC 8785 (JSON Canonicalization Scheme - JCS)**.
 
-### 4.1 Canonical JCS Payload Construction
+### Canonical payload
 
 The invoice dictionary is normalized with deterministic key ordering and zero unquoted whitespace:
 
@@ -361,7 +286,7 @@ The invoice dictionary is normalized with deterministic key ordering and zero un
 }
 ```
 
-### 4.2 Cryptographic Hash Computation
+### Computing the hash
 
 The canonicalized UTF-8 bytes are passed through SHA-256:
 
@@ -371,7 +296,7 @@ This yields a 64-character hexadecimal digest (e.g., `a1b2c3d4e5f60718293a4b5c6d
 
 ---
 
-## 5. Indian GST 2-Digit State Code Registry
+## GST state codes
 
 The tax engine includes an internal registry mapping all 37 official two-digit Indian GST state and Union Territory codes:
 
@@ -399,7 +324,7 @@ The tax engine includes an internal registry mapping all 37 official two-digit I
 
 ---
 
-## 6. Verification & Automated Unit Testing
+## Tests
 
 Verify the GSTR-1 tax calculation engine and HTML rendering pipeline using pytest:
 

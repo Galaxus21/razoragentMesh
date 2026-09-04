@@ -15,7 +15,6 @@ import {
   custodyAgentHeld,
   custodyMeshDemoCustodial,
   defaultDelegationValiditySeconds,
-  defaultMerchantAccount,
   defaultPackageWeightGrams,
   executionSigningWindowSeconds,
   mandateHashHexLength,
@@ -83,13 +82,24 @@ export const mandateToolsManifest = [
             "RFC 8785 canonical JSON of {buyerAgentId, maxBudgetPaise, nonce, " +
             "singleTransactionLimitPaise, timestamp}."
         },
-        proof_nonce: { type: "string", minLength: 1 },
+        proof_nonce: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Random single-use string you signed over. Replaying a nonce is refused."
+        },
         proof_timestamp: {
           type: "integer",
           minimum: 1,
           description: "Unix seconds. Accepted within -5s to +60s of mesh time."
         },
-        max_budget_paise: { type: "integer", minimum: 1 },
+        max_budget_paise: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "Total you may spend under this delegation, in paise (integer: 50000 is Rs 500). " +
+            "The budget gate is deterministic -- a cart one paise over is refused."
+        },
         single_transaction_limit_paise: {
           type: "integer",
           minimum: 1,
@@ -106,6 +116,9 @@ export const mandateToolsManifest = [
         },
         validity_seconds: {
           type: "integer",
+          description:
+            "How long this delegation stays usable, in seconds. Every later call is " +
+            "refused once it lapses, so allow for negotiation turns and retries.",
           minimum: minDelegationValiditySeconds,
           maximum: maxDelegationValiditySeconds,
           default: defaultDelegationValiditySeconds
@@ -120,7 +133,9 @@ export const mandateToolsManifest = [
       "The mesh re-derives every price from its own pricing and shipping engines and compares " +
       "the result against your quote_hash, so the merchant signature attests only to numbers " +
       "the merchant produced. Call get_live_sku_quote and reserve_inventory_lock first and " +
-      "pass their outputs through unchanged.",
+      "pass their outputs through unchanged. The cart also fixes WHERE the merchant is paid: " +
+      "the Route payout account is resolved from the merchant identity signing this cart, so " +
+      "merchant_account is not a destination you can choose. Omit it.",
     inputSchema: {
       type: "object",
       required: [
@@ -136,17 +151,45 @@ export const mandateToolsManifest = [
         "lock_signature"
       ],
       properties: {
-        delegation_id: { type: "string", minLength: 1 },
-        sku_id: { type: "string", pattern: "^SKU-[A-Z0-9_-]{3,32}$" },
-        quantity: { type: "integer", minimum: 1, maximum: 10000 },
-        delivery_pincode: { type: "string", pattern: "^[1-9][0-9]{5}$" },
+        delegation_id: {
+          type: "string",
+          minLength: 1,
+          description: "From establish_agent_delegation. Required on every later call."
+        },
+        sku_id: {
+          type: "string",
+          pattern: "^SKU-[A-Z0-9_-]{3,32}$",
+          description: "The SKU you quoted and locked. It must match both."
+        },
+        quantity: {
+          type: "integer",
+          minimum: 1,
+          maximum: 10000,
+          description:
+            "Units to buy. Must equal the quantity you quoted, or the quote hash will not " +
+            "verify."
+        },
+        delivery_pincode: {
+          type: "string",
+          pattern: "^[1-9][0-9]{5}$",
+          description:
+            "Destination PIN code. An address no courier serves is refused here outright."
+        },
         delivery_state_code: {
           type: "string",
           pattern: stateCodePattern,
           description: "Two-digit GST state code. Decides intra- vs inter-state GST."
         },
-        promo_code: { type: "string" },
-        package_weight_grams: { type: "integer", minimum: 1, default: defaultPackageWeightGrams },
+        promo_code: {
+          type: "string",
+          description: "Optional. Must be the same code you quoted with, if any."
+        },
+        package_weight_grams: {
+          type: "integer",
+          minimum: 1,
+          default: defaultPackageWeightGrams,
+          description: "Billable weight in grams, the same one you checked the SLA with."
+        },
         quote_hash: { type: "string", minLength: 1, description: "From get_live_sku_quote." },
         quote_expiry_timestamp: {
           type: "integer",
@@ -170,7 +213,16 @@ export const mandateToolsManifest = [
             "From reserve_inventory_lock, where this value is returned under the key " +
             "'signature' -- not 'lock_signature'. Pass it through unchanged."
         },
-        merchant_account: { type: "string", minLength: 1, default: defaultMerchantAccount }
+        merchant_account: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Do not send this. The Razorpay Route recipient for the merchant leg is resolved " +
+            "from the merchant identity that signs the cart, so it is not yours to choose. It " +
+            "is accepted only so that naming a different account is REFUSED with a reason " +
+            "rather than silently ignored; the refusal names the account this merchant is " +
+            "actually paid at, and nothing is charged."
+        }
       }
     }
   },
@@ -189,7 +241,11 @@ export const mandateToolsManifest = [
       type: "object",
       required: ["delegation_id"],
       properties: {
-        delegation_id: { type: "string", minLength: 1 },
+        delegation_id: {
+          type: "string",
+          minLength: 1,
+          description: "From establish_agent_delegation."
+        },
         cart_mandate_hash: {
           type: "string",
           minLength: mandateHashHexLength,
@@ -204,15 +260,27 @@ export const mandateToolsManifest = [
     description:
       "Submits the three-mandate bundle to the settlement saga and returns the capture, the " +
       "Route split and the GSTR-1 invoice. A refusal -- replayed nonce, expired inventory " +
-      "lock, budget exceeded, bad signature -- comes back as a tool result with isError set " +
-      "and a machine-readable reason, NOT as a JSON-RPC error. A refusal means the protocol " +
-      "worked; read the reason rather than retrying blindly.",
+      "lock, budget exceeded, bad signature, a merchant_account that is not where the signing " +
+      "merchant is paid -- comes back as a tool result with isError set and a machine-readable " +
+      "reason, NOT as a JSON-RPC error. A refusal means the protocol worked; read the reason " +
+      "rather than retrying blindly. The merchant leg of the split always pays the account " +
+      "registered to the merchantDid on the signed cart; no field on this call can move it.",
     inputSchema: {
       type: "object",
       required: ["delegation_id", "execution_id"],
       properties: {
-        delegation_id: { type: "string", minLength: 1 },
-        execution_id: { type: "string", minLength: 1 },
+        delegation_id: {
+          type: "string",
+          minLength: 1,
+          description: "From establish_agent_delegation."
+        },
+        execution_id: {
+          type: "string",
+          minLength: 1,
+          description:
+            "From sign_execution_mandate. Settlement is refused if the mandate it names has " +
+            "expired, so sign and settle without a long gap."
+        },
         agent_signature: {
           type: "string",
           minLength: signatureHexLength,
@@ -220,7 +288,15 @@ export const mandateToolsManifest = [
           description:
             `Required in ${custodyAgentHeld} mode; rejected in ${custodyMeshDemoCustodial} mode.`
         },
-        merchant_account: { type: "string", minLength: 1, default: defaultMerchantAccount }
+        merchant_account: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Do not send this. The Route recipient for the merchant leg is resolved from the " +
+            "merchantDid on the SIGNED cart mandate, never from this request, so it cannot " +
+            "redirect a payout. Sending a value that differs from the resolved account is " +
+            "refused before anything is charged."
+        }
       }
     }
   }

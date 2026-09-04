@@ -11,7 +11,7 @@ import Link from "next/link";
 import { PlayCircle } from "lucide-react";
 import { describeScenarioSteps } from "@/server/protocolDriver/runScenario";
 
-const playgroundRoute = "/playground";
+const playgroundRoute = "/visualise/run";
 
 export interface RunStepProps {
   readonly scenario: string;

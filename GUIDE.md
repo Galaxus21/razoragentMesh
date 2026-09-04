@@ -22,7 +22,7 @@
 5. [The 7 Core Mathematical & Cryptographic Invariants](#5-the-7-core-mathematical--cryptographic-invariants)
 6. [Interactive Frontend Guide: Telemetry Dashboard & Merchant SKU Studio](#6-interactive-frontend-guide-telemetry-dashboard--merchant-sku-studio)
    - [6.1 Google Stitch Dual-Palette Design System & Theme Engine](#61-google-stitch-dual-palette-design-system--theme-engine)
-   - [6.2 Deep Dive into the 7 Dashboard Routes](#62-deep-dive-into-the-7-dashboard-routes)
+   - [6.2 Deep Dive into the Dashboard Routes](#62-deep-dive-into-the-dashboard-routes)
 7. [How to Run, Test, and Interact with the Codebase](#7-how-to-run-test-and-interact-with-the-codebase)
    - [7.1 Quickstart with Docker Compose](#71-quickstart-with-docker-compose)
    - [7.2 Running the Test Matrix](#72-running-the-test-matrix)
@@ -138,22 +138,22 @@ sequenceDiagram
     actor BuyerAgent as AI Buyer Agent
     participant Gateway as x402 Gateway
     participant Escrow as Micro-Escrow
-    participant SellerAgent as Merchant Sales Agent
+    participant SellerPolicy as Merchant Policy (stored)
 
     BuyerAgent->>Gateway: POST /api/v1/negotiate/challenge (Quote Hash)
     Gateway-->>BuyerAgent: HTTP 402 Payment Required (WWW-Authenticate: x402-INR, PoW Challenge D=4)
     BuyerAgent->>BuyerAgent: Solve SHA-256 PoW (<20ms)
     BuyerAgent->>Escrow: Debit ₹0.50 Micro-Fee from ₹50 Pre-Auth Escrow
     BuyerAgent->>Gateway: POST /api/v1/negotiate/turn (Bid, PoW Nonce, Escrow Receipt)
-    Gateway->>SellerAgent: Rubinstein-Ståhl Step Evaluation (N<=5, Margin Floor)
-    SellerAgent-->>BuyerAgent: Counter-Offer (Monotonic Concession)
-    Note over BuyerAgent,SellerAgent: Repeat until Spread <= Epsilon (Converged)
-    SellerAgent-->>BuyerAgent: CommercialContractAst (RFC 8785 JCS + SHA-256 Hash)
+    Gateway->>SellerPolicy: Rubinstein-Ståhl Step Evaluation (N<=5, Margin Floor)
+    SellerPolicy-->>BuyerAgent: Counter-Offer (Monotonic Concession)
+    Note over BuyerAgent,SellerPolicy: Repeat until Spread <= Epsilon (Converged)
+    SellerPolicy-->>BuyerAgent: CommercialContractAst (RFC 8785 JCS + SHA-256 Hash)
 ```
 
 - **Dynamic SHA-256 PoW Shield:** Ingress anti-spam defense ($D=4$ leading zeros under normal load, $D=5$ under surge). Eliminates Sybil attacks without server overhead.
 - **₹0.50 Micro-Metering Escrow:** Each bargaining turn costs ₹0.50, debited from a ₹50 pre-authorized escrow. Spammers are economically deterred.
-- **Rubinstein-Ståhl Bargaining Engine:** Enforces bounded turns ($N \le 5$), monotonic concessions ($B_t \ge B_{t-1}, A_t \le A_{t-1}$, min step ₹5.00), and protects merchant margin floor.
+- **Rubinstein-Ståhl Bargaining Engine:** Evaluates turns against the merchant's stored policy in Redis (`mesh:merchant:policy:<did>`), enforcing bounded turns ($N \le 5$), monotonic concessions ($B_t \ge B_{t-1}, A_t \le A_{t-1}$, min step ₹5.00), and the merchant's private margin floor.
 - **Price-Drop Alert Webhooks:** Buyers subscribe to target prices; background workers dispatch signed HMAC-SHA256 HTTP webhooks when prices cross thresholds.
 
 ---
@@ -305,59 +305,39 @@ The Telemetry Dashboard (`packages/telemetryDashboard`) has been completely rede
 - **Semantic Tokens:** Built with CSS RGB variables (`bgBase`, `bgSurface`, `surfaceContainer`, `borderSubtle`, `accentPrimary #6366F1`, `statusSuccess #10B981`, `statusWarning #F59E0B`, `statusError #EF4444`).
 - **Typography:** `Plus Jakarta Sans` for headers, `Inter` for clean UI body text, and `Geist Mono` for financial numbers, cryptographic hashes, and terminal logs.
 - **Theme Toggle:** Supports Dark Mode (`#09090B`) and Light Mode (`#F8FAFC`) with zero Flash of Unstyled Content (anti-FOUC script) and `localStorage` persistence (`razormesh-theme`).
-- **Sidebar:** Collapsible navigation sidebar (240px expanded / 64px collapsed) with 7 Lucide navigation items and badge counters.
+- **Sidebar:** Collapsible navigation sidebar (240px expanded / 64px collapsed) with four Lucide navigation categories -- Overview, Merchant, Visualise, Docs -- and badge counters. Visualise expands into a five-tab strip and Docs into rows generated from the guides' frontmatter, so the sidebar states what the dashboard is for rather than enumerating its panels.
 
 ---
 
-### 6.2 Deep Dive into the 7 Dashboard Routes
+### 6.2 Deep Dive into the Dashboard Routes
+
+The sidebar carries **four categories over eight routes**, not one row per panel. Five telemetry
+panels used to own a route each -- Agent Observability, Negotiation Hub, Security Audit,
+Self-Healing and Infrastructure -- so watching a single purchase meant opening five pages that
+were all reacting to the same SSE event array, and no one screen ever showed the run happening.
+Those panels now sit together on `/visualise`. **The five old URLs no longer resolve**; the
+sub-pages of Merchant and Visualise are reached by a tab strip inside each section.
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                        TELEMETRY DASHBOARD ROUTE SITEMAP                               │
-├──────────────────────────┬─────────────────┬───────────────────────────────────────────┤
-│ Route URL                │ Sidebar Title   │ Primary Features & Visual Panels          │
-├──────────────────────────┼─────────────────┼───────────────────────────────────────────┤
-│ /overview                │ Overview        │ System KPIs, Active Trace, Mandate Chain  │
-│ /agent-observability     │ Observability   │ Terminal Agent Trace Panel & Tool Logs    │
-│ /negotiation-hub         │ Negotiation     │ Rubinstein-Ståhl Bargaining Chart         │
-│ /security-audit          │ Security Audit  │ 4-Phase AP2 Mandate Chain & Nonce Ledger  │
-│ /self-healing            │ Self-Healing    │ Sub-300ms Vector Substitution Diff Viewer │
-│ /infrastructure          │ Infrastructure  │ 2PC Saga Split Transfers & Webhook Feed   │
-│ /merchant-studio         │ Merchant Studio │ Interactive SKU Creator & Bullion Pricing │
-└──────────────────────────┴─────────────────┴───────────────────────────────────────────┘
+┌──────────────────────────┬──────────────────────────┬────────────────────────────────────────────┐
+│ Route URL                │ Sidebar / Tab            │ Primary Features & Visual Panels           │
+├──────────────────────────┼──────────────────────────┼────────────────────────────────────────────┤
+│ /overview                │ Overview                 │ Layer map, health probe, metrics bar       │
+│ /merchant-studio         │ Merchant                 │ SKU creator, offers, bullion pricing       │
+│ /visualise               │ Visualise › Live Agent   │ The five live panels of a running purchase │
+│ /visualise/settle        │ Visualise › Settle       │ Human pays an order an agent already opened│
+│ /visualise/run           │ Visualise › Run It Here  │ Protocol Playground: press Run, see steps  │
+│ /visualise/adversarial   │ Visualise › Adversarial  │ Attacks where a refusal is the pass        │
+│ /visualise/vectors       │ Visualise › Vector Index │ The Qdrant index Layer 1 ranks against     │
+│ /docs                    │ Docs                     │ Eight MDX guides, sidebar built from them  │
+└──────────────────────────┴──────────────────────────┴────────────────────────────────────────────┘
 ```
 
-#### 1. Route `/overview` (System Mission Control)
-- **KPI Metrics Bar:** Real-time displays of **Settlement Success Rate**, **Average Latency**, **Self-Healing Recovery Rate** and **Active 24h Volume**. The figures shown in a local run are computed from whatever `scripts/seedTelemetryStream.py` has emitted, so they are demo data rather than production measurements.
-- **Composite Dashboard:** Highlights recent agent tool executions, active negotiations, cryptographic mandate chains, and self-healing vector diffs in a unified grid.
+#### 1. Route `/overview` (Orientation & Liveness)
+- **What the mesh is:** the six-layer protocol map with a live health probe per service -- static architecture and a liveness check, which are orientation rather than observation.
+- **KPI Metrics Bar:** the one live element kept here, because "has anything settled yet" is part of knowing whether the system is up. Figures come from whatever the bus has carried; a local run seeded by `scripts/seedTelemetryStream.py` is demo data, and `provenance` is what separates it from a real settlement.
 
-#### 2. Route `/agent-observability` (Agent Trace Terminal)
-- **Live Event Stream:** Streams real-time tool calls across all ten MCP tools -- discovery (`search_catalog`, `browse_catalog`), commerce (`get_live_sku_quote`, `negotiate_price`, `reserve_inventory_lock`, `verify_shipping_sla`) and purchase (`establish_agent_delegation`, `create_cart_mandate`, `sign_execution_mandate`, `execute_settlement`) -- with caller agent DID, target SKU, and millisecond execution timers.
-- **Interactive JSON Inspector:** Click on any trace event to inspect input parameters, returned GST breakdowns, and cryptographic quote signatures.
-
-#### 3. Route `/negotiation-hub` (Rubinstein-Ståhl Bargaining Hub)
-- **Interactive Dual-Curve Chart:** Displays the convergence between Buyer Bids (green line) and Merchant Asks (purple line) over 5 turns.
-- **Turn-by-Turn Concession Timeline:** Tracks spread reduction, minimum step increments (₹5.00), and cumulative ₹0.50 micro-fee escrow burns.
-- **Compiled Contract Card:** Displays the compiled RFC 8785 immutable AST contract once convergence is reached ($B_t \ge A_t$).
-
-#### 4. Route `/security-audit` (Cryptographic Mandate Explorer)
-- **4-Phase Mandate Chain:** Visual step-by-step audit of $M_I \to M_C \to M_E \to M_A$.
-- **Ed25519 Signature Verification:** Verified badges with signer DIDs (`did:razoragent:user:cfo`, `did:razoragent:merchant:nexus`, `did:razoragent:buyer:agent01`).
-- **Canonical JCS Payload Viewer:** View the exact deterministic JSON string and SHA-256 digest.
-- **Anti-Replay Ledger Indicator:** Live status of single-use UUID nonces in Redis `SETNX`.
-
-#### 5. Route `/self-healing` (Vector Diff & AST Checklist Viewer)
-- **Side-by-Side SKU Comparison:** Visual comparison between the Out-of-Stock SKU (e.g. SKU-101) and Healed Vector Substitute (e.g. SKU-104).
-- **Vector Match Telemetry:** Cosine similarity score (e.g. `0.924`), price delta (e.g. `+₹50.00`), and the heal latency measured by that run against the 300ms SLA.
-- **Negative Constraint AST Checklist:** Interactive pass/fail badges for Allergens, Brand Blacklists, Dietary Rules (`isVeg: true`), and SLA Courier Deadlines.
-- **Dual-Signed Mandate Diff:** Displays the amended cart hash and dual signatures.
-
-#### 6. Route `/infrastructure` (2PC Saga Split & Webhook Feed)
-- **Razorpay Route Split Transfers:** Live breakdown of 3-way transfers (`acc_merchant_nexus`, `acc_razoragent_protocol`, `acc_delhivery_direct`).
-- **2PC Saga Compensation Banner:** Simulates secondary split failure and visualizes real-time **LIFO Compensation Rollback** via `reverseTransfer()`.
-- **System Health Monitor:** Live connectivity indicators for Redis 7, Qdrant Vector DB, Mandate Engine, and MCP Server.
-
-#### 7. Route `/merchant-studio` (Interactive Merchant SKU Studio)
+#### 2. Route `/merchant-studio` (Interactive Merchant SKU Studio)
 - **Basic SKU Configuration:** SKU ID, Name, Description, Base Unit Price (in ₹ / auto-converted to paise), Stock Count, HSN Code (auto-GST rate detection).
 - **Dynamic Volume Tiers Builder:** Configure multi-unit pricing tiers (e.g., 10+ units $\to$ ₹3,900, 50+ units $\to$ ₹3,500).
 - **MCX Bullion Dynamic Formula Toggle:** Switch between Fixed Pricing and MCX Bullion Spot Pricing (24K Gold, 22K Gold, Silver) with live purity formulas and making charges.
@@ -367,6 +347,40 @@ The Telemetry Dashboard (`packages/telemetryDashboard`) has been completely rede
   - *Pharma:* Active salt, dosage, prescription requirement (`requireOtcOnly`), expiry date.
   - *FMCG:* Net weight, shelf life, dietary badges (`isVeg: true`), allergen list.
 - **Live JSON Preview & Catalog Dispatch:** Real-time canonical JSON preview with one-click dispatch to `POST /api/v1/merchant/{merchantDid}/catalog` with validation feedback.
+
+#### 3. Route `/visualise` (Live Agent — the five panels on one screen)
+- **Agent Trace Terminal:** streams real-time tool calls across all ten MCP tools -- discovery (`search_catalog`, `browse_catalog`), commerce (`get_live_sku_quote`, `negotiate_price`, `reserve_inventory_lock`, `verify_shipping_sla`) and purchase (`establish_agent_delegation`, `create_cart_mandate`, `sign_execution_mandate`, `execute_settlement`) -- with caller agent DID, target SKU and millisecond timers, and a JSON inspector on any event.
+- **Rubinstein-Ståhl Bargaining Chart:** dual-curve convergence of Buyer Bids against Merchant Asks, a turn-by-turn concession timeline tracking spread reduction, the ₹5.00 minimum step and the ₹0.50 micro-fee escrow burn, and the compiled RFC 8785 contract card once $B_t \ge A_t$.
+- **Cryptographic Mandate Explorer:** the 4-phase chain $M_I \to M_C \to M_E \to M_A$, Ed25519 verified badges with signer DIDs, the canonical JCS payload and its SHA-256 digest, and the single-use nonce ledger in Redis `SETNX`.
+- **Vector Diff & AST Checklist:** side-by-side out-of-stock SKU against its healed substitute, the cosine score, the price delta, the heal latency that run measured against the 300ms SLA, and pass/fail badges for allergens, brand blacklists, dietary rules and courier deadlines.
+- **2PC Saga Split & Webhook Feed:** the conserved Route split transfers, the LIFO compensation banner when a secondary transfer fails, and connectivity indicators for Redis 7, Qdrant, the Mandate Engine and the MCP server.
+- **Settlement Handoff Card:** where an agent that opened a real order but cannot authorise it hands the purchase to a person, linking to Settle.
+
+#### 4. Route `/visualise/settle` (The human half of an agentic purchase)
+- **Pays an existing order only.** It never creates one: a fresh Razorpay order for the same rupee amount carries no cart or execution mandate hash, and would be settled money that no mandate points at -- the one action that quietly breaks the evidence trail.
+- **Standard Checkout** against `/api/v1/checkout/config|order|verify`, with the HMAC-SHA256 signature over `orderId|paymentId` compared in constant time.
+
+#### 5. Route `/visualise/run` (Protocol Playground)
+- **Press Run and the buyer SDK executes against the live mesh.** Every step shows the request that was actually sent and the cryptography it actually produced, chosen from the scenario catalog.
+
+#### 6. Route `/visualise/adversarial` (Adversarial Playground)
+- **Each card attacks the protocol for real.** A refusal is the success condition: it means the mesh rejected the attack before any money moved. The decisive step -- the one that was REFUSED or FAILED -- is surfaced per card.
+
+#### 7. Route `/visualise/vectors` (Vector Index — what Layer 1 ranks against)
+Every other screen shows what the mesh *decided*. This one shows what it decided **from**: the
+actual Qdrant collection a buyer agent's `search_catalog` call is ranked against. It reads Qdrant
+directly rather than asking the writer what it wrote, so a listing that failed to index shows up
+as missing instead of as claimed-present.
+
+- **Collection header:** name, point count, dimensions, distance metric and HNSW parameters read from Qdrant's own config -- `razoragent_catalog`, 64 points, 384 dimensions, Cosine, `m=16`, `ef_construct=100` on the current stack. `embeddingMode` reports whether the vectors came from all-MiniLM-L6-v2 (`model`) or from the character-hash fallback (`hash`); the fallback raises a warning banner and repeats the mesh's own `rankingQuality` text, because hash cosines are not semantic similarity.
+- **The map:** every real embedding projected onto a plane by PCA from a fixed seed, so it does not rearrange between takes. It prints the variance each drawn axis carries (PC1 11.8%, PC2 6.4% on the seeded catalog) and says outright that planar proximity is suggestive while the cosine scores are the truth.
+- **Legend by frequency:** colour goes to the six largest categories. The catalog carries 28, so a fixed six-colour legend rendered the page mostly grey; the tail now collapses into one "22 smaller categories · 39" row instead of 22 indistinguishable swatches.
+- **Live search:** posts to `/api/v1/catalog/search` -- the same endpoint behind the `search_catalog` tool. The hit ring radius *is* the cosine, so the gap between an answer and noise is visible before the number is read. Measured: *"a quiet booth for focused work in a noisy open-plan office"* returns `SKU-POD-DUO-02` 0.5030 and `SKU-POD-SOLO-01` 0.4821 ahead of desks at 0.34 / 0.33 / 0.32.
+- **Layer 3 healing, drawn:** click a point, ask for a substitute, and the arrow is the substitution -- `SKU-POD-SOLO-01 → SKU-POD-DUO-02`, cosine 0.9397548, 6.14 ms measured. A refusal explains itself and names the **15% price ceiling**, which rejects more candidates than the 0.85 similarity floor does (`defaultMaxPriceDeltaPercent` and `defaultSimilarityFloor` in `src/constants/vectorIndexConstants.ts`, matching `oosHealingRoute.py`).
+- **Wiring:** served by `/api/mesh/vectors` and `/api/mesh/vectors/query`. `QDRANT_URL` is set in `docker-compose.yml` and falls back to `localhost:6333` outside Docker. Six tests in `test/vectorProjection.test.ts` cover the projection -- separated clusters stay separated, variance is reported honestly and in order, the same catalog gives the same picture, coordinates stay finite and inside the drawable square, and empty / single-vector / all-identical catalogs put no `NaN` in an SVG -- plus one that asserts the route is registered as a Visualise tab so it cannot be orphaned.
+
+#### 8. Route `/docs` (Generated documentation)
+- Eight MDX guides whose sidebar rows, search index and tool reference are generated (`npm run docs:generate`), so a new guide appears by existing rather than by being registered in a map.
 
 ---
 
@@ -425,11 +439,11 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
-| Python backend + Python Buyer SDK | 1370 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
-| MCP discovery server | 257 | `cd packages/mcpServer && npm test` |
+| Python backend + Python Buyer SDK | 1388 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
+| MCP discovery server | 313 | `cd packages/mcpServer && npm test` |
 | TypeScript Buyer SDK | 98 | `cd packages/buyerSdkTs && npm test` |
-| Telemetry dashboard + SKU Studio | 348 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **2,073** | `python scripts/countTests.py` |
+| Telemetry dashboard + SKU Studio | 344 | `cd packages/telemetryDashboard && npm test` |
+| **Total** | **2,143** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 
@@ -571,16 +585,16 @@ console.log(`Payment Captured: ${settlement.paymentId}`);
 - **Visual:** Split screen showing the Google Stitch Telemetry Dashboard (`localhost:3000`) on `/overview` and dual-agent terminal output.
 - **Script:** *"Let's watch an autonomous Buyer Agent instructed to: **'Procure 50 Ergonomic Chairs under a hard budget of ₹2,00,000'**.
   In Layer 1, the agent connects to the Merchant's Razorpay MCP Server via JSON-RPC, querying `get_live_sku_quote`. The quote returns ₹4,200 + 18% GST (Total: ₹2,47,800)—which is over budget.
-  In Layer 2, the Buyer Agent initiates dynamic negotiation. Notice the gateway challenges with HTTP 402-INR. The buyer solves the Proof-of-Work and settles a ₹0.50 micro-fee. The Merchant Sales Agent evaluates its private margin floor and counters with ₹3,350. The contract compiles to ₹1,97,650 with GST—within budget, and the whole exchange completes in the time you just watched it take."*
+  In Layer 2, the Buyer Agent initiates dynamic negotiation. Notice the gateway challenges with HTTP 402-INR. The buyer solves the Proof-of-Work and settles a ₹0.50 micro-fee. The gateway evaluates the merchant's stored policy and private margin floor, countering with ₹3,350. The contract compiles to ₹1,97,650 with GST—within budget, and the whole exchange completes in the time you just watched it take."*
 
 #### Scene 3: The Crucible Test — Graceful Failures `[2:00 - 3:15]`
-- **Visual:** Navigate to `/self-healing` and `/security-audit` on the dashboard while triggering failure benchmarks.
+- **Visual:** Navigate to `/visualise` on the dashboard while triggering failure benchmarks -- the healing diff and the mandate chain are two panels on that one screen -- and to `/visualise/vectors` to show the index the substitute was found in.
 - **Script:** *"Razorpay leadership emphasizes: **'Show how your system handles failure.'**
   First, watch Out-of-Stock Self-Healing: As stock locks, SKU-101 goes out of stock. Standard checkouts abort. RazorAgent Mesh's Layer 3 Vector Engine matches SKU-104 well inside its 300ms SLA, verifies the buyer's Negative Constraint Manifest (zero allergen/brand conflicts), and auto-amends the mandate with dual signatures.
   Second, watch Bounded Agency: When forced to attempt an out-of-budget ₹2,10,000 purchase against a ₹2,00,000 cap, the deterministic backend engine intercepts the payload, raises a `BoundedAgencyViolationException`, and halts execution. Exactly ₹0 moves."*
 
 #### Scene 4: Cryptographic Mandates & NPCI UPI Circle `[3:15 - 4:15]`
-- **Visual:** Navigate to `/security-audit` showing the 4-phase mandate chain with green Ed25519 badges and `/infrastructure` showing Razorpay Route 3-way split transfers.
+- **Visual:** Navigate to `/visualise`, showing the 4-phase mandate chain with green Ed25519 badges and the Razorpay Route split transfers side by side on the same screen.
 - **Script:** *"To comply with RBI guidelines without manual OTPs for every turn, we implement Google AP2 over NPCI UPI Circle Mode 2. The human authorizes a delegated spending cap; the merchant signs a Cart Mandate; the buyer agent signs an Execution Mandate with Ed25519 keys. The settlement executes over Razorpay Route, capturing payment, executing 3-way splits, and generating GSTR-compliant invoice breakdowns."*
 
 #### Scene 5: Hiring Pitch & Close `[4:15 - 5:00]`

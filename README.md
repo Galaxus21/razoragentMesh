@@ -26,6 +26,60 @@ As autonomous AI agents (enterprise procurement bots, ERP replenishment loops, a
 └─────────────────────────┴───────────────────────────────────────────────────────────────────┘
 ```
 
+### End-to-End Autonomous Purchase Lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Human as Human Principal
+    actor BuyerAgent as AI Buyer Agent
+    participant MCP as RazorAgent MCP Server (Layer 1)
+    participant Gateway as x402 Gateway (Layer 2)
+    participant Engine as Mandate Engine (Layer 4)
+    participant Razorpay as Razorpay API Rails
+
+    Note over Human,BuyerAgent: Phase 1: Bounded Authority Delegation
+    Human->>BuyerAgent: Issue delegated authority & spending ceiling
+    BuyerAgent->>Engine: establish_delegation(humanDid, agentDid, maxBudgetPaise)
+    Engine-->>BuyerAgent: Delegation Mandate (Signed by Human Principal with Ed25519)
+
+    Note over BuyerAgent,MCP: Phase 2: Sanitized Discovery & Live Quoting
+    BuyerAgent->>MCP: search_catalog(query) [Layer 0 Ingress Shield]
+    MCP-->>BuyerAgent: Sanitized SKU matches (zero-width/ANSI/prompt-injection filtered)
+    BuyerAgent->>MCP: get_live_sku_quote(skuId, quantity)
+    Note over MCP: Deterministic integer-paise math: base price + statutory GST - discounts.<br/>Quote valid for 60s. Stock is NOT yet locked.
+    MCP-->>BuyerAgent: SKU Quote (bindable quoteHash, 60s TTL)
+
+    opt Phase 3: Dynamic B2B Negotiation (Opt-in per Merchant Policy)
+        BuyerAgent->>Gateway: negotiate_price(quoteHash, targetPricePaise)
+        Gateway-->>BuyerAgent: HTTP 402-INR Challenge (PoW difficulty D=4)
+        BuyerAgent->>Gateway: Solve PoW Nonce + Debit ₹0.50 micro-fee escrow
+        Gateway-->>BuyerAgent: Rubinstein-Ståhl Concession against stored Redis policy
+    end
+
+    Note over BuyerAgent,MCP: Phase 4: Atomic Inventory Reservation
+    BuyerAgent->>MCP: reserve_inventory_lock(skuId, quantity, ttlSeconds=30)
+    Note over MCP: Redis Lua atomic stock decrement with fencing token.<br/>If OOS: returns refusal with Layer 3 vector heal substitute.
+    MCP-->>BuyerAgent: Inventory Lock (lockId, fencingToken, lockTtl)
+
+    Note over BuyerAgent,Engine: Phase 5: Cryptographic Dual-Signed Mandate Chain
+    BuyerAgent->>Engine: create_cart_mandate(quoteHash, lockId)
+    Note over Engine: Merchant signs Cart Mandate (M_C) with Ed25519 over RFC 8785 canonical bytes
+    Engine-->>BuyerAgent: Cart Mandate (signed M_C)
+    BuyerAgent->>BuyerAgent: Sign Execution Mandate (M_E) with Buyer Ed25519 key over RFC 8785 bytes
+    
+    Note over BuyerAgent,Razorpay: Phase 6: 2-Phase Commit (2PC) Settlement Saga
+    BuyerAgent->>Engine: execute_settlement(intentMandate, cartMandate, executionMandate)
+    critical AP2 Deterministic Budget Gate
+        Engine->>Engine: validateBudgetGate(maxBudgetPaise, grossAmountPaise)
+        Note over Engine: STRICT GATE: If gross > maxBudget -> REJECT with ₹0 charged and ZERO Razorpay calls
+    end
+    Engine->>Razorpay: POST /v1/orders (Test Mode Evidence Order)
+    Razorpay-->>Engine: order_... ID (stamped with mandate chain audit notes)
+    Engine->>Engine: Execute 2PC split ledger: merchant payout + protocol fee + logistics + statutory tax
+    Engine-->>BuyerAgent: SettlementResult (status: "captured", razorpayOrderId, GSTR-1 tax breakdown)
+```
+
 ---
 
 ## 2. Adversarial Benchmark Matrix (TC-01 → TC-25)
@@ -153,11 +207,11 @@ Push-Location packages/telemetryDashboard; npm test; Pop-Location
 
 | Suite | Tests | Command that produced this number |
 |---|---:|---|
-| Python backend + Python Buyer SDK | 1370 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
-| MCP discovery server | 257 | `cd packages/mcpServer && npm test` |
+| Python backend + Python Buyer SDK | 1388 | `python -m pytest tests/ packages/buyerSdkPy/tests/ --collect-only -q` |
+| MCP discovery server | 313 | `cd packages/mcpServer && npm test` |
 | TypeScript Buyer SDK | 98 | `cd packages/buyerSdkTs && npm test` |
-| Telemetry dashboard + SKU Studio | 348 | `cd packages/telemetryDashboard && npm test` |
-| **Total** | **2,073** | `python scripts/countTests.py` |
+| Telemetry dashboard + SKU Studio | 344 | `cd packages/telemetryDashboard && npm test` |
+| **Total** | **2,143** | `python scripts/countTests.py` |
 
 <!-- testcounts:end -->
 
@@ -195,7 +249,7 @@ so the Docker build context stays self-contained.
 | [`onboarding.mdx`](./packages/telemetryDashboard/docs/onboarding.mdx) | `/docs/onboarding` | Full protocol topology, merchant onboarding, and buyer-agent lifecycle in TS and Python |
 | [`buyer-sdk.mdx`](./packages/telemetryDashboard/docs/buyer-sdk.mdx) | `/docs/buyer-sdk` | AI buyer agent SDK and AP2 protocol |
 | [`merchant-guide.mdx`](./packages/telemetryDashboard/docs/merchant-guide.mdx) | `/docs/merchant-guide` | Merchant onboarding and the universal SKU Studio |
-| [`telemetry.mdx`](./packages/telemetryDashboard/docs/telemetry.mdx) | `/docs/telemetry` | SSE streaming architecture, KPIs, and the 12 canonical event schemas |
+| [`telemetry.mdx`](./packages/telemetryDashboard/docs/telemetry.mdx) | `/docs/telemetry` | SSE streaming architecture, KPIs, the 12 canonical event schemas, and how a merchant builds an order feed on the same bus |
 | [`gstr1-invoice.mdx`](./packages/telemetryDashboard/docs/gstr1-invoice.mdx) | `/docs/gstr1-invoice` | Statutory GST compliance, integer-paise arithmetic, JCS audit digest |
 
 Repository-level documentation not served by the dashboard:
@@ -206,6 +260,8 @@ Repository-level documentation not served by the dashboard:
 | [`docs/AGENT_SETUP_TROUBLESHOOTING.md`](./docs/AGENT_SETUP_TROUBLESHOOTING.md) | Symptom-by-symptom fixes for connecting an external agent, with the exact error text |
 | [`GUIDE.md`](./GUIDE.md) | Architecture and presentation material |
 | [`PROJECT.md`](./PROJECT.md) | Completed milestone log |
+| [`AUDIT_TODO.md`](./AUDIT_TODO.md) | The audit findings still open, the standing debt, and the rule for adding a finding |
+| [`AUDIT_ARCHIVE.md`](./AUDIT_ARCHIVE.md) | The 51 closed findings with the evidence that proved each and the note recording what closed it |
 
 ---
 
@@ -286,6 +342,21 @@ returned to the caller. It is never persisted: the only settlement keys in Redis
 flags for replay defence. If the caller loses the response, the receipt is unrecoverable. There
 is no `get_order_status` tool and no invoice re-fetch endpoint.
 
+**Nothing tells a merchant that a sale happened.** There is no order email, SMS or merchant
+callback. A merchant integrates by subscribing to the same SSE bus the dashboard reads --
+`GET /api/v1/telemetry/stream` -- which is documented under *Merchant-side subscribers* in
+[docs/telemetry.mdx](packages/telemetryDashboard/docs/telemetry.mdx), including the two joins that
+are not where a reader expects: no event carries `merchantDid` (filter `PAYMENT_CAPTURED` on
+`transfers[].recipientAccountId`), and `sessionId` does not join across the settlement boundary
+because the engine puts the payment id in that field. The reverse direction is missing too:
+`POST /api/v1/webhooks/razorpay` now receives deliveries -- it verifies the HMAC-SHA256 signature,
+rejects anything outside the 300-second freshness window, and de-duplicates on
+`X-Razorpay-Event-Id`; set `RAZORPAY_WEBHOOK_SECRET` to enable it, and unset it answers 503 rather
+than accepting what it cannot verify. But it reconciles nothing, and says so in its own response
+(`"reconciled": false`): with no persisted order, a `payment.failed` or `refund.created` delivery
+has nothing to amend. The one outbound notification path that exists serves buyers, not merchants:
+signed price-drop alerts to a subscriber's callback URL (`POST /api/v1/alerts/price-drop`).
+
 **There is no cancel or refund path.** `AmendmentMandate` has a schema
 (`mandateEngine/mandates/amendmentMandateSchema.py`), a factory, and builders in both SDKs -- but
 no verifier and no route consumes one. The Route client exposes `capturePayment`,
@@ -296,9 +367,11 @@ and it is blocked on order persistence.
 
 **A delegation cannot be scoped to a merchant.** It bounds budget, categories and validity;
 there is no `authorized_merchants` field. The pattern to add would mirror
-`_verifyCategoryAuthorization` and check `cartMandate.merchantDid` (merchant-signed) rather than
-`merchant_account` (caller-supplied and unsigned). With one hardcoded demo merchant key it would
-be structurally correct but not yet discriminating, which is why it was not added.
+`_verifyCategoryAuthorization` and check `cartMandate.merchantDid`, which the merchant signs --
+the same value the Route payout account is resolved from
+(`mcpServer/src/merchant/merchantPayoutRegistry.ts`), so that identity is already what decides
+where money goes. With one hardcoded demo merchant key the check would be structurally correct
+but not yet discriminating, which is why it was not added.
 
 **Out-of-stock substitution is HTTP-only.** `POST /api/v1/catalog/heal-oos` works and publishes
 `OOS_HEALED`, but no MCP tool reaches it, so an agent that hits an out-of-stock SKU over MCP is

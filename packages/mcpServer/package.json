@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/mcpServerMain.js",
     "dev": "tsx src/mcpServerMain.ts",
-    "test": "node --test --import tsx test/**/*.test.ts"
+    "test": "node --test --import tsx --import ./test/testEnvSetup.ts test/**/*.test.ts"
   },
   "keywords": [
     "mcp",

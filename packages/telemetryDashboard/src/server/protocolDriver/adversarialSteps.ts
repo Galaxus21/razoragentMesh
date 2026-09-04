@@ -34,7 +34,7 @@ export const stepInflateSettlementAmount: ExecutableStep = {
       "The cart is signed and honest. Here the buyer agent rewrites only its own Execution Mandate, asking the settlement engine for more than the cart totals -- the case where the compromised party is the agent itself rather than the network.",
     protocolLayer: layerMandates,
     implementedBy: packageSdkMandates,
-    invariant: "INV-02",
+    invariant: "Settlement matches the signed cart",
     sdkCall: {
       methodName: "(no SDK call - execution mandate mutated after signing)",
       argumentSummary: {},
@@ -70,7 +70,7 @@ export const stepReplaySettlement: ExecutableStep = {
       "The first settlement succeeded and the money moved. This replays the identical mandate bundle, nonce and all -- what a network attacker gets for free by capturing one valid request. The engine's Redis nonce ledger is the only thing standing between a replay and a double charge.",
     protocolLayer: layerSettlement,
     implementedBy: `${packageMandateEngine}nonceLedger.py`,
-    invariant: "INV-05",
+    invariant: "Anti-replay nonce ledger",
     sdkCall: { methodName: "executeSettlement", argumentSummary: {}, isPureCrypto: false }
   },
   execute: async (context) => {
@@ -113,7 +113,7 @@ export const stepReplaySettlement: ExecutableStep = {
         refusal: {
           errorName: failure.name,
           message: failure.message,
-          invariantViolated: "INV-05",
+          invariantViolated: "Anti-replay nonce ledger",
           statusCode: failure.statusCode
         }
       };

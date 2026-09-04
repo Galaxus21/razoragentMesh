@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { CheckCircle, Coins, Layers } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { formatPaiseToInr } from "@/lib/currencyFormatter";
 import { truncateHash } from "@/lib/eventFormatter";
 import {
@@ -30,14 +30,14 @@ export function NegotiationChart({ events }: NegotiationChartProps): React.JSX.E
     <div className="flex h-full flex-col rounded-lg border border-borderSubtle bg-bgSurface p-4">
       <div className="flex items-center justify-between border-b border-borderSubtle pb-3">
         <div className="flex items-center gap-2">
-          <Layers className="h-4 w-4 text-accentPrimary" />
           <h2 className="text-sm font-semibold text-textPrimary">B2B Dynamic Negotiation</h2>
-          <span className="rounded bg-accentSubtle px-1.5 py-0.5 text-xs font-mono text-accentPrimary">x402-INR</span>
+          <span className="rounded bg-accentSubtle px-1.5 py-0.5 font-mono text-xs text-accentPrimary">x402-INR</span>
         </div>
-        <div className="flex items-center gap-1.5 rounded-md border border-accentPrimary/30 bg-accentSubtle px-2 py-0.5 text-xs text-accentPrimary">
-          <Coins className="h-3 w-3 text-statusWarning" />
-          <span>Micro-Fee: {formatPaiseToInr(totalMicroFeesPaise)}</span>
-        </div>
+        {/* A running fee total is a figure, not a status. Boxed in the accent colour with a coin
+            glyph it read as a badge announcing something had happened, which it does not. */}
+        <span className="font-mono text-xs text-textMuted">
+          micro-fees {formatPaiseToInr(totalMicroFeesPaise)}
+        </span>
       </div>
       {convergedPayload && (
         <div className="mt-3 flex items-center justify-between rounded-lg border border-statusSuccess/30 bg-statusSuccess/10 p-2.5">

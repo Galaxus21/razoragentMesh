@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { CheckCircle2, DollarSign, Layers, ShieldCheck, Zap } from "lucide-react";
 import { TelemetryEvent } from "@/types/telemetryEventTypes";
 import { formatLatency, formatPaiseToCompactInr } from "@/lib/currencyFormatter";
 
 // Events replayed from the seeder carry this. They are demo data, not measurements.
 const syntheticProvenance = "SYNTHETIC";
+// An em dash, not a zero: nothing has been measured, which is not the same as measuring nothing.
+const unmeasuredValue = "--";
 
 export interface MetricsBarProps {
   readonly events: ReadonlyArray<TelemetryEvent>;
@@ -61,76 +62,54 @@ export function MetricsBar({ events }: MetricsBarProps): React.JSX.Element {
   }, [events]);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-6 pt-4">
-      <div className="rounded-lg border border-borderSubtle bg-bgSurface p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-textSecondary">Total Settled Volume</span>
-          <div className="rounded-md bg-statusSuccess/10 p-1.5 text-statusSuccess">
-            <DollarSign className="h-4 w-4" />
-          </div>
-        </div>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="font-mono text-xl font-bold text-textPrimary">
-            {formatPaiseToCompactInr(metrics.totalSettledPaise)}
-          </span>
-          <span className="text-xs text-statusSuccess font-medium">100% 2PC</span>
-        </div>
-        <p className="mt-1 text-xs text-textMuted">
-          {metrics.paymentCount} Razorpay Route settlements
-        </p>
-      </div>
+    <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-borderSubtle bg-borderSubtle lg:grid-cols-4">
+      <MetricTile
+        label="Settled volume"
+        value={formatPaiseToCompactInr(metrics.totalSettledPaise)}
+        context={`${metrics.paymentCount} Razorpay Route settlements`}
+      />
+      <MetricTile
+        label="Negotiations converged"
+        value={`${metrics.convergedCount} / ${metrics.negotiationCount}`}
+        context="x402-INR, ₹0.50 micro-escrow per turn"
+      />
+      <MetricTile
+        label="Mandates verified"
+        value={String(metrics.mandateSignedCount)}
+        context="Ed25519 over RFC 8785 canonical JSON"
+      />
+      <MetricTile
+        label="Mean heal time"
+        value={metrics.measuredHealingCount > 0 ? formatLatency(metrics.avgHealingMs) : unmeasuredValue}
+        // The SLA line only appears beside a real measurement. Printing "0ms, within the 300ms
+        // SLA" when nothing has been measured is the same false claim in a cheerier form.
+        context={
+          metrics.measuredHealingCount > 0
+            ? `${metrics.measuredHealingCount} measured, 300ms budget`
+            : "no heals measured yet"
+        }
+      />
+    </dl>
+  );
+}
 
-      <div className="rounded-lg border border-borderSubtle bg-bgSurface p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-textSecondary">Negotiation Bargaining</span>
-          <div className="rounded-md bg-accentSubtle p-1.5 text-accentPrimary">
-            <Layers className="h-4 w-4" />
-          </div>
-        </div>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="font-mono text-xl font-bold text-textPrimary">
-            {metrics.convergedCount} / {metrics.negotiationCount}
-          </span>
-          <span className="text-xs text-accentPrimary font-medium">x402-INR</span>
-        </div>
-        <p className="mt-1 text-xs text-textMuted">₹0.50 micro-escrow anti-spam</p>
-      </div>
+interface MetricTileProps {
+  readonly label: string;
+  readonly value: string;
+  readonly context: string;
+}
 
-      <div className="rounded-lg border border-borderSubtle bg-bgSurface p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-textSecondary">AP2 Mandate Integrity</span>
-          <div className="rounded-md bg-statusInfo/10 p-1.5 text-statusInfo">
-            <ShieldCheck className="h-4 w-4" />
-          </div>
-        </div>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="font-mono text-xl font-bold text-textPrimary">
-            {metrics.mandateSignedCount} Verified
-          </span>
-          <span className="text-xs text-statusInfo font-medium">Ed25519</span>
-        </div>
-        <p className="mt-1 text-xs text-textMuted">Zero floating-point arithmetic</p>
-      </div>
-
-      <div className="rounded-lg border border-borderSubtle bg-bgSurface p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-textSecondary">Self-Healing SLA</span>
-          <div className="rounded-md bg-statusWarning/10 p-1.5 text-statusWarning">
-            <Zap className="h-4 w-4" />
-          </div>
-        </div>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="font-mono text-xl font-bold text-textPrimary">
-            {metrics.measuredHealingCount > 0 ? formatLatency(metrics.avgHealingMs) : "--"}
-          </span>
-          {/* The SLA label only appears beside a real measurement. Showing "0ms < 300ms SLA"
-              when nothing has been measured is the same false claim in a cheerier form. */}
-          <span className="text-xs text-statusWarning font-medium">
-            {metrics.measuredHealingCount > 0 ? "< 300ms SLA" : "no measured heals yet"}
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-textMuted">Cosine sim &ge; 0.85 vector search</p>
-      </div>
+// One tile, one number. The previous version hung a coloured lucide glyph in a tinted rounded
+// square beside each label -- a dollar sign on a figure printed in rupees, a stack of sheets
+// beside "negotiation" -- and painted the qualifier line in that same colour. Four different
+// accent hues in one row is decoration competing with the four numbers underneath it, so the
+// glyphs and the colour are gone and the reading order is label, figure, what it counts.
+function MetricTile({ label, value, context }: MetricTileProps): React.JSX.Element {
+  return (
+    <div className="bg-bgSurface p-4">
+      <dt className="text-[11px] font-medium text-textSecondary">{label}</dt>
+      <dd className="mt-1.5 font-mono text-xl font-semibold tabular-nums text-textPrimary">{value}</dd>
+      <p className="mt-1 text-[11px] text-textMuted">{context}</p>
     </div>
   );
 }

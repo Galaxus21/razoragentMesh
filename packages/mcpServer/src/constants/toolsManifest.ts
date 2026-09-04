@@ -27,7 +27,12 @@ const discoveryToolsManifest = [
       "Finds catalog products matching a natural-language description, ranked by semantic " +
       "similarity. Use this first when the buyer describes what they want rather than naming " +
       "a SKU id. The response reports embedding_mode: when it is 'hash' the ranking is NOT " +
-      "semantic and the order is not meaningful.",
+      "semantic and the order is not meaningful. A result whose merchant has a sale SCHEDULED " +
+      "carries next_promotion, with its start time and expected_savings_paise. If ANY result " +
+      "carries one you MUST say so in your final answer -- naming the SKU, the saving and when " +
+      "it starts -- even for a product you did not buy and even when the buyer did not ask " +
+      "about discounts. A buyer who spends money hours before a sale they were shown, and were " +
+      "not told about, has been failed by their agent.",
     inputSchema: {
       type: "object",
       properties: {
@@ -63,13 +68,22 @@ const discoveryToolsManifest = [
       "also carries next_promotion when its merchant has a sale SCHEDULED, with the start time " +
       "and expected_savings_paise -- so you can find what is about to get cheaper without " +
       "quoting every SKU. Filter with has_upcoming_promotion to ask that question directly, and " +
-      "advise your buyer to wait when the saving is worth the delay.",
+      "advise your buyer to wait when the saving is worth the delay. available_stock, and the " +
+      "min_stock filter applied to it, are both read after reservations whose lock has lapsed " +
+      "are released -- so a SKU an abandoned lock was holding is listed again rather than " +
+      "staying hidden behind a hold nobody is using.",
     inputSchema: {
       type: "object",
       properties: {
         category: { type: "string", minLength: 1, description: "Exact category, case-insensitive." },
         brand: { type: "string", minLength: 1, description: "Exact brand, case-insensitive." },
-        hsn_code: { type: "string", minLength: 1 },
+        hsn_code: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Exact HSN tax code, as printed on the invoice line (94013000 is seating). Use it " +
+            "to list everything taxed alike."
+        },
         min_stock: {
           type: "integer",
           minimum: 0,
@@ -82,8 +96,21 @@ const discoveryToolsManifest = [
             "Omit to list everything. True lists only SKUs with a sale scheduled; false only " +
             "those without one, which is what to buy when waiting is not an option."
         },
-        limit: { type: "integer", minimum: 1, maximum: 100, default: 25 },
-        offset: { type: "integer", minimum: 0, default: 0 }
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 100,
+          default: 25,
+          description: "How many items to return in this page."
+        },
+        offset: {
+          type: "integer",
+          minimum: 0,
+          default: 0,
+          description:
+            "How many items to skip, for paging. Compare with total_matching in the response " +
+            "to know when you have seen everything."
+        }
       }
     }
   },
@@ -101,16 +128,47 @@ const discoveryToolsManifest = [
       "mention has been badly served. Say it in your final answer, not only in your reasoning. " +
       "Which campaign, cashback and promo codes apply is set per SKU by its merchant, so a code " +
       "that discounts one SKU may do nothing on another -- applied_discounts names every one " +
-      "that fired.",
+      "that fired. available_stock is what reserve_inventory_lock would grant you at this " +
+      "moment: reservations whose lock has already lapsed are released before the count is " +
+      "taken, so the number you read here and the number the lock enforces are the same one.",
     inputSchema: {
       type: "object",
       required: ["sku_id", "quantity", "buyer_agent_id", "delivery_pincode"],
       properties: {
-        sku_id: { type: "string", pattern: "^SKU-[A-Z0-9_-]{3,32}$" },
-        quantity: { type: "integer", minimum: 1, maximum: 10000 },
-        buyer_agent_id: { type: "string", pattern: "^did:agent:[a-z0-9_\\-\\.:]+$" },
-        delivery_pincode: { type: "string", pattern: "^[1-9][0-9]{5}$" },
-        promo_code: { type: "string" }
+        sku_id: {
+          type: "string",
+          pattern: "^SKU-[A-Z0-9_-]{3,32}$",
+          description: "The SKU to price, exactly as search_catalog or browse_catalog returned it."
+        },
+        quantity: {
+          type: "integer",
+          minimum: 1,
+          maximum: 10000,
+          description:
+            "Units to price. Volume tiers are applied from this number, so quoting 1 and then " +
+            "buying 10 gives the wrong price."
+        },
+        buyer_agent_id: {
+          type: "string",
+          pattern: "^did:agent:[a-z0-9_\\-\\.:]+$",
+          description:
+            "Your agent DID. Under mesh_demo_custodial custody it is minted by " +
+            "establish_agent_delegation, so call that FIRST and reuse the buyer_agent_did it " +
+            "returns rather than inventing one."
+        },
+        delivery_pincode: {
+          type: "string",
+          pattern: "^[1-9][0-9]{5}$",
+          description:
+            "Six-digit destination PIN code. It selects the courier zone and the GST treatment, " +
+            "so a quote for one address does not hold for another."
+        },
+        promo_code: {
+          type: "string",
+          description:
+            "Optional merchant promo code. Codes are set per SKU, so one that discounts another " +
+            "SKU may do nothing here; applied_discounts names whatever actually fired."
+        }
       }
     }
   },
@@ -136,9 +194,24 @@ const discoveryToolsManifest = [
       type: "object",
       required: ["sku_id", "quantity", "buyer_agent_id", "opening_bid_paise", "max_unit_price_paise"],
       properties: {
-        sku_id: { type: "string", pattern: "^SKU-[A-Z0-9_-]{3,32}$" },
-        quantity: { type: "integer", minimum: 1, maximum: 10000 },
-        buyer_agent_id: { type: "string", pattern: "^did:agent:[a-z0-9_\\-\\.:]+$" },
+        sku_id: {
+          type: "string",
+          pattern: "^SKU-[A-Z0-9_-]{3,32}$",
+          description: "The SKU to bargain over."
+        },
+        quantity: {
+          type: "integer",
+          minimum: 1,
+          maximum: 10000,
+          description:
+            "Units you intend to buy. Volume moves the merchant floor, so a larger " +
+            "order can settle lower per unit."
+        },
+        buyer_agent_id: {
+          type: "string",
+          pattern: "^did:agent:[a-z0-9_\\-\\.:]+$",
+          description: "Your agent DID, the same one you quoted with."
+        },
         opening_bid_paise: {
           type: "integer",
           minimum: 1,
@@ -150,8 +223,23 @@ const discoveryToolsManifest = [
           description:
             "Your walk-away price per unit. A hard ceiling, not a target: no turn will bid above it."
         },
-        merchant_did: { type: "string", minLength: 1 },
-        max_turns: { type: "integer", minimum: 1, maximum: 5, default: 5 }
+        merchant_did: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Merchant to bargain with, when the SKU is sold by more than one. Omit " +
+            "to use the SKU own merchant. A DID you supply is never trusted as " +
+            "authority over price."
+        },
+        max_turns: {
+          type: "integer",
+          minimum: 1,
+          maximum: 5,
+          default: 5,
+          description:
+            "Cap on alternating offers. Each turn costs a micro-escrow fee, so " +
+            "more turns is not free; the loop stops early once the spread closes."
+        }
       }
     }
   },
@@ -162,7 +250,9 @@ const discoveryToolsManifest = [
       "needs: lock_token, fencing_token, expires_at_unix_ms, and signature. Call get_live_sku_quote " +
       "first and pass its quote_hash through unchanged -- a hash this mesh did not issue for this " +
       "exact SKU, quantity and buyer_agent_id is refused and NO stock is reserved, so a refusal " +
-      "here costs you nothing and tells you what to fix. Note the two clocks: your lock lasts " +
+      "here costs you nothing and tells you what to fix. An out-of-stock refusal may also suggest " +
+      "an available substitute SKU discovered via vector search; taking it requires requesting a fresh " +
+      "quote for that substitute SKU. Note the two clocks: your lock lasts " +
       "lock_ttl_seconds, but the quote behind it dies 60 seconds after it was issued, and " +
       "create_cart_mandate needs both alive. Taking a lock longer than the quote does not extend " +
       "the quote -- go straight from quote to lock to cart, and re-quote if you detour.",
@@ -214,12 +304,32 @@ const discoveryToolsManifest = [
       type: "object",
       required: ["origin_pincode", "delivery_pincode", "package_weight_grams", "required_delivery_tier"],
       properties: {
-        origin_pincode: { type: "string", pattern: "^[1-9][0-9]{5}$" },
-        delivery_pincode: { type: "string", pattern: "^[1-9][0-9]{5}$" },
-        package_weight_grams: { type: "integer", minimum: 1 },
+        origin_pincode: {
+          type: "string",
+          pattern: "^[1-9][0-9]{5}$",
+          description:
+            "Six-digit PIN code the goods ship FROM -- the merchant warehouse, not " +
+            "the buyer. It is the origin of the courier zone calculation."
+        },
+        delivery_pincode: {
+          type: "string",
+          pattern: "^[1-9][0-9]{5}$",
+          description: "Six-digit PIN code the goods ship TO."
+        },
+        package_weight_grams: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "Billable package weight in grams. Shipping is priced in weight slabs, " +
+            "so this changes the cost even when the zone does not."
+        },
         required_delivery_tier: {
           type: "string",
-          enum: ["standard", "express", "sameDay"]
+          enum: ["standard", "express", "sameDay"],
+          description:
+            "Service level to price. Not every tier is offered to every zone: when " +
+            "one is not, serviceable comes back false and available_delivery_tiers " +
+            "lists what is."
         }
       }
     }

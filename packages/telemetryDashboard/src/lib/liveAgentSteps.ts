@@ -24,6 +24,21 @@ import {
 import type { ProtocolStepRecord, ProtocolStepStatus } from "@/types/protocolRunTypes";
 import type { TelemetryEvent } from "@/types/telemetryEventTypes";
 
+/**
+ * The real Razorpay order the settlement saga opened for this run, when it opened one.
+ *
+ * The agent cannot pay it. No Razorpay rail authorises a charge on a fresh account without a
+ * prior human act, so the mesh does the half a machine CAN do -- verify the mandate chain, gate
+ * the budget, split the settlement, and open a real order carrying the mandate hashes in its
+ * notes -- and hands the last step to a person. That handoff is the honest shape of the demo,
+ * so the order is lifted onto the session rather than left buried in one step's result blob.
+ */
+export interface SettlementOrderHandoff {
+  readonly razorpayOrderId: string;
+  readonly amountPaise: number;
+  readonly paymentId: string | null;
+}
+
 export interface LiveAgentSession {
   readonly sessionId: string;
   readonly steps: readonly ProtocolStepRecord[];
@@ -31,6 +46,7 @@ export interface LiveAgentSession {
   readonly lastEventAtMs: number;
   readonly callerAgentId: string | null;
   readonly refusalCount: number;
+  readonly settlementOrder: SettlementOrderHandoff | null;
 }
 
 interface RefusalBody {
@@ -206,6 +222,30 @@ function mapPaymentIdsToSessions(
 }
 
 /**
+ * Pulls the Razorpay order out of PAYMENT_CAPTURED, the only event that carries it.
+ *
+ * `razorpayOrderId` is null whenever the engine ran without credentials, and the payload then
+ * falls back to the executionId in its sibling `orderId` field. That fallback is deliberately
+ * NOT read here: an executionId is not payable, and offering it as a checkout link would send a
+ * reader to a modal that cannot open.
+ */
+function readSettlementOrder(
+  events: readonly TelemetryEvent[]
+): SettlementOrderHandoff | null {
+  for (const event of events) {
+    if (event.eventType !== "PAYMENT_CAPTURED") {
+      continue;
+    }
+    const { razorpayOrderId, amountPaise, paymentId } = event.payload;
+    if (!razorpayOrderId) {
+      continue;
+    }
+    return { razorpayOrderId, amountPaise, paymentId: paymentId || null };
+  }
+  return null;
+}
+
+/**
  * Groups the stream into one session per agent, newest session first.
  *
  * `sessionId` is the MCP transport's own session id, which the server stamps on every tool call
@@ -246,7 +286,8 @@ export function buildLiveAgentSessions(
       startedAtMs: ordered[0]?.timestampMs ?? 0,
       lastEventAtMs: ordered[ordered.length - 1]?.timestampMs ?? 0,
       callerAgentId: callerAgentId ?? null,
-      refusalCount: steps.filter((step) => step.status === "REFUSED").length
+      refusalCount: steps.filter((step) => step.status === "REFUSED").length,
+      settlementOrder: readSettlementOrder(ordered)
     });
   }
 

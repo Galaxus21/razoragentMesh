@@ -8,9 +8,8 @@
 // hop, no vector index, and no way for the two to disagree.
 
 import { defaultCatalogStore, CatalogStore } from "../catalog/catalogStore.js";
-import { evaluateScheduledPromotions } from "../catalog/pricingEngine.js";
+import { resolveNextPromotion } from "../catalog/promotionResolver.js";
 import { millisPerSecond } from "../constants/protocolConstants.js";
-import type { CatalogSkuItem, UpcomingPromotion } from "../types/mcpToolTypes.js";
 import {
   browseCatalogRequestSchema,
   browseCatalogResponseSchema,
@@ -21,46 +20,6 @@ export const browsePriceDisclaimer =
   "base_unit_price_paise is the list price before volume tiers, campaigns and promo codes, and " +
   "excludes GST and shipping. Call get_live_sku_quote for a binding price and a quote_hash. " +
   "next_promotion is a sale the merchant has scheduled for later, not a price you can take now.";
-
-/**
- * The soonest sale scheduled for this SKU, or undefined when none is.
- *
- * Until this existed, a scheduled sale was reachable only one SKU at a time through
- * get_live_sku_quote's upcoming_promotions, so an agent could not ask what is on sale without
- * quoting the whole catalog. It reuses the quote's evaluator rather than reimplementing the
- * arithmetic, so the two surfaces cannot drift.
- *
- * Ties break on campaign_id: two sales starting the same second must order the same way on every
- * call, or a page boundary would show one of them twice.
- */
-function _resolveNextPromotion(
-  sku: CatalogSkuItem,
-  currentTimeUnix: number
-): UpcomingPromotion | undefined {
-  if (!sku.promotions || sku.promotions.length === 0) {
-    return undefined;
-  }
-
-  let upcoming: readonly UpcomingPromotion[];
-  try {
-    upcoming = evaluateScheduledPromotions(sku.baseUnitPricePaise, sku.promotions, currentTimeUnix)
-      .upcomingPromotions;
-  } catch {
-    // evaluateScheduledPromotions throws on a promotion it cannot price -- an inverted window, or
-    // a fixed price above the list price. The TypeScript schema does not reject either
-    // (mcpToolTypes.ts scheduledPromotionSchema checks types, not the relationship between the
-    // two timestamps); only merchantApi's Pydantic model does, so a listing that reached the store
-    // by another route can carry one. In a quote that costs one SKU. Here it would cost the whole
-    // catalog listing, and enumerating what the mesh can sell is the one thing this tool owes an
-    // agent -- so the SKU stays listed and simply reports no scheduled sale.
-    return undefined;
-  }
-
-  return [...upcoming].sort(
-    (left, right) =>
-      left.starts_at_unix - right.starts_at_unix || left.campaign_id.localeCompare(right.campaign_id)
-  )[0];
-}
 
 export function browseCatalog(
   rawRequest: unknown,
@@ -78,7 +37,7 @@ export function browseCatalog(
 
   // Resolved across every match rather than on the page, because has_upcoming_promotion filters
   // and total_matching has to count what the filter matched -- not what survived into a page.
-  const evaluated = matches.map((sku) => ({ sku, nextPromotion: _resolveNextPromotion(sku, currentTimeUnix) }));
+  const evaluated = matches.map((sku) => ({ sku, nextPromotion: resolveNextPromotion(sku, currentTimeUnix) }));
   const selected =
     request.has_upcoming_promotion === undefined
       ? evaluated

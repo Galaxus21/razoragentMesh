@@ -165,6 +165,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
       interval: 10s
@@ -222,6 +223,9 @@ services:
       - MANDATE_ENGINE_URL=http://mandate-engine:8000
       - X402_GATEWAY_URL=http://x402-gateway:4003
       - MERCHANT_API_URL=http://merchant-api:4002
+      # Read directly by /api/mesh/vectors so the Vector Index panel is drawn from the
+      # collection itself rather than from what a writer reports about it.
+      - QDRANT_URL=http://qdrant:6333
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/overview"]
       interval: 10s

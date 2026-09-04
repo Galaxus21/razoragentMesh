@@ -6,7 +6,7 @@ import { executeSkuQuote } from "../tools/skuQuoter.js";
 import { reserveInventoryLock } from "../tools/inventoryLocker.js";
 import { verifyShippingSla } from "../tools/slaVerifier.js";
 import { defaultCatalogStore } from "../catalog/catalogStore.js";
-import { defaultInMemoryLocker } from "../inventory/redisLockManager.js";
+import { reclaimExpiredDefaultReservations } from "../inventory/redisLockManager.js";
 import { deliveryTierStandard } from "../constants/protocolConstants.js";
 import { defaultQuoteQuantity, defaultSlaWeightGrams } from "../constants/httpRequestDefaults.js";
 import {
@@ -45,7 +45,7 @@ export function handleQuoteRequest(query: URLSearchParams): SdkSkuQuote {
   };
   // Reclaim lapsed reservations before reading stock, so `availableStock` reflects what a
   // lock attempt would actually find rather than what was held at some earlier moment.
-  defaultInMemoryLocker.reclaimExpired(defaultCatalogStore);
+  reclaimExpiredDefaultReservations();
   const toolResponse = executeSkuQuote(toolInput, defaultCatalogStore);
   return toSdkSkuQuote(toolResponse, quantity);
 }

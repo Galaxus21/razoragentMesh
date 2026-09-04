@@ -39,7 +39,22 @@ export const proofMaxSkewSeconds = 5;
 export const executionSigningWindowSeconds = 65;
 
 export const defaultPackageWeightGrams = 750;
+/**
+ * The Route account the mesh's OWN merchant identity is paid at -- the demo catalog's seller.
+ *
+ * No longer a default a caller can override: merchantPayoutRegistry.ts resolves the payout
+ * destination from the merchant-signed cart, and this is the answer for every cart the mesh
+ * signs itself.
+ */
 export const defaultMerchantAccount = "acc_demoMerchantChairs";
+/**
+ * Where a merchant registered through the Merchant API stores its profile. Must stay equal to
+ * `redisMerchantProfileKeyPrefix` in merchantApi/src/constants/merchantConstants.py: this key is
+ * the only way the mesh can learn the payout account of a merchant it did not sign for itself.
+ */
+export const redisMerchantProfileKeyPrefix = "mesh:merchant:profile:";
+/** Razorpay Route linked account id. Mirrors razorpayAccountIdRegexPattern in merchantSchema.py. */
+export const razorpayAccountIdRegex = /^acc_[a-zA-Z0-9_]+$/;
 // Checksum-valid (Luhn Mod-36); the engine rejects a made-up GSTIN with HTTP 422.
 // 29 = Karnataka, matching defaultOriginPincode.
 export const demoMerchantGstin = "29AAACR5055K1Z3";
@@ -177,6 +192,33 @@ export const errorDuplicatePurchaseInSession = (paymentId: string): string =>
 export const errorReservationConsumeFailed = (skuId: string, lockToken: string): string =>
   `settled reservation ${lockToken} on ${skuId} could not be consumed; the expiry sweeper may ` +
   "credit a sold unit back to stock.";
+
+/**
+ * Refuses a payout destination the caller chose rather than one the merchant signed for.
+ *
+ * Names the resolved account and the DID it came from, so this reads as "here is where this
+ * merchant is paid" rather than "your argument was rejected" -- an agent that passed the field
+ * out of habit can simply drop it and retry. Says nothing was charged, because the guard fires
+ * before the bundle reaches the engine and an agent told only "refused" will assume otherwise.
+ */
+export const errorMerchantAccountNotBound = (
+  requested: string,
+  resolved: string,
+  merchantDid: string
+): string =>
+  `merchant_account ${requested} is not the payout account registered to the merchant that ` +
+  `signed this cart. The merchant leg pays ${resolved}, resolved from the signed cart's ` +
+  `merchantDid ${merchantDid} -- a payout destination is never taken from the request, so this ` +
+  "field cannot redirect funds. Omit it, or pass the registered account. Nothing was charged.";
+
+/**
+ * Fires when a cart names a merchant the mesh has no Route account for. Refusing is the whole
+ * point: settling to an invented destination is the failure the resolution exists to prevent.
+ */
+export const errorMerchantPayoutUnregistered = (merchantDid: string): string =>
+  `no Razorpay Route account is registered for merchantDid ${merchantDid}, so the merchant leg ` +
+  "of this settlement has no destination. A merchant must be registered with the mesh " +
+  "(POST /api/v1/merchant/register) before a cart it signed can settle. Nothing was charged.";
 
 export const errorNoCartForDelegation = "No cart mandate has been created for this delegation";
 export const errorNoExecutionPayload = "No execution payload has been issued for this delegation";

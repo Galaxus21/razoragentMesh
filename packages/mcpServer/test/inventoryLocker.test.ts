@@ -231,4 +231,258 @@ describe("a lock is only granted against a quote this mesh issued", () => {
     assert.equal(registry.verify({ ...live, quoteHash: live.quoteHash }, nowUnix).outcome, "issued");
     assert.equal(registry.verify({ ...lapsed, quoteHash: lapsed.quoteHash }, nowUnix).outcome, "unknown");
   });
+
+  it("suggests a substitute on out-of-stock refusal when heal returns a match (model mode)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          healed: true,
+          failedSkuId: "SKU-LIMITED-001",
+          substituteSkuId: "SKU-POD-DUO-02",
+          substitutePayload: {
+            skuId: "SKU-POD-DUO-02",
+            title: "AcoustiCabin Duo Soundproof Office Meeting Booth",
+            baseUnitPricePaise: 19900000
+          },
+          cosineScore: 0.94,
+          healingDurationMs: 8.5,
+          embeddingMode: "model"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+
+    try {
+      const store = new CatalogStore([
+        {
+          skuId: "SKU-LIMITED-001",
+          name: "Limited Edition Item",
+          category: "furniture",
+          description: "Limited item",
+          hsnCode: "94030000",
+          gstRatePercent: 18,
+          baseUnitPricePaise: 10000,
+          availableStock: 2,
+          volumeTiers: []
+        }
+      ]);
+
+      const quoteHash = quoteHashFor(store, "SKU-LIMITED-001", 5, "did:agent:test-buyer");
+
+      await assert.rejects(
+        () =>
+          reserveInventoryLock(
+            {
+              sku_id: "SKU-LIMITED-001",
+              quantity: 5,
+              lock_ttl_seconds: 60,
+              buyer_agent_id: "did:agent:test-buyer",
+              quote_hash: quoteHash
+            },
+            { catalogStore: store }
+          ),
+        (err: unknown) => {
+          assert.ok(err instanceof InsufficientStockException);
+          assert.match(err.message, /SKU-POD-DUO-02/);
+          assert.match(err.message, /semantic similarity 0.94/);
+          assert.match(err.message, /call get_live_sku_quote for SKU-POD-DUO-02/);
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("preserves exact original message when heal endpoint is unreachable", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      throw new Error("Connection refused");
+    };
+
+    try {
+      const store = new CatalogStore([
+        {
+          skuId: "SKU-LIMITED-001",
+          name: "Limited Edition Item",
+          category: "furniture",
+          description: "Limited item",
+          hsnCode: "94030000",
+          gstRatePercent: 18,
+          baseUnitPricePaise: 10000,
+          availableStock: 2,
+          volumeTiers: []
+        }
+      ]);
+
+      const quoteHash = quoteHashFor(store, "SKU-LIMITED-001", 5, "did:agent:test-buyer");
+
+      await assert.rejects(
+        () =>
+          reserveInventoryLock(
+            {
+              sku_id: "SKU-LIMITED-001",
+              quantity: 5,
+              lock_ttl_seconds: 60,
+              buyer_agent_id: "did:agent:test-buyer",
+              quote_hash: quoteHash
+            },
+            { catalogStore: store }
+          ),
+        (err: unknown) => {
+          assert.ok(err instanceof InsufficientStockException);
+          assert.equal(
+            err.message,
+            "Insufficient stock for SKU-LIMITED-001: requested 5, available 2"
+          );
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("preserves exact original message when heal returns healed: false", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          healed: false,
+          failedSkuId: "SKU-LIMITED-001",
+          reason: "no_qualifying_candidate"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+
+    try {
+      const store = new CatalogStore([
+        {
+          skuId: "SKU-LIMITED-001",
+          name: "Limited Edition Item",
+          category: "furniture",
+          description: "Limited item",
+          hsnCode: "94030000",
+          gstRatePercent: 18,
+          baseUnitPricePaise: 10000,
+          availableStock: 2,
+          volumeTiers: []
+        }
+      ]);
+
+      const quoteHash = quoteHashFor(store, "SKU-LIMITED-001", 5, "did:agent:test-buyer");
+
+      await assert.rejects(
+        () =>
+          reserveInventoryLock(
+            {
+              sku_id: "SKU-LIMITED-001",
+              quantity: 5,
+              lock_ttl_seconds: 60,
+              buyer_agent_id: "did:agent:test-buyer",
+              quote_hash: quoteHash
+            },
+            { catalogStore: store }
+          ),
+        (err: unknown) => {
+          assert.ok(err instanceof InsufficientStockException);
+          assert.equal(
+            err.message,
+            "Insufficient stock for SKU-LIMITED-001: requested 5, available 2"
+          );
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("omits semantic similarity claim when embeddingMode is hash", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          healed: true,
+          failedSkuId: "SKU-LIMITED-001",
+          substituteSkuId: "SKU-POD-DUO-02",
+          substitutePayload: {
+            skuId: "SKU-POD-DUO-02",
+            title: "AcoustiCabin Duo",
+            baseUnitPricePaise: 19900000
+          },
+          cosineScore: 0.88,
+          embeddingMode: "hash"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+
+    try {
+      const store = new CatalogStore([
+        {
+          skuId: "SKU-LIMITED-001",
+          name: "Limited Edition Item",
+          category: "furniture",
+          description: "Limited item",
+          hsnCode: "94030000",
+          gstRatePercent: 18,
+          baseUnitPricePaise: 10000,
+          availableStock: 2,
+          volumeTiers: []
+        }
+      ]);
+
+      const quoteHash = quoteHashFor(store, "SKU-LIMITED-001", 5, "did:agent:test-buyer");
+
+      await assert.rejects(
+        () =>
+          reserveInventoryLock(
+            {
+              sku_id: "SKU-LIMITED-001",
+              quantity: 5,
+              lock_ttl_seconds: 60,
+              buyer_agent_id: "did:agent:test-buyer",
+              quote_hash: quoteHash
+            },
+            { catalogStore: store }
+          ),
+        (err: unknown) => {
+          assert.ok(err instanceof InsufficientStockException);
+          assert.match(err.message, /SKU-POD-DUO-02/);
+          assert.doesNotMatch(err.message, /semantic similarity/);
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("makes no call to the heal endpoint during a successful lock", async () => {
+    let healCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      healCalls++;
+      return new Response("{}", { status: 200 });
+    };
+
+    try {
+      const store = new CatalogStore();
+      const quoteHash = quoteHashFor(store, "SKU-CHAIR-001", 1, "did:agent:test-buyer");
+      const res = await reserveInventoryLock(
+        {
+          sku_id: "SKU-CHAIR-001",
+          quantity: 1,
+          lock_ttl_seconds: 60,
+          buyer_agent_id: "did:agent:test-buyer",
+          quote_hash: quoteHash
+        },
+        { catalogStore: store }
+      );
+      assert.ok(res.lock_token.length > 0);
+      assert.equal(healCalls, 0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

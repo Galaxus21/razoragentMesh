@@ -31,9 +31,16 @@ const stepEventTypeMap: Readonly<Record<string, TelemetryEventType>> = {
   settle: "PAYMENT_CAPTURED"
 };
 
+// Keyed by the guarantee a refusal names, matching the strings the step definitions carry. It
+// previously keyed on two opaque identifiers that named Ed25519 signatures and GST division in the
+// docs' invariant table -- neither of which has anything to do with a blocked budget or a rolled
+// back Route split. Nothing in the driver emitted either one as invariantViolated, so this map had
+// quietly stopped matching anything. The identifiers are gone from the docs as well; guarantees
+// are named in full on both sides so a mismatch here is legible instead of silent.
 const refusalEventTypeMap: Readonly<Record<string, TelemetryEventType>> = {
-  "INV-03": "BUDGET_BLOCKED",
-  "INV-02": "ROUTE_ROLLBACK_TRIGGERED"
+  "AP2 budget gate": "BUDGET_BLOCKED",
+  "Per-transaction ceiling": "BUDGET_BLOCKED",
+  "Settlement matches the signed cart": "ROUTE_ROLLBACK_TRIGGERED"
 };
 
 function resolveEventType(step: ProtocolStepRecord): TelemetryEventType {

@@ -18,6 +18,13 @@ export const maxSearchLimit = 25;
 // Generous: the first search after a cold start pays for the embedding model loading.
 export const catalogSearchTimeoutMs = 30_000;
 
+export const catalogHealPath = "/api/v1/catalog/heal-oos";
+
+// Deliberately short, and much shorter than catalogSearchTimeoutMs. This runs on a refusal path
+// that has already failed: an agent waiting 30s to be told "out of stock" is worse served than
+// one told immediately without a suggestion.
+export const catalogHealTimeoutMs = 4_000;
+
 // Assumed when the upstream response omits the field -- the pessimistic choice, so a missing
 // value is never mistaken for a confirmed semantic ranking.
 export const degradedEmbeddingMode = "hash";

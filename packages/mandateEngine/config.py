@@ -42,6 +42,26 @@ class MandateEngineSettings(BaseModel):
         ),
     )
 
+    razorpayWebhookSecret: str = Field(
+        default_factory=lambda: os.getenv("RAZORPAY_WEBHOOK_SECRET", ""),
+        description=(
+            "Shared secret for verifying inbound Razorpay webhook deliveries. Blank disables "
+            "the receiver: POST /api/v1/webhooks/razorpay answers 503 rather than accepting a "
+            "payload it cannot verify."
+        ),
+    )
+
+    routeTransportLive: bool = Field(
+        default_factory=lambda: os.getenv("RAZORPAY_ROUTE_LIVE", "").lower()
+        in ("1", "true", "yes"),
+        description=(
+            "Opt-in for LIVE Route capture and split transfers. Off by default even when "
+            "credentials are present, because /v1/transfers needs Route activation and real "
+            "linked account ids, and /v1/payments/{id}/capture needs a payment this mesh did "
+            "not create. Supplying credentials alone enables the Orders API and nothing else."
+        ),
+    )
+
     @property
     def hasRazorpayCredentials(self) -> bool:
         """True only when both halves of a real Razorpay key pair are present.

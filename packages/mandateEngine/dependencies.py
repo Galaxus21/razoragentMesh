@@ -23,6 +23,7 @@ __all__ = [
     "getCompensationDlq",
     "getNonceLedger",
     "getRedisClient",
+    "getRouteClient",
     "getSettlementLedger",
     "getSettlementOrchestrator",
     "getTelemetryEmitter",
@@ -88,3 +89,12 @@ def getSettlementOrchestrator(request: Request) -> SettlementOrchestrator:
     )
     request.app.state.settlementOrchestrator = orchestrator
     return orchestrator
+
+
+def getRouteClient(request: Request) -> Any:
+    """Retrieves or builds RazorpayRouteClient instance from application state."""
+    routeClient = getattr(request.app.state, "routeClient", None)
+    if routeClient is None:
+        routeClient = buildRouteClient()
+        request.app.state.routeClient = routeClient
+    return routeClient

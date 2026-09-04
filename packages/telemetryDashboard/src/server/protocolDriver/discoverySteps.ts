@@ -71,7 +71,7 @@ export const stepReserveLock: ExecutableStep = {
       "The agent takes a short-lived reservation so the price it just quoted cannot be sold out from under it mid-flow. The lock carries a monotonic fencing token, which is what stops a delayed retry from resurrecting an already-expired reservation.",
     protocolLayer: layerDiscovery,
     implementedBy: `${packageMcpTools}inventoryLocker.ts`,
-    invariant: "INV-05",
+    invariant: "Atomic inventory fencing",
     sdkCall: { methodName: "reserveInventoryLock", argumentSummary: {}, isPureCrypto: false }
   },
   execute: async (context) => {

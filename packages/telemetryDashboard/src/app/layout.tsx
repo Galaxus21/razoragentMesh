@@ -26,9 +26,18 @@ const geistMono = Geist_Mono({
 
 const themeInitScriptContent = `(function(){try{var t=localStorage.getItem('razormesh-theme');var p=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(!t&&p)){document.documentElement.classList.add('dark');}else{document.documentElement.classList.remove('dark');}}catch(e){}})();`;
 
+// The mark is declared rather than left to the browser's implicit /favicon.ico probe, so the SVG
+// is preferred where it is supported and the tab icon matches the one in the sidebar.
 export const metadata: Metadata = {
-  title: "RazorAgent Mesh | Real-Time Telemetry & Settlement Enclave",
-  description: "Autonomous M2M Settlement & Cryptographic Telemetry Enclave on Razorpay Rails",
+  title: "RazorAgent Mesh",
+  description: "Live telemetry for autonomous agent purchases settled on Razorpay rails.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+    ],
+    shortcut: "/favicon.ico",
+  },
 };
 
 export interface RootLayoutProps {

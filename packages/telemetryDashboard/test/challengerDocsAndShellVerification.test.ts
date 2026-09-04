@@ -11,43 +11,40 @@ import {
 } from "../src/components/appSidebar.js";
 import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 import OverviewPage from "../src/app/(dashboard)/overview/page.js";
-import AgentObservabilityPage from "../src/app/(dashboard)/agent-observability/page.js";
-import NegotiationHubPage from "../src/app/(dashboard)/negotiation-hub/page.js";
-import SecurityAuditPage from "../src/app/(dashboard)/security-audit/page.js";
-import SelfHealingPage from "../src/app/(dashboard)/self-healing/page.js";
-import InfrastructurePage from "../src/app/(dashboard)/infrastructure/page.js";
+import VisualisePage from "../src/app/(dashboard)/visualise/page.js";
+import VisualiseRunPage from "../src/app/(dashboard)/visualise/run/page.js";
+import AdversarialPage from "../src/app/(dashboard)/visualise/adversarial/page.js";
+import SettlePage from "../src/app/(dashboard)/visualise/settle/page.js";
 import MerchantStudioPage from "../src/app/(dashboard)/merchant-studio/page.js";
 import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 
-const expectedCategoryCount = 6;
-const expectedTotalRoutesCount = 20;
-const expectedDocsRoutesCount = 7;
-const expectedTelemetryRoutesCount = 13;
+const expectedCategoryCount = 4;
+const expectedTotalRoutesCount = 12;
+// Sidebar rows under Docs: the eight guides plus the /docs landing page. Kept apart from
+// expectedDocumentCount because they stopped being the same number the moment the landing
+// page existed, and a single constant would have made one of the two assertions vacuous.
+const expectedDocsRoutesCount = 9;
+const expectedDocumentCount = 8;
+const expectedTelemetryRoutesCount = 3;
+
+const docsLandingRoute = "/docs";
 
 const requiredDocsRouteUrls: ReadonlyArray<string> = [
+  "/docs",
   "/docs/setup",
   "/docs/agent-quickstart",
   "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
+  "/docs/tool-reference",
   "/docs/telemetry",
   "/docs/gstr1-invoice",
 ];
 
 const requiredTelemetryRouteUrls: ReadonlyArray<string> = [
   "/overview",
-  "/self-healing",
-  "/infrastructure",
-  "/protocol",
-  "/playground/layers",
-  "/playground",
-  "/playground/adversarial",
-  "/playground/live-agent",
-  "/sdk-console",
-  "/agent-observability",
-  "/negotiation-hub",
-  "/security-audit",
   "/merchant-studio",
+  "/visualise",
 ];
 
 describe("Empirical Challenger 2 — Documentation Routes Mounting & Component Trees", () => {
@@ -57,7 +54,7 @@ describe("Empirical Challenger 2 — Documentation Routes Mounting & Component T
   // failure the old maps produced was a route that rendered "Page Not Found" with HTTP 200.
   it("should resolve every documentation route to a loadable page", () => {
     const docPages = loadAllDocPages();
-    assert.equal(docPages.length, expectedDocsRoutesCount);
+    assert.equal(docPages.length, expectedDocumentCount);
 
     for (const page of docPages) {
       assert.ok(page.body.trim().length > 0, `${page.slug} has an empty body`);
@@ -67,7 +64,13 @@ describe("Empirical Challenger 2 — Documentation Routes Mounting & Component T
   });
 
   it("should back each sidebar documentation route with a real document", () => {
-    for (const routeUrl of requiredDocsRouteUrls) {
+    // /docs is the landing page: a real route with no .mdx behind it, so it is the one
+    // documentation entry this invariant cannot apply to. Every other one must resolve, or
+    // the sidebar is advertising a guide that does not exist.
+    const guideRouteUrls = requiredDocsRouteUrls.filter((routeUrl) => routeUrl !== docsLandingRoute);
+    assert.equal(guideRouteUrls.length, requiredDocsRouteUrls.length - 1);
+
+    for (const routeUrl of guideRouteUrls) {
       const slug = routeUrl.replace("/docs/", "");
       const page = loadDocPage([slug]);
       assert.ok(page, `Sidebar advertises ${routeUrl} but no document backs it`);
@@ -82,7 +85,7 @@ describe("Empirical Challenger 2 — Documentation Routes Mounting & Component T
 });
 
 describe("Empirical Challenger 2 — Link Integrity & Route Configuration Invariants", () => {
-  it("should verify all 5 category IDs, icons, and children configurations", () => {
+  it("should verify every category ID, icon, and children configuration", () => {
     assert.equal(navigationCategories.length, expectedCategoryCount);
 
     const seenCategoryIds = new Set<string>();
@@ -97,7 +100,7 @@ describe("Empirical Challenger 2 — Link Integrity & Route Configuration Invari
     }
   });
 
-  it("should verify all 20 navigation items have valid URI paths and non-empty metadata", () => {
+  it("should verify every navigation item has a valid URI path and non-empty metadata", () => {
     assert.equal(navigationItems.length, expectedTotalRoutesCount);
 
     const seenRoutes = new Set<string>();
@@ -159,15 +162,14 @@ describe("Empirical Challenger 2 — App Shell & Layout Scroll Invariants", () =
   });
 });
 
-describe("Empirical Challenger 2 — Zero Regression on All 7 Existing Telemetry Pages", () => {
+describe("Empirical Challenger 2 — Zero Regression on All Telemetry Pages", () => {
   const telemetryPages = [
     { name: "OverviewPage", component: OverviewPage, route: "/overview" },
-    { name: "AgentObservabilityPage", component: AgentObservabilityPage, route: "/agent-observability" },
-    { name: "NegotiationHubPage", component: NegotiationHubPage, route: "/negotiation-hub" },
-    { name: "SecurityAuditPage", component: SecurityAuditPage, route: "/security-audit" },
-    { name: "SelfHealingPage", component: SelfHealingPage, route: "/self-healing" },
-    { name: "InfrastructurePage", component: InfrastructurePage, route: "/infrastructure" },
     { name: "MerchantStudioPage", component: MerchantStudioPage, route: "/merchant-studio" },
+    { name: "SettlePage", component: SettlePage, route: "/visualise/settle" },
+    { name: "VisualisePage", component: VisualisePage, route: "/visualise" },
+    { name: "VisualiseRunPage", component: VisualiseRunPage, route: "/visualise/run" },
+    { name: "AdversarialPage", component: AdversarialPage, route: "/visualise/adversarial" },
   ];
 
   for (const page of telemetryPages) {

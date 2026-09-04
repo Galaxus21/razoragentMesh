@@ -1627,6 +1627,10 @@
           "signature": "number"
         },
         {
+          "name": "category",
+          "signature": "string | undefined"
+        },
+        {
           "name": "finalUnitPricePaise",
           "signature": "number"
         },
@@ -1693,6 +1697,10 @@
         {
           "name": "baseUnitPricePaise",
           "signature": "number"
+        },
+        {
+          "name": "category",
+          "signature": "string | undefined"
         },
         {
           "name": "finalUnitPricePaise",

@@ -62,7 +62,7 @@ export function ScenarioPicker({
               {scenario.invariants.map((invariant) => (
                 <span
                   key={invariant}
-                  className="rounded-full border border-borderSubtle bg-surfaceContainer px-1.5 py-0.5 text-[10px] font-mono text-textSecondary"
+                  className="rounded-full border border-borderSubtle bg-surfaceContainer px-2 py-0.5 text-[10px] text-textSecondary"
                 >
                   {invariant}
                 </span>

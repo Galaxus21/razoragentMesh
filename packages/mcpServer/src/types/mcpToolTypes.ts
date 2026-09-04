@@ -306,9 +306,14 @@ export class SkuNotFoundException extends Error {
 
 export class InsufficientStockException extends Error {
   readonly code = "INSUFFICIENT_STOCK";
-  constructor(skuId: string, requested: number, available: number) {
-    super(`Insufficient stock for ${skuId}: requested ${requested}, available ${available}`);
+  readonly requested: number;
+  readonly available: number;
+  constructor(skuId: string, requested: number, available: number, substituteAdvice?: string) {
+    const baseMessage = `Insufficient stock for ${skuId}: requested ${requested}, available ${available}`;
+    super(substituteAdvice ? `${baseMessage}. ${substituteAdvice}` : baseMessage);
     this.name = "InsufficientStockException";
+    this.requested = requested;
+    this.available = available;
   }
 }
 

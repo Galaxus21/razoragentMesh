@@ -1,0 +1,401 @@
+[
+  {
+    "name": "establish_agent_delegation",
+    "required": [
+      "key_custody",
+      "max_budget_paise",
+      "single_transaction_limit_paise"
+    ],
+    "parameters": [
+      {
+        "name": "authorized_categories",
+        "type": "string[]",
+        "description": "Enforced at settlement against the category the merchant signed onto each cart line; a line outside this list aborts with ₹0 charged. Use the merchant catalog's spellings (matched case-insensitively). Empty means no restriction."
+      },
+      {
+        "name": "buyer_agent_id",
+        "type": "string",
+        "description": "Required for agent_held; omitted otherwise. did:agent: plus 64 lowercase hex."
+      },
+      {
+        "name": "key_custody",
+        "type": "string",
+        "description": "No default. State which party holds the buyer signing key."
+      },
+      {
+        "name": "max_budget_paise",
+        "type": "integer",
+        "description": "Total you may spend under this delegation, in paise (integer: 50000 is Rs 500). The budget gate is deterministic -- a cart one paise over is refused."
+      },
+      {
+        "name": "proof_nonce",
+        "type": "string",
+        "description": "Random single-use string you signed over. Replaying a nonce is refused."
+      },
+      {
+        "name": "proof_signature",
+        "type": "string",
+        "description": "Required for agent_held. Detached Ed25519, 128 lowercase hex, over the RFC 8785 canonical JSON of {buyerAgentId, maxBudgetPaise, nonce, singleTransactionLimitPaise, timestamp}."
+      },
+      {
+        "name": "proof_timestamp",
+        "type": "integer",
+        "description": "Unix seconds. Accepted within -5s to +60s of mesh time."
+      },
+      {
+        "name": "single_transaction_limit_paise",
+        "type": "integer",
+        "description": "Clamped to max_budget_paise if larger."
+      },
+      {
+        "name": "validity_seconds",
+        "type": "integer",
+        "description": "How long this delegation stays usable, in seconds. Every later call is refused once it lapses, so allow for negotiation turns and retries."
+      }
+    ]
+  },
+  {
+    "name": "search_catalog",
+    "required": [
+      "query_text"
+    ],
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "integer",
+        "description": "Maximum number of ranked results to return."
+      },
+      {
+        "name": "query_text",
+        "type": "string",
+        "description": "Plain-language description of the desired product. 'queryText' and 'query' are accepted as aliases for this field."
+      }
+    ]
+  },
+  {
+    "name": "browse_catalog",
+    "required": [],
+    "parameters": [
+      {
+        "name": "brand",
+        "type": "string",
+        "description": "Exact brand, case-insensitive."
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "description": "Exact category, case-insensitive."
+      },
+      {
+        "name": "has_upcoming_promotion",
+        "type": "boolean",
+        "description": "Omit to list everything. True lists only SKUs with a sale scheduled; false only those without one, which is what to buy when waiting is not an option."
+      },
+      {
+        "name": "hsn_code",
+        "type": "string",
+        "description": "Exact HSN tax code, as printed on the invoice line (94013000 is seating). Use it to list everything taxed alike."
+      },
+      {
+        "name": "limit",
+        "type": "integer",
+        "description": "How many items to return in this page."
+      },
+      {
+        "name": "min_stock",
+        "type": "integer",
+        "description": "Defaults to 1, so only orderable stock is listed. Pass 0 to include out-of-stock."
+      },
+      {
+        "name": "offset",
+        "type": "integer",
+        "description": "How many items to skip, for paging. Compare with total_matching in the response to know when you have seen everything."
+      }
+    ]
+  },
+  {
+    "name": "get_live_sku_quote",
+    "required": [
+      "buyer_agent_id",
+      "delivery_pincode",
+      "quantity",
+      "sku_id"
+    ],
+    "parameters": [
+      {
+        "name": "buyer_agent_id",
+        "type": "string",
+        "description": "Your agent DID. Under mesh_demo_custodial custody it is minted by establish_agent_delegation, so call that FIRST and reuse the buyer_agent_did it returns rather than inventing one."
+      },
+      {
+        "name": "delivery_pincode",
+        "type": "string",
+        "description": "Six-digit destination PIN code. It selects the courier zone and the GST treatment, so a quote for one address does not hold for another."
+      },
+      {
+        "name": "promo_code",
+        "type": "string",
+        "description": "Optional merchant promo code. Codes are set per SKU, so one that discounts another SKU may do nothing here; applied_discounts names whatever actually fired."
+      },
+      {
+        "name": "quantity",
+        "type": "integer",
+        "description": "Units to price. Volume tiers are applied from this number, so quoting 1 and then buying 10 gives the wrong price."
+      },
+      {
+        "name": "sku_id",
+        "type": "string",
+        "description": "The SKU to price, exactly as search_catalog or browse_catalog returned it."
+      }
+    ]
+  },
+  {
+    "name": "negotiate_price",
+    "required": [
+      "buyer_agent_id",
+      "max_unit_price_paise",
+      "opening_bid_paise",
+      "quantity",
+      "sku_id"
+    ],
+    "parameters": [
+      {
+        "name": "buyer_agent_id",
+        "type": "string",
+        "description": "Your agent DID, the same one you quoted with."
+      },
+      {
+        "name": "max_turns",
+        "type": "integer",
+        "description": "Cap on alternating offers. Each turn costs a micro-escrow fee, so more turns is not free; the loop stops early once the spread closes."
+      },
+      {
+        "name": "max_unit_price_paise",
+        "type": "integer",
+        "description": "Your walk-away price per unit. A hard ceiling, not a target: no turn will bid above it."
+      },
+      {
+        "name": "merchant_did",
+        "type": "string",
+        "description": "Merchant to bargain with, when the SKU is sold by more than one. Omit to use the SKU own merchant. A DID you supply is never trusted as authority over price."
+      },
+      {
+        "name": "opening_bid_paise",
+        "type": "integer",
+        "description": "Your opening offer per unit. Below the list price, or there is nothing to negotiate."
+      },
+      {
+        "name": "quantity",
+        "type": "integer",
+        "description": "Units you intend to buy. Volume moves the merchant floor, so a larger order can settle lower per unit."
+      },
+      {
+        "name": "sku_id",
+        "type": "string",
+        "description": "The SKU to bargain over."
+      }
+    ]
+  },
+  {
+    "name": "reserve_inventory_lock",
+    "required": [
+      "buyer_agent_id",
+      "lock_ttl_seconds",
+      "quantity",
+      "quote_hash",
+      "sku_id"
+    ],
+    "parameters": [
+      {
+        "name": "buyer_agent_id",
+        "type": "string",
+        "description": "The same DID you quoted with. The quote is bound to it, so a lock for a different agent is refused."
+      },
+      {
+        "name": "lock_ttl_seconds",
+        "type": "integer",
+        "description": "How long the reservation is held. The 60s default already matches the quote's own lifetime; a longer lock outlives the quote it was taken against and cannot be carted."
+      },
+      {
+        "name": "quantity",
+        "type": "integer",
+        "description": "Must match the quantity the quote_hash was issued for. Quote again to lock a different number."
+      },
+      {
+        "name": "quote_hash",
+        "type": "string",
+        "description": "From get_live_sku_quote, unchanged. Verified against the quotes this mesh issued before any stock moves."
+      },
+      {
+        "name": "sku_id",
+        "type": "string",
+        "description": "Must match the SKU the quote_hash was issued for."
+      }
+    ]
+  },
+  {
+    "name": "verify_shipping_sla",
+    "required": [
+      "delivery_pincode",
+      "origin_pincode",
+      "package_weight_grams",
+      "required_delivery_tier"
+    ],
+    "parameters": [
+      {
+        "name": "delivery_pincode",
+        "type": "string",
+        "description": "Six-digit PIN code the goods ship TO."
+      },
+      {
+        "name": "origin_pincode",
+        "type": "string",
+        "description": "Six-digit PIN code the goods ship FROM -- the merchant warehouse, not the buyer. It is the origin of the courier zone calculation."
+      },
+      {
+        "name": "package_weight_grams",
+        "type": "integer",
+        "description": "Billable package weight in grams. Shipping is priced in weight slabs, so this changes the cost even when the zone does not."
+      },
+      {
+        "name": "required_delivery_tier",
+        "type": "string",
+        "description": "Service level to price. Not every tier is offered to every zone: when one is not, serviceable comes back false and available_delivery_tiers lists what is."
+      }
+    ]
+  },
+  {
+    "name": "create_cart_mandate",
+    "required": [
+      "delegation_id",
+      "delivery_pincode",
+      "delivery_state_code",
+      "fencing_token",
+      "lock_expires_at_unix_ms",
+      "lock_signature",
+      "lock_token",
+      "quantity",
+      "quote_hash",
+      "sku_id"
+    ],
+    "parameters": [
+      {
+        "name": "delegation_id",
+        "type": "string",
+        "description": "From establish_agent_delegation. Required on every later call."
+      },
+      {
+        "name": "delivery_pincode",
+        "type": "string",
+        "description": "Destination PIN code. An address no courier serves is refused here outright."
+      },
+      {
+        "name": "delivery_state_code",
+        "type": "string",
+        "description": "Two-digit GST state code. Decides intra- vs inter-state GST."
+      },
+      {
+        "name": "fencing_token",
+        "type": "integer",
+        "description": "From reserve_inventory_lock."
+      },
+      {
+        "name": "lock_expires_at_unix_ms",
+        "type": "integer",
+        "description": "Milliseconds, exactly as reserve_inventory_lock returned it."
+      },
+      {
+        "name": "lock_signature",
+        "type": "string",
+        "description": "From reserve_inventory_lock, where this value is returned under the key 'signature' -- not 'lock_signature'. Pass it through unchanged."
+      },
+      {
+        "name": "lock_token",
+        "type": "string",
+        "description": "From reserve_inventory_lock."
+      },
+      {
+        "name": "merchant_account",
+        "type": "string",
+        "description": "Do not send this. The Razorpay Route recipient for the merchant leg is resolved from the merchant identity that signs the cart, so it is not yours to choose. It is accepted only so that naming a different account is REFUSED with a reason rather than silently ignored; the refusal names the account this merchant is actually paid at, and nothing is charged."
+      },
+      {
+        "name": "package_weight_grams",
+        "type": "integer",
+        "description": "Billable weight in grams, the same one you checked the SLA with."
+      },
+      {
+        "name": "promo_code",
+        "type": "string",
+        "description": "Optional. Must be the same code you quoted with, if any."
+      },
+      {
+        "name": "quantity",
+        "type": "integer",
+        "description": "Units to buy. Must equal the quantity you quoted, or the quote hash will not verify."
+      },
+      {
+        "name": "quote_expiry_timestamp",
+        "type": "integer",
+        "description": "Optional but recommended: pass quote_expiry_timestamp back exactly as get_live_sku_quote returned it. Supplying it lets the mesh tell an expired quote apart from a genuine parameter mismatch and refuse with a timeout you can act on."
+      },
+      {
+        "name": "quote_hash",
+        "type": "string",
+        "description": "From get_live_sku_quote."
+      },
+      {
+        "name": "sku_id",
+        "type": "string",
+        "description": "The SKU you quoted and locked. It must match both."
+      }
+    ]
+  },
+  {
+    "name": "sign_execution_mandate",
+    "required": [
+      "delegation_id"
+    ],
+    "parameters": [
+      {
+        "name": "cart_mandate_hash",
+        "type": "string",
+        "description": "Optional. Selects a cart when the delegation holds more than one."
+      },
+      {
+        "name": "delegation_id",
+        "type": "string",
+        "description": "From establish_agent_delegation."
+      }
+    ]
+  },
+  {
+    "name": "execute_settlement",
+    "required": [
+      "delegation_id",
+      "execution_id"
+    ],
+    "parameters": [
+      {
+        "name": "agent_signature",
+        "type": "string",
+        "description": "Required in agent_held mode; rejected in mesh_demo_custodial mode."
+      },
+      {
+        "name": "delegation_id",
+        "type": "string",
+        "description": "From establish_agent_delegation."
+      },
+      {
+        "name": "execution_id",
+        "type": "string",
+        "description": "From sign_execution_mandate. Settlement is refused if the mandate it names has expired, so sign and settle without a long gap."
+      },
+      {
+        "name": "merchant_account",
+        "type": "string",
+        "description": "Do not send this. The Route recipient for the merchant leg is resolved from the merchantDid on the SIGNED cart mandate, never from this request, so it cannot redirect a payout. Sending a value that differs from the resolved account is refused before anything is charged."
+      }
+    ]
+  }
+]

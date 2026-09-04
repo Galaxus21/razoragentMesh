@@ -1,18 +1,22 @@
 ---
-title: "Merchant Onboarding & Universal SKU Studio Guide"
-description: "Guides merchants on registering DIDs, ingesting catalogs, configuring volume discounts, setting bullion spot formulas, and applying statutory HSN tax rules."
+title: "Merchant guide"
+description: "Register a merchant identity, publish a catalog, configure volume discount tiers, price bullion from the live spot oracle, get the HSN code and GST rate right, and subscribe to the bus that tells you a sale happened."
 navLabel: "Merchant Guide"
-navDescription: "Catalog Ingestion & Pricing"
+navDescription: "Catalog ingestion and pricing"
 order: 5
+section: "Guides"
 icon: "Store"
 audience: "merchant"
 ---
 
-A comprehensive guide for merchants and enterprise catalog providers registering Ed25519 DIDs, configuring dynamic bullion formulas, defining volume discount tiers, and automating statutory GSTR-1 tax compliance.
+For merchants putting inventory somewhere an agent can buy it. By the end you will have a
+registered identity, a published catalog an agent can search, and prices that respond to order
+quantity and to the bullion spot rate. Bargaining is configured separately and is off until you
+turn it on -- see [the negotiation policy](/docs/onboarding#step-2-set-the-negotiation-policy).
 
 ---
 
-## 1. Merchant Identity & DID Derivation
+## Merchant identity
 
 Every merchant on RazorAgent Mesh is identified by an immutable Decentralized Identifier (`did:razoragent:merchant:<hex16>`) derived from an Ed25519 cryptographic public key.
 
@@ -21,11 +25,11 @@ Every merchant on RazorAgent Mesh is identified by an immutable Decentralized Id
 curl -X POST http://localhost:4002/api/v1/merchant/register \
   -H "Content-Type: application/json" \
   -d '{
-    "merchantName": "Tanishq Flagship Enclave",
-    "publicKeyHex": "9f8e7d6c5b4a3210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "businessName": "Tanishq Flagship Enclave",
+    "gstin": "27AAACG0123M1Z5",
     "razorpayAccountId": "acc_N0xMerchantGold99",
-    "settlementSplitBps": 9800,
-    "gstin": "27AAACG0123M1Z5"
+    "contactEmail": "ops@tanishq-enclave.example",
+    "originPincode": "400001"
   }'
 ```
 
@@ -35,24 +39,30 @@ const response = await fetch("http://localhost:4002/api/v1/merchant/register", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    merchantName: "Tanishq Flagship Enclave",
-    publicKeyHex: "9f8e7d6c5b4a3210fedcba9876543210fedcba9876543210fedcba9876543210",
-    razorpayAccountId: "acc_N0xMerchantGold99",
-    settlementSplitBps: 9800,
+    businessName: "Tanishq Flagship Enclave",
     gstin: "27AAACG0123M1Z5",
+    razorpayAccountId: "acc_N0xMerchantGold99",
+    contactEmail: "ops@tanishq-enclave.example",
+    originPincode: "400001",
   }),
 });
 const merchant = await response.json();
 console.log("Registered DID:", merchant.merchantDid);
 ```
 
-### Verification & Validation Rules
-- **Luhn Mod-36 GSTIN Check**: The 15-character Indian GSTIN is verified using the statutory Luhn Mod-36 checksum algorithm.
-- **Razorpay Route Account**: Linked accounts must match the pattern `acc_[A-Za-z0-9]+` for automated 2PC split transfers.
+You do not send a public key. The server generates the Ed25519 keypair, derives the DID from it,
+and returns both on the `MerchantProfile` -- so read `publicKeyHex` off the response rather than
+choosing one.
+
+### Validation rules
+- The request model forbids unknown fields. All five above are required and anything else is a `422`.
+- **GSTIN**: the 15-character identifier is checked against the statutory Luhn Mod-36 checksum, not just the pattern.
+- **Razorpay Route account**: must match `acc_[A-Za-z0-9_]+`, because it is the destination of a real split transfer.
+- **Origin pincode**: a 6-digit Indian pincode. Place of supply is decided from it, so it decides whether a sale is taxed CGST + SGST or IGST.
 
 ---
 
-## 2. Multi-Channel Catalog Ingestion
+## Publishing a catalog
 
 RazorAgent Mesh supports 4 ingestion adapters for populating and vectorizing merchant catalogs:
 
@@ -73,13 +83,13 @@ The single-SKU route is abbreviated above to fit the diagram. In full it is
 `POST /api/v1/merchant/{merchantDid}/catalog` -- the merchant DID is part of the path, not a header,
 so a catalog write is always scoped to one merchant.
 
-### Multi-Tier Volume Discount Configuration
+### Volume tiers
 Merchants can define tiered volume discount curves in Basis Points (1 BPS = 0.01%):
 
 ```json
 {
   "skuId": "sku_cotton_oxford_shirt",
-  "basePricePaise": 249900,
+  "baseUnitPricePaise": 249900,
   "volumeTiers": [
     { "minQuantity": 3, "discountBps": 500 },
     { "minQuantity": 10, "discountBps": 1000 },
@@ -90,7 +100,7 @@ Merchants can define tiered volume discount curves in Basis Points (1 BPS = 0.01
 
 ---
 
-## 3. Dynamic Bullion Spot Pricing (INV-05)
+## Bullion pricing
 
 For gold and silver precious metals, pricing is calculated dynamically from the live MCX Spot Oracle with a 5-second cache:
 
@@ -112,7 +122,7 @@ For gold and silver precious metals, pricing is calculated dynamically from the 
 
 ---
 
-## 4. Vertical Domain Facet Schema
+## Domain facets
 
 Catalogs support specialized industry facets with custom attribute normalization:
 
@@ -125,7 +135,7 @@ Catalogs support specialized industry facets with custom attribute normalization
 
 ---
 
-## 5. Statutory HSN Chapter Resolution & Tax Rules (INV-04)
+## HSN codes and tax rates
 
 Every SKU maps to an official Indian Harmonized System of Nomenclature (HSN) chapter:
 
@@ -136,3 +146,24 @@ Every SKU maps to an official Indian Harmonized System of Nomenclature (HSN) cha
 | **`3004`** | Essential Pharmaceuticals | **5.0%** | 2.5% CGST + 2.5% SGST (or 5.0% IGST) |
 | **`8471`** | Computing & Electronics | **18.0%** | 9.0% CGST + 9.0% SGST (or 18.0% IGST) |
 
+---
+
+## How you find out an order happened
+
+There is no order email, SMS or merchant callback. A sale reaches you through the same
+Server-Sent Events bus the dashboard reads: `GET /api/v1/telemetry/stream` on the mandate engine
+(port 8000), where `INVENTORY_LOCKED` says your stock was committed and `PAYMENT_CAPTURED`
+says the money moved, carrying the four Route transfer legs and the GSTR-1 invoice hash.
+
+Two things to know before you write the consumer, because neither is where you would look first:
+
+- **No event carries `merchantDid`.** Filter `PAYMENT_CAPTURED` on
+  `payload.transfers[].recipientAccountId` -- the `razorpayAccountId` you registered above -- and
+  `INVENTORY_LOCKED` on `payload.skuId` against your own catalog.
+- **`sessionId` does not join the two halves.** The engine puts the *payment* id in that field on
+  `PAYMENT_CAPTURED`, so group on the payment id instead.
+
+[Merchant-side subscribers](/docs/telemetry#merchant-side-subscribers) has the working listener,
+the lifecycle events in order, and what is not built -- there is no outbound order notification,
+and the inbound Razorpay receiver acknowledges a verified delivery without reconciling anything
+against it -- stated plainly so you do not design around something that is not there.

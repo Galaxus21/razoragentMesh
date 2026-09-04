@@ -14,6 +14,7 @@ export type ProtocolStepStatus =
 export interface StepRefusal {
   readonly errorName: string;
   readonly message: string;
+  /** The guarantee that caught this, named in words. Never a bare code. */
   readonly invariantViolated?: string;
   readonly statusCode?: number;
 }
@@ -57,6 +58,7 @@ export interface ProtocolStepRecord {
   readonly narrative: string;
   readonly protocolLayer: string;
   readonly implementedBy: string;
+  /** What this step guarantees, in words a reader can act on without a legend. */
   readonly invariant?: string;
   readonly sdkCall: SdkCallRecord;
   readonly status: ProtocolStepStatus;
@@ -75,8 +77,15 @@ export interface ScenarioSummary {
   readonly kind: ScenarioKind;
   readonly premise: string;
   readonly expectedOutcome: string;
+  /**
+   * The guarantees this scenario exercises, in words.
+   *
+   * Held as prose rather than as INV-xx codes: the codes were rendered as badges with no
+   * legend on the page, and half of them pointed at the wrong invariant in the docs table.
+   * A sibling testCaseRefs field carried TC-xx benchmark filenames, which said nothing to
+   * anyone who was not editing tests/benchmarkHarness; it is gone.
+   */
   readonly invariants: readonly string[];
-  readonly testCaseRefs: readonly string[];
 }
 
 export type RunEventType = "RUN_STARTED" | "STEP_COMPLETED" | "RUN_FINISHED" | "RUN_ERROR";

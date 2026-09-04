@@ -15,6 +15,7 @@ import {
   InsufficientStockException,
   SkuNotFoundException
 } from "../types/mcpToolTypes.js";
+import { findSubstituteForOutOfStock } from "../catalog/substituteFinder.js";
 import { defaultCatalogStore, CatalogStore } from "../catalog/catalogStore.js";
 import { signLockPayload } from "../crypto/lockSignatureGenerator.js";
 import {
@@ -57,12 +58,27 @@ export async function reserveInventoryLock(
   // Before the reservation, never after: the whole point is that an unverifiable quote_hash must
   // not cost the merchant stock. A refusal here has taken nothing.
   _rejectUnissuedQuote(request, options.quoteRegistry);
-  const { lockToken, expiresAtUnixMs, fencingToken } = await _executeAtomicReservation(
-    request,
-    store,
-    options
-  );
-  return _buildLockResponse(request, lockToken, fencingToken, expiresAtUnixMs, options.privateKeyHex);
+
+  let reservation: { lockToken: string; expiresAtUnixMs: number; fencingToken: number };
+  try {
+    reservation = await _executeAtomicReservation(request, store, options);
+  } catch (err: unknown) {
+    if (err instanceof InsufficientStockException) {
+      const substitute = await findSubstituteForOutOfStock(request.sku_id, request.quantity);
+      if (substitute) {
+        const priceFormatted = (substitute.unitPricePaise / 100).toFixed(2);
+        let similarityText = "";
+        if (substitute.embeddingMode === "model" && substitute.cosineScore !== null) {
+          similarityText = `, semantic similarity ${substitute.cosineScore.toFixed(2)} to the SKU you asked for`;
+        }
+        const advice = `No stock was reserved and nothing was charged. A substitute is available: ${substitute.substituteSkuId} (${substitute.title}) at ${priceFormatted} INR per unit${similarityText}. To take it, call get_live_sku_quote for ${substitute.substituteSkuId} and lock that quote.`;
+        throw new InsufficientStockException(request.sku_id, request.quantity, err.available, advice);
+      }
+    }
+    throw err;
+  }
+
+  return _buildLockResponse(request, reservation.lockToken, reservation.fencingToken, reservation.expiresAtUnixMs, options.privateKeyHex);
 }
 
 function _validateLockRequest(

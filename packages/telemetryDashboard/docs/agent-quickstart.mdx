@@ -1,9 +1,10 @@
 ---
-title: "Connect Your Own Agent — MCP Quickstart"
-description: "Connects an external AI agent (Claude Desktop, Claude Code, Cursor) to the mesh over MCP, publishes inventory from the dashboard, and drives a real signed purchase while the telemetry stream renders it live."
+title: "Agent quickstart"
+description: "Connect an external agent -- Claude Desktop, Claude Code, Cursor -- to the mesh over MCP, publish a product, and drive a signed purchase while the telemetry stream renders it live."
 navLabel: "Agent Quickstart"
-navDescription: "Drive the Mesh From Your Own Agent"
+navDescription: "Drive the mesh from your own agent"
 order: 2
+section: "Get started"
 icon: "Plug"
 audience: "developer"
 ---
@@ -111,8 +112,9 @@ query, or want to see the range before choosing. `negotiate_price` runs a real a
 negotiation -- five turns, each gated by a proof-of-work solve and charged ₹0.50 from a
 micro-escrow it opens and releases for you. It is worth a call on anything expensive and a waste
 on anything cheap, and it reports both the saving and the fees so your agent can tell which.
-Note that a negotiated price is recorded in the gateway's contract AST and is **not** applied to
-your quote: `get_live_sku_quote` is still the only source of a bindable `quote_hash`.
+Negotiating does not itself produce a price you can buy at. Call `get_live_sku_quote` again
+once the session converges: the agreed price comes back on the fresh quote as a `NEGOTIATED`
+discount line, and that quote's `quote_hash` is what the cart binds to.
 
 Pair first. In `mesh_demo_custodial` the mesh mints your buyer DID inside
 `establish_agent_delegation`, so a `buyer_agent_id` to quote with does not exist until you have
@@ -162,12 +164,16 @@ the two clocks while you are here: a lock lasts `lock_ttl_seconds`, but the quot
 60 seconds after it was issued, and `create_cart_mandate` needs both alive. Taking a 120-second
 lock does not buy a 120-second quote.
 
-A successful settlement returns a capture, the Route split, and a statutory GSTR-1 invoice:
+### Reading the settlement response
+
+A successful settlement returns a capture, the split across recipients, a statutory GSTR-1
+invoice, and -- when Razorpay test credentials are configured -- a real Razorpay order id:
 
 ```json
 {
   "status": "captured",
   "paymentId": "pay_mcp_a7b8c5c85a78",
+  "razorpayOrderId": "order_TXx0xYqZgafgE3",
   "amountPaise": 82526,
   "transfers": [
     { "account": "acc_demoMerchantChairs", "amount": 77148, "status": "processed" },
@@ -189,6 +195,18 @@ A successful settlement returns a capture, the Route split, and a statutory GSTR
 
 The four transfers sum to the grand total, and the tax is recomputed independently by the
 settlement enclave rather than trusted from the cart.
+
+Two of those fields come from different places, and the difference matters:
+
+- `razorpayOrderId` is a **real order at Razorpay**, created through the Orders API and carrying
+  this run's `cartMandateHash` and `executionId` in its `notes`. Fetch it back with your test keys
+  and the audit trail continues outside the mesh. It appears only when `RAZORPAY_KEY_ID` and
+  `RAZORPAY_KEY_SECRET` are set; see [environment configuration](/docs/setup).
+- `paymentId` and `transfers` come from the **mock ledger**. The split is computed for real and
+  conserves the total to the paise, but it is not executed at Razorpay: Route transfers need
+  account activation and real linked accounts, so they stay on the mock until
+  `RAZORPAY_ROUTE_LIVE=true`. The order is payable by a person -- that is what the dashboard's
+  Settle screen is for -- and paying it is what produces a genuine Razorpay `pay_...` id.
 
 Note that tool **inputs** are `snake_case` while settlement **output** is `camelCase`; the
 settlement response is the mandate engine's own schema, passed through unmodified.
@@ -226,7 +244,7 @@ curl -N http://localhost:8000/api/v1/telemetry/stream
 
 ---
 
-## 6. Key custody — read this before believing the demo
+## 6. Key custody
 
 Signing the Execution Mandate requires the **buyer's private key**. Whoever holds that key can
 spend the buyer's money without the buyer. `key_custody` has no default; you must state it.

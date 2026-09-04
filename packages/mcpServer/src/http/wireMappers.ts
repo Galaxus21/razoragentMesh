@@ -41,6 +41,10 @@ export interface SdkSkuQuote {
   readonly quantity: number;
   readonly currency: string;
   readonly hsnCode: string;
+  // Mirrors the SDK's SkuQuote.category. Required on the tool schema, so it is required here:
+  // a quote that reached an SDK caller without it left the cart line "uncategorized" and the
+  // settlement enclave refused the purchase.
+  readonly category: string;
   readonly gstRatePercent: number;
   readonly taxableSubtotalPaise: number;
   readonly taxBreakdown: SdkTaxBreakdown;
@@ -118,6 +122,11 @@ export function toSdkSkuQuote(toolResponse: SkuQuoteResponse, quantity: number):
     quantity,
     currency: toolResponse.currency,
     hsnCode: toolResponse.hsn_code,
+    // The tool schema requires this and skuQuoter always sets it, but this mapper dropped it, so
+    // every SDK caller saw a quote with no category and had nothing to put on the cart line. The
+    // SDK then defaulted the line to "uncategorized" and the settlement enclave refused it as an
+    // unauthorized category -- a real refusal for a value the mesh had known the whole time.
+    category: toolResponse.category,
     gstRatePercent: toolResponse.gst_rate_percent,
     taxableSubtotalPaise: offeredUnitPricePaise * quantity,
     taxBreakdown: {

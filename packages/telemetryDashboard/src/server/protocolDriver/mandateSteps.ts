@@ -43,7 +43,7 @@ export function buildIntentStep(options: IntentStepOptions = {}): ExecutableStep
         "The human -- or a CFO agent acting for them -- signs an Intent Mandate: a ceiling on what the buyer agent may spend, which categories it may spend on, and for how long. This is the only step a person is involved in; everything after it is autonomous.",
       protocolLayer: layerMandates,
       implementedBy: packageSdkMandates,
-      invariant: "INV-03",
+      invariant: "Ed25519 canonical signatures",
       sdkCall: { methodName: "createSignedIntentMandate", argumentSummary: {}, isPureCrypto: true }
     },
     execute: async (context) => {
@@ -93,7 +93,7 @@ export const stepSignCart: ExecutableStep = {
       "The merchant assembles the itemised cart from the live quote, the live shipping fee, and the live lock token, then signs it. Every number in the cart traces back to a value the mesh produced -- none of it is asserted by the buyer.",
     protocolLayer: layerMandates,
     implementedBy: packageSdkMandates,
-    invariant: "INV-01",
+    invariant: "Ed25519 canonical signatures",
     sdkCall: { methodName: "createSignedCartMandate", argumentSummary: {}, isPureCrypto: true }
   },
   execute: async (context) => {
@@ -118,6 +118,10 @@ export const stepSignCart: ExecutableStep = {
             unitPricePaise: quote.finalUnitPricePaise,
             hsnCode: quote.hsnCode,
             gstRatePercent: quote.gstRatePercent,
+            // From the merchant-signed quote, never named by the buyer: the enclave checks this
+            // against the Intent Mandate's authorizedCategories, and an agent free to assert its
+            // own category would simply assert whichever one its delegation allowed.
+            category: quote.category,
             lineTotalPaise
           }
         ],
@@ -173,7 +177,7 @@ export const stepTamperCart: ExecutableStep = {
       "The cart is already signed. Here a single field is rewritten -- the total quietly reduced -- while the merchant signature is left exactly as it was. Nothing about the payload looks malformed.",
     protocolLayer: layerMandates,
     implementedBy: packageSdkMandates,
-    invariant: "INV-02",
+    invariant: "Cart hash binds the execution mandate",
     sdkCall: {
       methodName: "(no SDK call - payload mutated in transit)",
       argumentSummary: {},
@@ -206,7 +210,7 @@ export const stepSignExecution: ExecutableStep = {
       "The agent binds the two upstream mandates together: it hashes each one and signs the pair alongside the settlement amount. This hash-chain link is what makes any later edit to either mandate detectable.",
     protocolLayer: layerMandates,
     implementedBy: packageSdkMandates,
-    invariant: "INV-02",
+    invariant: "Cart hash binds the execution mandate",
     sdkCall: { methodName: "createSignedExecutionMandate", argumentSummary: {}, isPureCrypto: true }
   },
   execute: async (context) => {
@@ -258,7 +262,7 @@ export const stepVerifyChain: ExecutableStep = {
       "The same check the settlement coordinator runs, executed locally first: recompute both upstream hashes, confirm they match what the Execution Mandate recorded, and confirm the settlement amount sits inside the delegated budget. If any of that fails the run stops here, before money moves.",
     protocolLayer: layerMandates,
     implementedBy: packageSdkMandates,
-    invariant: "INV-02, INV-03",
+    invariant: "Cart hash binds the execution mandate, AP2 budget gate",
     sdkCall: { methodName: "verifyMandateChain", argumentSummary: {}, isPureCrypto: true }
   },
   execute: async (context) => {
@@ -276,7 +280,9 @@ export const stepVerifyChain: ExecutableStep = {
         refusal: {
           errorName: failure.name,
           message: failure.message,
-          invariantViolated: failure.message.includes(budgetRefusalMarker) ? "INV-03" : "INV-02"
+          invariantViolated: failure.message.includes(budgetRefusalMarker)
+            ? "AP2 budget gate"
+            : "Cart hash binds the execution mandate"
         }
       };
     }

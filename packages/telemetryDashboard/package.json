@@ -15,8 +15,9 @@
     "docs:search": "tsx scripts/generateDocsSearchIndex.ts",
     "docs:reference": "tsx scripts/generateSdkReference.ts",
     "docs:verify": "tsx scripts/verifyDocSnippets.ts",
-    "docs:generate": "npm run docs:manifest && npm run docs:search && npm run docs:reference && npm run docs:examples",
-    "docs:examples": "tsx scripts/generateExampleSnippets.ts"
+    "docs:generate": "npm run docs:tools && npm run docs:manifest && npm run docs:search && npm run docs:reference && npm run docs:examples",
+    "docs:examples": "tsx scripts/generateExampleSnippets.ts",
+    "docs:tools": "tsx scripts/generateToolReference.ts"
   },
   "dependencies": {
     "@razorpay/agent-buyer-sdk": "file:../buyerSdkTs",

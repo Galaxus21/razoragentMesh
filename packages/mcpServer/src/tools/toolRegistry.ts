@@ -31,6 +31,7 @@ import { createCartMandateForDelegation } from "./cartMandateCreator.js";
 import { signExecutionMandateForDelegation } from "./executionMandateSigner.js";
 import { executeSettlementForDelegation } from "./settlementExecutor.js";
 import { defaultCatalogStore } from "../catalog/catalogStore.js";
+import { reclaimExpiredDefaultReservations } from "../inventory/redisLockManager.js";
 
 /**
  * Runs one tool by name. Throws for an unrecognized name; callers that speak JSON-RPC turn
@@ -43,6 +44,10 @@ export async function executeTool(
   mcpSessionId?: string
 ): Promise<unknown> {
   if (toolName === toolGetLiveSkuQuote) {
+    // Same reclaim the REST adapter runs before it reads stock. Without it the two surfaces
+    // answered differently: reserve_inventory_lock sweeps as it acquires, so it would hand out
+    // units this quote had just reported as held by a lock that lapsed minutes ago.
+    reclaimExpiredDefaultReservations();
     return executeSkuQuote(toolArguments, defaultCatalogStore);
   }
   if (toolName === toolReserveInventoryLock) {
@@ -55,10 +60,16 @@ export async function executeTool(
     return await searchCatalog(toolArguments);
   }
   if (toolName === toolBrowseCatalog) {
+    // Browsing reads stock twice over: it prints available_stock, and min_stock filters on it.
+    // A lapsed reservation left unreclaimed therefore does not merely understate a SKU -- it
+    // drops that SKU out of the listing entirely, which is indistinguishable from not selling it.
+    reclaimExpiredDefaultReservations();
     return browseCatalog(toolArguments, defaultCatalogStore);
   }
   if (toolName === toolNegotiatePrice) {
-    return await negotiatePrice(toolArguments, defaultCatalogStore);
+    return await negotiatePrice(toolArguments, defaultCatalogStore, undefined, {
+      mcpSessionId
+    });
   }
   if (toolName === toolEstablishAgentDelegation) {
     // Same session id as the settlement below: it is what makes the buyer's stated budget a

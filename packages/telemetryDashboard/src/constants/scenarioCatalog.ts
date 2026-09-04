@@ -20,8 +20,7 @@ export const scenarioSummaries: ReadonlyArray<ScenarioSummary> = [
       "A buyer agent holding a signed spending delegation discovers a quote, verifies shipping, locks stock, and settles -- with no human in the loop.",
     expectedOutcome:
       "Every mandate in the Intent -> Cart -> Execution chain verifies, and the settlement saga completes.",
-    invariants: ["INV-02", "INV-03"],
-    testCaseRefs: ["TC-01"]
+    invariants: ["Ed25519 canonical signatures", "Integer paise arithmetic"]
   },
   {
     scenarioId: scenarioBudgetBlocked,
@@ -31,8 +30,7 @@ export const scenarioSummaries: ReadonlyArray<ScenarioSummary> = [
       "The same flow, but the merchant's cart total is priced above the ceiling the user delegated in the Intent Mandate.",
     expectedOutcome:
       "The chain verifier refuses before any money moves. A refusal here is the correct result, not a failure.",
-    invariants: ["INV-03"],
-    testCaseRefs: ["TC-07"]
+    invariants: ["AP2 budget gate"]
   },
   {
     scenarioId: scenarioTamperedMandate,
@@ -42,8 +40,7 @@ export const scenarioSummaries: ReadonlyArray<ScenarioSummary> = [
       "After the merchant signs the Cart Mandate, a single field is modified in transit -- the classic man-in-the-middle edit.",
     expectedOutcome:
       "The Execution Mandate's recorded cart hash no longer matches the tampered cart, so verification refuses.",
-    invariants: ["INV-02"],
-    testCaseRefs: ["TC-11"]
+    invariants: ["Ed25519 canonical signatures"]
   },
   {
     scenarioId: scenarioStaleDelegation,
@@ -53,8 +50,7 @@ export const scenarioSummaries: ReadonlyArray<ScenarioSummary> = [
       "The Intent Mandate is genuine and correctly signed by the user, but its validity window closed before the agent got around to spending. A captured delegation replayed a day later looks exactly like this.",
     expectedOutcome:
       "Chain verification compares the execution timestamp against the delegation's expiry and refuses. Signature validity is not the same as authority.",
-    invariants: ["INV-03"],
-    testCaseRefs: ["TC-08"]
+    invariants: ["Delegation validity window"]
   },
   {
     scenarioId: scenarioOversizedTransaction,
@@ -64,8 +60,7 @@ export const scenarioSummaries: ReadonlyArray<ScenarioSummary> = [
       "The user delegated a generous overall budget but a much smaller single-transaction ceiling. The cart fits the first and breaks the second -- the shape of an agent draining a budget in one purchase instead of many.",
     expectedOutcome:
       "The per-transaction ceiling is enforced independently of the overall budget, so the run is refused with the budget still largely unspent.",
-    invariants: ["INV-03", "INV-04"],
-    testCaseRefs: ["TC-09"]
+    invariants: ["Per-transaction ceiling", "AP2 budget gate"]
   },
   {
     scenarioId: scenarioSettlementAmountMismatch,
@@ -75,8 +70,7 @@ export const scenarioSummaries: ReadonlyArray<ScenarioSummary> = [
       "Every mandate is signed by the right party and the cart is untouched. The buyer agent alters only its own Execution Mandate to request a larger transfer -- the case where the compromised party is the agent, not the network.",
     expectedOutcome:
       "The settlement amount is checked against the signed cart total, so an agent cannot move more money than the cart it was handed.",
-    invariants: ["INV-02", "INV-04"],
-    testCaseRefs: ["TC-10"]
+    invariants: ["Settlement matches the signed cart"]
   },
   {
     scenarioId: scenarioReplayedSettlement,
@@ -86,8 +80,7 @@ export const scenarioSummaries: ReadonlyArray<ScenarioSummary> = [
       "The first settlement completes normally. The identical bundle is then submitted again, nonce and all, which is what a network attacker gets for free from one captured request.",
     expectedOutcome:
       "The engine's Redis nonce ledger has already spent that nonce and refuses the second submission, so the buyer is charged once. This scenario needs the mesh running: the ledger is server-side.",
-    invariants: ["INV-05"],
-    testCaseRefs: ["TC-12"]
+    invariants: ["Anti-replay nonce ledger"]
   }
 ];
 

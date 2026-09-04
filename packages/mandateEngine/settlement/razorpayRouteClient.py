@@ -22,6 +22,23 @@ headerAcceptJson: str = "application/json"
 # Route transfers/reversals must be confirmed rather than assumed. The mechanism below is
 # correct regardless; only this string is provider-specific.
 headerIdempotencyKey: str = "X-Razorpay-Idempotency-Key"
+mockOrderIdPrefix: str = "order_mock_"
+minRazorpayOrderAmountPaise: int = 100
+maxRazorpayReceiptLength: int = 40
+
+
+class RazorpayOrderResponse(BaseModel):
+    """Response payload for Razorpay order creation."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str = Field(min_length=1)
+    entity: str = Field(default="order")
+    amount: int = Field(gt=0)
+    currency: str = Field(default="INR")
+    receipt: str = Field(default="")
+    status: str = Field(default="created")
+    createdAt: int = Field(gt=0)
 
 
 class RouteTransferRequest(BaseModel):
@@ -87,6 +104,7 @@ class RazorpayRouteClient:
         apiSecret: str = defaultMockApiSecret,
         baseUrl: str = defaultRazorpayBaseUrl,
         isMockMode: bool = True,
+        ordersLive: bool = False,
         httpClient: Optional[httpx.AsyncClient] = None,
         timeoutSeconds: float = defaultRequestTimeoutSeconds,
     ) -> None:
@@ -94,6 +112,7 @@ class RazorpayRouteClient:
         self.apiSecret = apiSecret
         self.baseUrl = baseUrl.rstrip("/")
         self.isMockMode = isMockMode
+        self.ordersLive = ordersLive
         self.timeoutSeconds = timeoutSeconds
         self._httpClient = httpClient
         self._ownsHttpClient = httpClient is None
@@ -185,6 +204,59 @@ class RazorpayRouteClient:
             return resp.json()
         except Exception as err:
             raise MandateEngineException(f"Invalid JSON response from Razorpay API: {resp.text}") from err
+
+    async def createOrder(
+        self,
+        amountPaise: int,
+        receipt: str,
+        currency: str = "INR",
+        notes: Optional[dict[str, str]] = None,
+    ) -> RazorpayOrderResponse:
+        """Creates a Razorpay order -- the one call that is real on plain test-mode keys.
+
+        Orders need neither Route activation nor linked accounts, so this is the only surface
+        where `not isMockMode` is achievable today. Kept separate from `isMockMode` for that
+        reason: a deployment with test credentials creates real orders while capture and
+        transfers stay on the deterministic ledger, because those cannot yet succeed.
+
+        A failure is swallowed by the caller, not here: this call is evidence, not a gate, and
+        an unreachable Razorpay must not fail a settlement that is otherwise valid.
+        """
+        if amountPaise < minRazorpayOrderAmountPaise:
+            raise MandateEngineException(
+                f"Razorpay order amount must be at least {minRazorpayOrderAmountPaise} paise, got {amountPaise}"
+            )
+
+        sanitizedReceipt = receipt[:maxRazorpayReceiptLength]
+
+        if not self.ordersLive:
+            mockOrderId = f"{mockOrderIdPrefix}{uuid.uuid4().hex[:14]}"
+            return RazorpayOrderResponse(
+                id=mockOrderId,
+                entity="order",
+                amount=amountPaise,
+                currency=currency,
+                receipt=sanitizedReceipt,
+                status="created",
+                createdAt=int(time.time()),
+            )
+
+        payload: dict[str, Any] = {
+            "amount": amountPaise,
+            "currency": currency,
+            "receipt": sanitizedReceipt,
+            "notes": notes or {},
+        }
+        data = await self._sendHttpRequest(method="POST", path="/orders", jsonPayload=payload)
+        return RazorpayOrderResponse(
+            id=str(data.get("id") or f"{mockOrderIdPrefix}{uuid.uuid4().hex[:14]}"),
+            entity=str(data.get("entity") or "order"),
+            amount=int(data.get("amount") or amountPaise),
+            currency=str(data.get("currency") or currency),
+            receipt=str(data.get("receipt") or sanitizedReceipt),
+            status=str(data.get("status") or "created"),
+            createdAt=int(data.get("created_at") or data.get("createdAt") or time.time()),
+        )
 
     async def capturePayment(
         self,

@@ -148,6 +148,16 @@ export interface SkuQuote {
   readonly quoteExpiryTimestamp: number;
   readonly quoteHash: string;
   readonly upcomingPromotions?: readonly UpcomingPromotion[];
+  /**
+   * The merchant's own product category, as get_live_sku_quote already returns it.
+   *
+   * Typed here because the settlement enclave checks the cart's categories against the Intent
+   * Mandate's authorizedCategories, and the ONLY trustworthy source for that value is the
+   * merchant-signed quote. Without it on this type a caller had nothing to put on the cart line,
+   * the SDK fell back to `uncategorized`, and every settlement was refused as an unauthorized
+   * category -- a real refusal, for a cart whose category the mesh had known all along.
+   */
+  readonly category?: string;
 }
 
 export type SkuQuoteResponse = SkuQuote;

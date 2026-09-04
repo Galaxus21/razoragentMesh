@@ -76,6 +76,8 @@ function toFrontmatter(data: Record<string, unknown>, slug: string): DocFrontmat
     order: typeof orderValue === "number" ? orderValue : Number.MAX_SAFE_INTEGER,
     icon: readFrontmatterField(data, "icon", "FileText"),
     audience: readFrontmatterField(data, "audience", "developer"),
+    // An unsectioned page lands under Guides rather than vanishing from the sidebar.
+    section: readFrontmatterField(data, "section", "Guides"),
   };
 }
 
@@ -178,6 +180,7 @@ export function toNavEntry(page: DocPage): DocNavEntry {
     description: page.frontmatter.description,
     order: page.frontmatter.order,
     icon: page.frontmatter.icon,
+    section: page.frontmatter.section,
   };
 }
 

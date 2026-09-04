@@ -1,18 +1,21 @@
 ---
-title: "System Setup & Environment Architecture Guide"
-description: "Guides platform operators and engineers through prerequisites, environment configuration, Docker Compose deployment, health verification, and local development."
+title: "Setup and installation"
+description: "Prerequisites, environment configuration, starting the stack with Docker Compose, verifying each service, and running packages without Docker."
 navLabel: "System Setup"
-navDescription: "Environment & Architecture Setup"
+navDescription: "Prerequisites, .env and Docker"
 order: 1
+section: "Get started"
 icon: "Server"
 audience: "operator"
 ---
 
-A step-by-step technical guide for Platform Ops and software engineers configuring, booting, and verifying the 7-layer **RazorAgent Mesh v2.0** local development and production enclave.
+Everything needed to get the mesh running on your own machine: what to install, what to
+put in `.env`, one command to start seven services, and how to tell when they are ready.
+Allow about ten minutes, most of it Docker pulling images.
 
 ---
 
-## 1. System Prerequisites & Runtimes
+## Prerequisites
 
 Before launching RazorAgent Mesh, verify your local system meets the following version requirements:
 
@@ -24,7 +27,7 @@ Before launching RazorAgent Mesh, verify your local system meets the following v
 
 ---
 
-## 2. Monorepo Package Topology & Localhost Ports
+## Packages and ports
 
 When running the mesh locally (via Docker Compose or native processes), each microservice listens on a dedicated `localhost` port:
 
@@ -40,7 +43,7 @@ When running the mesh locally (via Docker Compose or native processes), each mic
 
 ---
 
-## 3. Environment Configuration (`.env`)
+## Environment configuration
 
 Create your `.env` file in `razoragentMesh/`. It is shorter than you might expect: `docker-compose.yml`
 sets each service's port and Redis URL directly, so the only values it interpolates from `.env` are the
@@ -82,12 +85,13 @@ ALLOW_LOCALHOST_CALLBACK=true
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
 
-# Supplying real Razorpay credentials switches settlement OFF the mock ledger. The mandate engine
-# reads both (packages/mandateEngine/config.py:25,30) and buildRouteClient selects the live
-# transport whenever the key id is not a placeholder and the secret is non-empty. Leave unset to
-# stay on the mock ledger.
+# Supplying real Razorpay credentials enables the live Orders API (POST /v1/orders) for authentic
+# order evidence. Primary capture and Route split transfers remain on the deterministic mock ledger
+# unless RAZORPAY_ROUTE_LIVE=true is explicitly configured, because Route split transfers require
+# RBI account activation and real linked accounts.
 RAZORPAY_KEY_ID=
 RAZORPAY_KEY_SECRET=
+RAZORPAY_ROUTE_LIVE=false
 ```
 
 Every variable above is read by code. Earlier revisions of this guide also listed `TELEMETRY_PORT`,
@@ -99,12 +103,12 @@ rather than left to mislead.
 
 That list previously also named `QDRANT_HOST`, `QDRANT_PORT`, `RAZORPAY_KEY_ID` and
 `RAZORPAY_KEY_SECRET`. All four are read by code and are documented above instead: the Qdrant pair
-by the Merchant API's auto-vectorizer, the Razorpay pair by the mandate engine, where they decide
-whether settlement runs against the mock ledger or the live Route API.
+by the Merchant API's auto-vectorizer, the Razorpay credentials by the mandate engine, where they
+enable the live Orders API and decouple it from Route split transfers.
 
 ---
 
-## 4. Bootstrapping with Docker Compose
+## Start the stack
 
 Start the full 7-service mesh in the background:
 
@@ -113,97 +117,47 @@ Start the full 7-service mesh in the background:
 docker compose up -d --build
 ```
 
-### Health Probes & Endpoint Verification
+### Verify each service
 
-Verify container health across all service ports:
-
-#### 1. Mandate Engine Settlement Probe
-Tests the AP2 settlement coordinator, mandate verification enclave, and GSTR-1 tax calculator:
-
-<ApiEndpoint service="mandateEngine" path="/health" />
+`docker compose ps` should show seven services healthy. To check them individually:
 
 ```bash
-# cURL
-curl -s http://localhost:8000/health
+for url in http://localhost:8000/health \
+           http://localhost:4002/health \
+           http://localhost:4003/api/v1/mesh/health \
+           http://localhost:4001/health \
+           http://localhost:6333/healthz; do
+  printf '%-46s %s\n' "$url" "$(curl -s -o /dev/null -w '%{http_code}' "$url")"
+done
 ```
 
-```javascript
-// Fetch API
-const response = await fetch("http://localhost:8000/health");
-const data = await response.json();
-console.log("Mandate Engine:", data);
-```
+Every line should print `200`. The four mesh services, with the package that implements each:
 
-#### 2. Merchant Registration API Probe
-Tests the merchant onboarding service, GSTIN validator, and catalog ingestion pipeline:
+<ApiEndpoint service="mandateEngine" path="/health">
+Settlement coordinator, mandate verification and the GSTR-1 tax engine.
+</ApiEndpoint>
 
-<ApiEndpoint service="merchantApi" path="/health" />
+<ApiEndpoint service="merchantApi" path="/health">
+Merchant registration, GSTIN validation and catalog ingestion.
+</ApiEndpoint>
 
-```bash
-# cURL
-curl -s http://localhost:4002/health
-```
+<ApiEndpoint service="x402Gateway" path="/api/v1/mesh/health">
+Proof-of-work ingress and the bilateral negotiation state machine.
+</ApiEndpoint>
 
-```javascript
-// Fetch API
-const response = await fetch("http://localhost:4002/health");
-const data = await response.json();
-console.log("Merchant API:", data);
-```
+<ApiEndpoint service="mcpServer" path="/health">
+The MCP tool surface an agent connects to.
+</ApiEndpoint>
 
-#### 3. x402 Dynamic Negotiation Gateway Probe
-Tests the HTTP 402 dynamic negotiation gateway and anti-spam PoW solver. Unlike the other
-services, this gateway namespaces its probe under `/api/v1/mesh/` -- `GET /health` on port 4003
-returns 404:
+Qdrant answers on `http://localhost:6333/healthz` and Redis on `docker compose exec redis
+redis-cli ping`; neither is a mesh service, so neither appears in the registry above.
 
-<ApiEndpoint service="x402Gateway" path="/api/v1/mesh/health" />
-
-```bash
-# cURL
-curl -s http://localhost:4003/api/v1/mesh/health
-```
-
-```javascript
-// Fetch API
-const response = await fetch("http://localhost:4003/api/v1/mesh/health");
-const data = await response.json();
-console.log("x402 Gateway:", data);
-```
-
-#### 4. Qdrant Vector Search Engine Probe (`localhost:6333`)
-Tests the Qdrant ANN vector embedding search engine for sub-300ms cart healing:
-
-```bash
-# cURL
-curl -s http://localhost:6333/healthz
-```
-
-```javascript
-// Fetch API
-const response = await fetch("http://localhost:6333/healthz");
-const data = await response.json();
-console.log("Qdrant Health:", data);
-```
-
-#### 5. Real-Time Telemetry SSE Stream (`localhost:8000`)
-Connects an event listener to the live telemetry event streaming bus:
-
-```bash
-# cURL
-curl -N http://localhost:8000/api/v1/telemetry/stream
-```
-
-```javascript
-// Fetch API / EventSource
-const sse = new EventSource("http://localhost:8000/api/v1/telemetry/stream");
-sse.onmessage = (event) => {
-  console.log("SSE Event Received:", JSON.parse(event.data));
-};
-```
+Once everything is healthy, open the dashboard at `http://localhost:3000` and follow the
+[agent quickstart](/docs/agent-quickstart) to put an agent through the stack.
 
 ---
 
-## 5. Local Development Mode
+## Running without Docker
 
 To run individual packages on your host machine without Docker:
 

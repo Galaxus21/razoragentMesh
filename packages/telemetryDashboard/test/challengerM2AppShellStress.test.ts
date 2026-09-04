@@ -24,30 +24,22 @@ import { SseConnectionState, TelemetryEvent } from "../src/types/telemetryEventT
 
 const expectedRouteList: ReadonlyArray<string> = [
   "/overview",
-  "/self-healing",
-  "/infrastructure",
-  "/protocol",
-  "/playground/layers",
-  "/playground",
-  "/playground/adversarial",
-  "/playground/live-agent",
-  "/sdk-console",
-  "/agent-observability",
-  "/negotiation-hub",
-  "/security-audit",
   "/merchant-studio",
+  "/visualise",
+  "/docs",
   "/docs/setup",
   "/docs/agent-quickstart",
   "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
+  "/docs/tool-reference",
   "/docs/telemetry",
   "/docs/gstr1-invoice",
 ];
 
 const mockSessionPrefix = "session-challenger-m2-";
 const stressToggleIterations = 10000;
-const expectedTotalNavItems = 20;
+const expectedTotalNavItems = 12;
 
 function simulateLocalStorageReader(rawValue: string | null): boolean {
   if (rawValue === null) {

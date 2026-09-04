@@ -14,15 +14,13 @@ import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 
 const stressLoopIterations = 5000;
-const expectedCategoryCount = 6;
-const expectedTotalRouteCount = 20;
+const expectedCategoryCount = 4;
+const expectedTotalRouteCount = 12;
 
 const defaultCategoryIds: ReadonlyArray<string> = [
-  "platformOps",
-  "protocolPlayground",
-  "aiBuyerAgents",
-  "cfosAuditors",
-  "merchants",
+  "overview",
+  "merchant",
+  "visualise",
   "documentation",
 ];
 
@@ -59,10 +57,9 @@ function simulateExpandFromCollapsed(
 describe("Challenger 1 Empirical Stress: Rapid State Transitions & Category Isolation", () => {
   it("should maintain state consistency across 5,000 rapid toggles per category", () => {
     let state: Record<string, boolean> = {
-      platformOps: true,
-      protocolPlayground: true,
-      aiBuyerAgents: true,
-      cfosAuditors: true,
+      overview: true,
+      merchant: true,
+      visualise: true,
       merchants: true,
       documentation: true,
     };
@@ -78,10 +75,9 @@ describe("Challenger 1 Empirical Stress: Rapid State Transitions & Category Isol
 
   it("should enforce category state isolation during randomized cross-category mutations", () => {
     let state: Record<string, boolean> = {
-      platformOps: true,
-      protocolPlayground: true,
-      aiBuyerAgents: true,
-      cfosAuditors: true,
+      overview: true,
+      merchant: true,
+      visualise: true,
       merchants: true,
       documentation: true,
     };
@@ -91,9 +87,9 @@ describe("Challenger 1 Empirical Stress: Rapid State Transitions & Category Isol
       state = simulateCategoryToggle(state, targetMutationCategory);
     }
 
-    assert.equal(state.platformOps, true);
-    assert.equal(state.aiBuyerAgents, true);
-    assert.equal(state.cfosAuditors, true);
+    assert.equal(state.overview, true);
+    assert.equal(state.merchant, true);
+    assert.equal(state.visualise, true);
     assert.equal(state.merchants, true);
     assert.equal(state.documentation, true);
   });
@@ -155,8 +151,8 @@ describe("Challenger 1 Empirical Stress: Collapsed Icon Interaction & Expansion"
     for (const categoryId of defaultCategoryIds) {
       let toggleCount = 0;
       const initialCategories = {
-        platformOps: false,
-        aiBuyerAgents: false,
+        overview: false,
+        merchant: false,
         cfosAuditors: false,
         merchants: false,
         documentation: false,

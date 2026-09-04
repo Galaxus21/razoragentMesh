@@ -13,6 +13,14 @@ export interface DocFrontmatter {
   readonly order: number;
   readonly icon: string;
   readonly audience: string;
+  /**
+   * Which group this page sits in in the sidebar: "Get started", "Guides" or "Reference".
+   *
+   * A flat list of seven guides gave a reader no way to tell orientation from specification
+   * -- the statutory tax spec and the five-minute quickstart looked like peers. Grouping is
+   * what every API documentation site does, and it costs one frontmatter line per file.
+   */
+  readonly section: string;
 }
 
 export interface DocHeading {
@@ -41,6 +49,7 @@ export interface DocNavEntry {
   readonly description: string;
   readonly order: number;
   readonly icon: string;
+  readonly section: string;
 }
 
 // One heading and the prose beneath it. The table of contents needs only the heading; the

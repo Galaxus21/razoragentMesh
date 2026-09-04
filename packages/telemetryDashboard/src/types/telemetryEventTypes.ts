@@ -48,10 +48,19 @@ export interface McpToolCallPayload {
   readonly parameters: Record<string, unknown>;
 }
 
+/** Why a call came back with success=false. Absent on events from servers older than this field. */
+export type ToolFailureKind = "invalid_request" | "refusal";
+
 export interface McpToolResultPayload {
   readonly toolName: string;
   readonly callId: string;
   readonly success: boolean;
+  /**
+   * Set by the MCP server only when `success` is false. "invalid_request" means the agent's
+   * arguments failed the tool's schema; "refusal" means a well-formed call the mesh declined.
+   * The dashboard must not present the first as the second.
+   */
+  readonly failureKind?: ToolFailureKind;
   readonly result: Record<string, unknown>;
   readonly durationMs: number;
 }
@@ -96,6 +105,14 @@ export interface RouteTransferItem {
 export interface PaymentCapturedPayload {
   readonly paymentId: string;
   readonly orderId: string;
+  /**
+   * The REAL Razorpay order the settlement saga opened, when it opened one.
+   *
+   * Distinct from `orderId`, which falls back to the executionId so the field is never empty. An
+   * executionId is not payable, so anything offering the reader a checkout link must read this
+   * field and treat null as "the engine ran without credentials", not as "same as orderId".
+   */
+  readonly razorpayOrderId?: string | null;
   readonly amountPaise: number;
   readonly currency: "INR";
   readonly status: "captured";

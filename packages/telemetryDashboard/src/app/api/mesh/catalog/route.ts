@@ -40,7 +40,7 @@ function badRequest(detail: string): Response {
  * offending field -- swallowing it would hide the only useful diagnostic.
  */
 async function forwardToMerchantApi(
-  method: "POST" | "DELETE",
+  method: "GET" | "POST" | "DELETE",
   path: string,
   body?: unknown
 ): Promise<Response> {
@@ -81,6 +81,24 @@ function readMerchantDid(value: unknown): string | undefined {
   }
   const candidate = (value as Record<string, unknown>).merchantDid;
   return typeof candidate === "string" && candidate.trim().length > 0 ? candidate : undefined;
+}
+
+/**
+ * GET /api/mesh/catalog?merchantDid=..
+ *
+ * Lists what this merchant has actually published. The human checkout page used to carry its
+ * product list as a hard-coded array, so a SKU a judge authored in Merchant Studio and published
+ * successfully was nowhere to be found on the page that sells it -- the publish looked like it
+ * had silently failed. This is the read side that array was standing in for.
+ */
+export async function GET(request: Request): Promise<Response> {
+  const merchantDid = new URL(request.url).searchParams.get("merchantDid");
+  if (!merchantDid) {
+    return badRequest("The merchantDid query parameter is required.");
+  }
+
+  const path = `${catalogPathPrefix}/${encodeURIComponent(merchantDid)}${catalogPathSuffix}`;
+  return forwardToMerchantApi("GET", path);
 }
 
 export async function POST(request: Request): Promise<Response> {

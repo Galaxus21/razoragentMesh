@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Activity, BookOpen, ListChecks, Package, Play } from "lucide-react";
+import { BookOpen, Play } from "lucide-react";
 import { meshServicesById } from "@/constants/meshServiceRegistry";
 import type { ProtocolLayerNode } from "@/constants/protocolLayerMap";
 import type { MeshServiceStatus } from "@/server/meshHealth/probeMeshServices";
@@ -12,19 +12,12 @@ export interface LayerDetailPanelProps {
   readonly statuses: readonly MeshServiceStatus[];
 }
 
-function SectionHeading({
-  icon: Icon,
-  label,
-}: {
-  readonly icon: React.ComponentType<{ className?: string }>;
-  readonly label: string;
-}): React.JSX.Element {
-  return (
-    <div className="mb-2 flex items-center gap-1.5">
-      <Icon className="h-3.5 w-3.5 text-accentPrimary" />
-      <span className="text-label-caps uppercase text-textMuted">{label}</span>
-    </div>
-  );
+// The three headings below used to each carry their own lucide glyph. None of them distinguished
+// anything -- a clipboard beside "responsibilities" and a box beside "packages" tell the reader
+// nothing the words do not -- and three accent-coloured icons in one narrow column read as
+// decoration applied by rote. The label alone does the work.
+function SectionHeading({ label }: { readonly label: string }): React.JSX.Element {
+  return <p className="mb-2 text-label-caps uppercase text-textMuted">{label}</p>;
 }
 
 export function LayerDetailPanel({
@@ -34,14 +27,15 @@ export function LayerDetailPanel({
   return (
     <div className="space-y-5">
       <header>
-        <h3 className="text-headline-sm text-textPrimary">
-          Layer {layer.ordinal} - {layer.title}
-        </h3>
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-[11px] font-semibold text-textMuted">L{layer.ordinal}</span>
+          <h3 className="text-headline-sm text-textPrimary">{layer.title}</h3>
+        </div>
         <p className="mt-1.5 text-body-sm leading-relaxed text-textSecondary">{layer.tagline}</p>
       </header>
 
       <section>
-        <SectionHeading icon={ListChecks} label="What it is responsible for" />
+        <SectionHeading label="What it is responsible for" />
         <ul className="space-y-1.5">
           {layer.responsibilities.map((responsibility) => (
             <li key={responsibility} className="flex gap-2 text-body-sm text-textSecondary">
@@ -53,7 +47,7 @@ export function LayerDetailPanel({
       </section>
 
       <section>
-        <SectionHeading icon={Activity} label="Telemetry it emits" />
+        <SectionHeading label="Telemetry it emits" />
         <div className="flex flex-wrap gap-1.5">
           {layer.eventsEmitted.map((eventType) => (
             <span
@@ -67,7 +61,7 @@ export function LayerDetailPanel({
       </section>
 
       <section>
-        <SectionHeading icon={Package} label="Where the code lives" />
+        <SectionHeading label="Where the code lives" />
         <ul className="space-y-1">
           {layer.implementedBy.map((packagePath) => (
             <li key={packagePath}>
@@ -98,11 +92,11 @@ export function LayerDetailPanel({
 
       <section className="flex flex-wrap gap-2">
         <Link
-          href={{ pathname: "/playground", query: { scenario: layer.scenarioId } }}
+          href={{ pathname: "/visualise/run", query: { scenario: layer.scenarioId } }}
           className="inline-flex items-center gap-1.5 rounded-md border border-accentPrimary/30 bg-accentPrimary/10 px-3 py-1.5 text-label-sm font-semibold text-accentPrimary transition-colors hover:bg-accentPrimary/20"
         >
           <Play className="h-3.5 w-3.5" />
-          Exercise this layer
+          Run this stage
         </Link>
         <Link
           href={layer.docRoute}

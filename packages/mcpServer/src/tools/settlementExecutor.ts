@@ -14,7 +14,6 @@ import { randomBytes } from "node:crypto";
 import { AgentKeyManager, extractPublicKeyFromDid } from "@razorpay/agent-buyer-sdk";
 import {
   custodyAgentHeld,
-  defaultMerchantAccount,
   errorCustodyMismatch,
   errorDuplicatePurchaseInSession,
   errorExecutionIdMismatch,
@@ -51,6 +50,10 @@ import {
 } from "../session/sessionPurchaseRegistry.js";
 import { defaultCatalogStore } from "../catalog/catalogStore.js";
 import { evaluateScheduledPromotions } from "../catalog/pricingEngine.js";
+import {
+  assertRequestedMerchantAccountMatches,
+  resolveMerchantPayoutAccount
+} from "../merchant/merchantPayoutRegistry.js";
 
 const settlementExecutePath = "/api/v1/settlement/execute";
 const paymentIdResponseField = "paymentId";
@@ -172,6 +175,14 @@ export async function executeSettlementForDelegation(
     throw new Error(errorExecutionIdMismatch);
   }
 
+  // The payout destination, resolved from the merchantDid the MERCHANT signed onto this cart --
+  // never from the request. `merchant_account` used to win over the account bound at cart
+  // creation, which made the merchant leg of the split a field any caller could set. Resolved
+  // here rather than read off the session so the answer comes from the signed document itself:
+  // a session copy is one more thing that can drift from what the merchant attested to.
+  const payout = await resolveMerchantPayoutAccount(session.cartMandate.merchantDid, options);
+  assertRequestedMerchantAccountMatches(request.merchant_account, payout);
+
   const cartKey = buildCartKey(session.cartMandate);
   _rejectDuplicatePurchase(cartKey, request, options.mcpSessionId);
   _rejectOverSessionBudget(session.cartMandate.totalPaise, options.mcpSessionId);
@@ -186,7 +197,7 @@ export async function executeSettlementForDelegation(
       agentSignature: resolveAgentSignature(session, request)
     };
 
-  const result = await _postSettlement(session, executionMandate, request);
+  const result = await _postSettlement(session, executionMandate, payout.razorpayAccountId);
   _rememberPurchase(cartKey, result, options.mcpSessionId);
   if (options.mcpSessionId) {
     recordSessionSpend(options.mcpSessionId, session.cartMandate.totalPaise);
@@ -284,13 +295,16 @@ async function _consumeSettledReservation(
 async function _postSettlement(
   session: DelegationSession,
   executionMandate: Record<string, unknown>,
-  request: ExecuteSettlementRequest
+  merchantAccount: string
 ): Promise<Record<string, unknown>> {
   const body = {
     intentMandate: session.intentMandate,
     cartMandate: session.cartMandate,
     executionMandate,
-    merchantAccount: request.merchant_account ?? session.merchantAccount ?? defaultMerchantAccount,
+    // Already resolved from cartMandate.merchantDid by the caller. Taken as a parameter rather
+    // than re-resolved so there is exactly one place a payout destination is decided, and so
+    // this function cannot be given a request field by a future edit.
+    merchantAccount,
     paymentId: newPaymentId(),
     // Set server-side and never exposed as a tool input. serverTime overrides the clock for
     // mandate expiry, inventory-lock expiry AND the NTP drift window, so an agent that could

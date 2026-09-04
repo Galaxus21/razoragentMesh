@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/appSidebar";
 import { DashboardHeader } from "@/components/dashboardHeader";
 import { TelemetryProvider, useTelemetry } from "@/context/telemetryContext";
+import { resolvePageLocation } from "@/constants/sidebarNavigationConfig";
 import { useSidebarState } from "@/hooks/useSidebarState";
 import { useThemeToggle } from "@/hooks/useThemeToggle";
 
@@ -16,6 +17,7 @@ function DashboardShell({ children }: DashboardShellProps): React.JSX.Element {
   const pathname = usePathname();
   const { isCollapsed, toggleSidebar } = useSidebarState();
   const { theme, toggleTheme } = useThemeToggle();
+  const pageLocation = resolvePageLocation(pathname);
   const telemetry = useTelemetry();
 
   return (
@@ -31,6 +33,8 @@ function DashboardShell({ children }: DashboardShellProps): React.JSX.Element {
           streamMode={telemetry.streamMode}
           provenanceCounts={telemetry.provenanceCounts}
           totalEventsCount={telemetry.events.length}
+          pageTitle={pageLocation.title}
+          pageSection={pageLocation.section}
           onClearEvents={telemetry.clearEvents}
           theme={theme}
           onToggleTheme={toggleTheme}

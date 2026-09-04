@@ -109,6 +109,22 @@ export const toolPresentation: Readonly<Record<string, LiveEventPresentation>> =
     protocolLayer: settlementLayer,
     implementedBy: mandateBuilderPath
   },
+  browse_catalog: {
+    title: "Browse the catalog",
+    narrative:
+      "Enumerates the SKUs the mesh can actually quote, so an agent can see the whole catalog " +
+      "rather than only what a semantic query happened to rank.",
+    protocolLayer: discoveryLayer,
+    implementedBy: mcpToolsPath
+  },
+  negotiate_price: {
+    title: "Negotiate the price",
+    narrative:
+      "An alternating-offer x402-INR negotiation against the merchant's own policy. The floor is " +
+      "the merchant's, never the buyer's: an agent cannot name a price the policy did not allow.",
+    protocolLayer: negotiationLayer,
+    implementedBy: x402Path
+  },
   execute_settlement: {
     title: "Settle",
     narrative:

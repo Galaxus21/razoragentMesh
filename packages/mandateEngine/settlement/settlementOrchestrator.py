@@ -1,8 +1,11 @@
 """Two-Phase Commit (2PC) Settlement Saga Coordinator with Rollback Compensation."""
 
+import logging
 import time
 from typing import TYPE_CHECKING, Optional
 from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .compensationDlq import CompensationDlq
@@ -46,6 +49,7 @@ class SettlementResult(BaseModel):
     transfers: list[RouteTransferResponse] = Field(min_length=1)
     invoice: GstrInvoicePayload
     settledAt: int = Field(gt=0)
+    razorpayOrderId: Optional[str] = Field(default=None)
 
 
 class SettlementOrchestrator:
@@ -153,6 +157,49 @@ class SettlementOrchestrator:
             amountPaise=executionMandate.settlementAmountPaise,
         )
 
+    async def _createEvidenceOrder(
+        self,
+        executionMandate: ExecutionMandate,
+        cartMandate: CartMandate,
+    ) -> Optional[str]:
+        """Creates an evidence order in Razorpay if live keys are present.
+
+        This runs after _verifyAndCapturePhase (and thus after validateBudgetGate),
+        preserving TC-03 invariant (0 calls on budget refusal). Failures are caught
+        and logged without aborting the settlement saga.
+        """
+        try:
+            # Read the buyer DID and the cart hash from the EXECUTION mandate, which is where
+            # they live: CartMandate carries neither (it has cartId and merchantDid). Reading
+            # them off the cart raised AttributeError on every settlement, and because this
+            # helper degrades rather than raises, the only symptom was razorpayOrderId coming
+            # back null -- a silent loss of the one real Razorpay call in the agent's path.
+            #
+            # Not truncated to 40 like the receipt: a DID is "did:agent:" plus 64 hex, so a
+            # 40-char cut yields a prefix that identifies nobody and cannot be verified against
+            # the mandate chain. Razorpay allows far more room in a notes value than in a
+            # receipt, and an unverifiable note is worse than no note.
+            notes = {
+                "executionId": executionMandate.executionId,
+                "buyerAgentDid": executionMandate.buyerAgentDid,
+                "cartMandateHash": executionMandate.cartMandateHash,
+                "cartId": cartMandate.cartId,
+            }
+            order = await self._routeClient.createOrder(
+                amountPaise=executionMandate.settlementAmountPaise,
+                receipt=executionMandate.executionId[:40],
+                currency="INR",
+                notes=notes,
+            )
+            return order.id
+        except Exception as err:
+            logger.warning(
+                "Failed to create evidence order in Razorpay for execution %s: %s",
+                executionMandate.executionId,
+                err,
+            )
+            return None
+
     async def executeSettlementSaga(
         self,
         intentMandate: IntentMandate,
@@ -164,6 +211,8 @@ class SettlementOrchestrator:
     ) -> SettlementResult:
         """Executes 2PC saga with full validation, primary capture, and split transfers."""
         await self._verifyAndCapturePhase(intentMandate, cartMandate, executionMandate, paymentId, serverTime)
+
+        razorpayOrderId = await self._createEvidenceOrder(executionMandate, cartMandate)
 
         manifest = self.buildSplitManifest(cartMandate, merchantAccount)
         requests = self._buildTransferRequests(manifest, paymentId)
@@ -196,4 +245,5 @@ class SettlementOrchestrator:
             transfers=transfers,
             invoice=invoice,
             settledAt=int(time.time()),
+            razorpayOrderId=razorpayOrderId,
         )

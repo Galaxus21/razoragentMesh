@@ -12,7 +12,11 @@ import {
   resolveDocsDirectory,
 } from "../src/lib/docsLoader.js";
 import { docsManifest } from "../src/generated/docsManifest.js";
-import { navigationCategories, navigationItems } from "../src/constants/sidebarNavigationConfig.js";
+import {
+  documentationSectionOrder,
+  navigationCategories,
+  navigationItems,
+} from "../src/constants/sidebarNavigationConfig.js";
 
 // The pipeline's whole claim is that a guide is registered by existing. These assertions are
 // what make that true: if the manifest, the sidebar and the directory can drift apart, the old
@@ -94,12 +98,18 @@ describe("Sidebar documentation section derives from the manifest", () => {
     );
     assert.ok(documentationCategory);
 
+    // The first child is the /docs landing page, which is a route rather than a document.
+    // Everything after it must be exactly the manifest, in exactly its order -- that is what
+    // keeps the sidebar derived from the docs directory instead of hand-maintained.
+    const [landing, ...guides] = documentationCategory.children;
+    assert.equal(landing.route, "/docs");
+
     assert.deepEqual(
-      documentationCategory.children.map((child) => child.route),
+      guides.map((child) => child.route),
       docsManifest.map((entry) => entry.route)
     );
     assert.deepEqual(
-      documentationCategory.children.map((child) => child.label),
+      guides.map((child) => child.label),
       docsManifest.map((entry) => entry.navLabel)
     );
   });
@@ -113,6 +123,22 @@ describe("Sidebar documentation section derives from the manifest", () => {
     for (const route of docsRoutes) {
       const slug = route.slice(`${docsRoutePrefix}/`.length);
       assert.ok(loadDocPage(slug.split("/")), `${route} has no backing document`);
+    }
+  });
+});
+
+describe("Every guide declares a section the sidebar can group by", () => {
+  it("assigns each document to one of the declared sections", () => {
+    // `section` is load-bearing: it is the sidebar heading and the docs-index grouping. A
+    // malformed value renders as a heading rather than failing, so it is invisible in every test
+    // that only counts routes -- which is exactly how `\\"Get started` once reached seven files
+    // with the whole suite green.
+    for (const page of loadAllDocPages()) {
+      assert.ok(
+        documentationSectionOrder.includes(page.frontmatter.section),
+        `${page.slug} declares section ${JSON.stringify(page.frontmatter.section)}, which is not ` +
+          `one of ${documentationSectionOrder.filter(Boolean).join(", ")}`
+      );
     }
   });
 });

@@ -168,7 +168,7 @@ function PromotionRow({
 
         <div className="col-span-8">
           <label className="mb-1 block font-mono uppercase tracking-wider text-textSecondary">
-            Display Name
+            Display Name <span className="text-statusError">*</span>
           </label>
           <input
             type="text"

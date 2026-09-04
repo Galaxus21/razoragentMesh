@@ -1,6 +1,6 @@
 import type { Redis } from "ioredis";
 import { millisPerSecond } from "../constants/protocolConstants.js";
-import { CatalogStore } from "../catalog/catalogStore.js";
+import { CatalogStore, defaultCatalogStore } from "../catalog/catalogStore.js";
 import {
   activeReservationsKey,
   buildReservationEntry,
@@ -119,6 +119,20 @@ export class InMemoryAtomicLocker {
 }
 
 export const defaultInMemoryLocker = new InMemoryAtomicLocker();
+
+// The reclaim every READ surface owes its caller, in one place so that a surface added later
+// cannot forget it the way the MCP tools did. `reclaimExpired` was wired into the REST adapter
+// alone, so an agent that abandoned a lock over MCP kept seeing those units reported as held for
+// the life of the process -- `available_stock` disagreed with what `reserve_inventory_lock` would
+// actually have granted, because `executeLock` sweeps on acquire and the read path did not.
+//
+// The default locker and the default catalog store are one pairing, named together here rather
+// than at each call site: a reservation record names a SKU, not a store, so the units it credits
+// back have to land in the store they were taken from. Surfaces that read a caller-supplied store
+// hold their own locker and sweep it themselves.
+export function reclaimExpiredDefaultReservations(): SweepResult {
+  return defaultInMemoryLocker.reclaimExpired(defaultCatalogStore);
+}
 
 export async function executeRedisLock(
   redis: Redis,

@@ -1,46 +1,53 @@
 ---
-title: "RazorAgent Mesh v2.0 — Real-Time Telemetry & Event Streaming Specification"
-description: "Defines the real-time SSE telemetry architecture, event streaming endpoints, canonical event schemas, metric algorithms, and testing procedures."
+title: "Telemetry and event streaming"
+description: "The SSE bus every service publishes to: how to subscribe, how to publish, the schema of all twelve event types, the metrics the dashboard derives from them, and how a merchant builds an order feed on the same stream."
 navLabel: "Telemetry & SSE"
-navDescription: "Observability Event Streams"
-order: 6
+navDescription: "Observability event streams"
+order: 7
+section: "Reference"
 icon: "Activity"
 audience: "operator"
 ---
 
+Every service on the mesh publishes what it does to one event bus, and the dashboard is
+just a subscriber. This page is for anyone building a second subscriber -- an alerting
+hook, a ledger, a merchant's own order feed, a replica of the dashboard -- and covers how to
+subscribe, how to publish, what every event type carries, how the dashboard's metrics are
+derived, and what a merchant integration can and cannot join on.
+
 ---
 
-## 1. Real-Time Telemetry Architecture
+## How telemetry flows
 
 The **RazorAgent Mesh v2.0** telemetry pipeline provides a high-throughput, low-latency asynchronous event streaming backbone for autonomous multi-agent commerce. It captures the entire lifecycle of multi-agent interactions across all protocol layers—including Model Context Protocol (MCP) JSON-RPC execution, Rubinstein-Ståhl bilateral bargaining concessions, sub-300ms vector semantic self-healing, AP2 cryptographic mandate signing, and 2-Phase Commit (2PC) multi-party settlements.
 
-### 1.1 Asynchronous Pub-Sub Architecture
+### Publish and subscribe
 
 The telemetry pipeline operates on an asynchronous **Server-Sent Events (SSE)** publish-subscribe model implemented via Python's `asyncio` primitives in `mandateEngine/telemetryEmitter.py`.
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                RAZORAGENT MESH DISTRIBUTED RUNTIME                               │
-│                                                                                                  │
-│   ┌─────────────────────┐    ┌─────────────────────┐    ┌────────────────────────────────────┐   │
-│   │   MCP Tool Server   │    │     x402 Gateway    │    │      Mandate Settlement Engine     │   │
-│   │   (Port 4001 / RPC) │    │  (Bargaining/Escrow)│    │      (AP2 2PC Enclave & Tax)       │   │
-│   └──────────┬──────────┘    └──────────┬──────────┘    └─────────────────┬──────────────────┘   │
-│              │                          │                                 │                      │
-│              │ emit(MCP_TOOL_CALL)      │ emit(BID_TURN_COMPLETED)        │ emit(MANDATE_SIGNED) │
+┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                RAZORAGENT MESH DISTRIBUTED RUNTIME                                │
+│                                                                                                   │
+│   ┌─────────────────────┐    ┌─────────────────────┐    ┌────────────────────────────────────┐    │
+│   │   MCP Tool Server   │    │     x402 Gateway    │    │      Mandate Settlement Engine     │    │
+│   │   (Port 4001 / RPC) │    │  (Bargaining/Escrow)│    │      (AP2 2PC Enclave & Tax)       │    │
+│   └──────────┬──────────┘    └──────────┬──────────┘    └─────────────────┬──────────────────┘    │
+│              │                          │                                 │                       │
+│              │ emit(MCP_TOOL_CALL)      │ emit(BID_TURN_COMPLETED)        │ emit(MANDATE_SIGNED)  │
 │              │ emit(MCP_TOOL_RESULT)    │ emit(NEGOTIATION_CONVERGED)     │ emit(PAYMENT_CAPTURED)│
-│              │                          │ emit(POW_CHALLENGE_SOLVED)      │ emit(ROUTE_ROLLBACK) │
-│              │                          │                                 │ emit(BUDGET_BLOCKED) │
-│              └──────────────────────────┼─────────────────────────────────┘                      │
-│                                         ▼                                                        │
-│                     ┌───────────────────────────────────────┐                                    │
-│                     │       TelemetryEventEmitter Engine    │                                    │
-│                     │  - Global Singleton Instance          │                                    │
-│                     │  - asyncio.Lock synchronization       │                                    │
-│                     │  - Client Queues: capacity = 500      │                                    │
-│                     │  - Heartbeat Generator: 15s interval  │                                    │
-│                     └───────────────────┬───────────────────┘                                    │
-└─────────────────────────────────────────┼────────────────────────────────────────────────────────┘
+│              │                          │ emit(POW_CHALLENGE_SOLVED)      │ emit(ROUTE_ROLLBACK)  │
+│              │                          │                                 │ emit(BUDGET_BLOCKED)  │
+│              └──────────────────────────┼─────────────────────────────────┘                       │
+│                                         ▼                                                         │
+│                     ┌───────────────────────────────────────┐                                     │
+│                     │       TelemetryEventEmitter Engine    │                                     │
+│                     │  - Global Singleton Instance          │                                     │
+│                     │  - asyncio.Lock synchronization       │                                     │
+│                     │  - Client Queues: capacity = 500      │                                     │
+│                     │  - Heartbeat Generator: 15s interval  │                                     │
+│                     └───────────────────┬───────────────────┘                                     │
+└─────────────────────────────────────────┼─────────────────────────────────────────────────────────┘
                                           │
                                           │ HTTP GET /api/v1/telemetry/stream
                                           │ Content-Type: text/event-stream
@@ -55,7 +62,7 @@ The telemetry pipeline operates on an asynchronous **Server-Sent Events (SSE)** 
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 Core Operational & Architectural Invariants
+### What the bus guarantees
 
 1. **Subscriber Queue Isolation & Capacity:** Every connected listener receives a dedicated `asyncio.Queue[str]` configured with a capacity of **500 event frames** (`defaultQueueCapacity = 500`).
 2. **Non-Blocking Ingestion & Backpressure Handling:** Event publishing executes via `put_nowait()`. If a client queue saturates because of slow network consumption, the server drops the stale queue rather than blocking the producer pipeline, preventing memory leakage and system degradation.
@@ -67,9 +74,9 @@ The telemetry pipeline operates on an asynchronous **Server-Sent Events (SSE)** 
 
 ---
 
-## 2. Server-Sent Events (SSE) Streaming API Reference
+## Streaming API
 
-### 2.1 Live Event Stream Endpoint (`GET /api/v1/telemetry/stream`)
+### Subscribe to the stream
 
 Subscribes an HTTP client to the live telemetry event stream using standard HTTP/1.1 or HTTP/2 Server-Sent Events.
 
@@ -81,7 +88,7 @@ Cache-Control: no-cache
 Connection: keep-alive
 ```
 
-#### Response Headers
+#### Response headers
 
 ```http
 HTTP/1.1 200 OK
@@ -92,7 +99,7 @@ X-Accel-Buffering: no
 Access-Control-Allow-Origin: *
 ```
 
-#### SSE Wire Format
+#### SSE wire format
 
 Telemetry events are serialized to JSON with compact key-value separators (`,`, `:`) and prefixed with `data: ` and terminated by `\n\n`:
 
@@ -106,7 +113,7 @@ data: {"eventId":"evt_pay_002","eventType":"PAYMENT_CAPTURED","timestampMs":1724
 
 ---
 
-### 2.2 Telemetry Event Ingestion (`POST /api/v1/telemetry/events`)
+### Publish an event
 
 Allows internal microservices, external agent gateways, or testing harnesses to ingest telemetry frames into the broadcast queue.
 
@@ -129,7 +136,7 @@ Content-Type: application/json
 }
 ```
 
-#### Response (HTTP 200 OK)
+#### Response
 
 ```json
 {
@@ -141,7 +148,7 @@ Content-Type: application/json
 
 ---
 
-### 2.3 Health & Liveness Verification Endpoint (`GET /health`)
+### Health check
 
 Returns real-time service health status, active SSE subscriber counts, and subsystem connection readiness.
 
@@ -150,7 +157,7 @@ GET /health HTTP/1.1
 Host: localhost:8000
 ```
 
-#### Response (HTTP 200 OK)
+#### Response
 
 ```json
 {
@@ -169,7 +176,7 @@ Host: localhost:8000
 
 ---
 
-### 2.4 Command-Line Telemetry Stream Inspection
+### Inspect the stream from a terminal
 
 Developers and infrastructure engineers can consume and inspect the unbuffered live SSE feed directly from the command line using `curl`:
 
@@ -198,7 +205,7 @@ async def monitorTelemetryStream():
 
 ---
 
-## 3. Canonical Event Schema Specifications
+## Event reference
 
 All telemetry events extend the base immutable envelope `BaseTelemetryEvent<TType, TPayload>` and map directly to Pydantic models on the backend and TypeScript interfaces on the client.
 
@@ -219,29 +226,21 @@ export interface BaseTelemetryEvent<TType extends TelemetryEventType, TPayload> 
 
 ---
 
-### 1. `MCP_TOOL_CALL`
-Emitted when an autonomous AI buyer agent invokes any of the eight merchant Model Context Protocol (MCP) JSON-RPC tools: `search_catalog`, `get_live_sku_quote`, `reserve_inventory_lock`, `verify_shipping_sla`, `establish_agent_delegation`, `create_cart_mandate`, `sign_execution_mandate` and `execute_settlement`.
+### `MCP_TOOL_CALL`
+Emitted when an agent calls any tool on the MCP server. `toolName` carries whichever tool was called -- see the [tool reference](/docs/tool-reference) for the current set -- and `parameters` carries the arguments exactly as the agent sent them, so a subscriber can reconstruct the call.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface McpToolCallPayload {
-  readonly toolName:
-    | "search_catalog"
-    | "get_live_sku_quote"
-    | "reserve_inventory_lock"
-    | "verify_shipping_sla"
-    | "establish_agent_delegation"
-    | "create_cart_mandate"
-    | "sign_execution_mandate"
-    | "execute_settlement"
-    | string;
+  // Widened to string on purpose: publishing a new tool must not require a telemetry release.
+  readonly toolName: "get_live_sku_quote" | "reserve_inventory_lock" | "verify_shipping_sla" | string;
   readonly callId: string;
   readonly callerAgentId: string;
   readonly parameters: Record<string, unknown>;
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_mcp_call_101",
@@ -263,10 +262,10 @@ export interface McpToolCallPayload {
 
 ---
 
-### 2. `MCP_TOOL_RESULT`
+### `MCP_TOOL_RESULT`
 Emitted upon completion of an MCP tool invocation, reporting the execution status, output data, and exact latency in milliseconds (`durationMs`).
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface McpToolResultPayload {
   readonly toolName: string;
@@ -277,7 +276,7 @@ export interface McpToolResultPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_mcp_res_102",
@@ -302,10 +301,10 @@ export interface McpToolResultPayload {
 
 ---
 
-### 3. `BID_TURN_COMPLETED`
+### `BID_TURN_COMPLETED`
 Emitted after each Rubinstein-Ståhl bargaining turn, capturing the buyer's bid, the seller's ask, the spread in paise, and the anti-spam micro-escrow fee burn (50 paise/turn).
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface BidTurnCompletedPayload {
   readonly turnNumber: number;
@@ -319,7 +318,7 @@ export interface BidTurnCompletedPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_bid_turn_103",
@@ -341,10 +340,10 @@ export interface BidTurnCompletedPayload {
 
 ---
 
-### 4. `NEGOTIATION_CONVERGED`
+### `NEGOTIATION_CONVERGED`
 Emitted when the buyer bid and seller ask reach mathematical equilibrium $(\text{spreadPaise} \le 0)$, binding the agreed unit price $P^*$ and compiling the RFC 8785 Abstract Syntax Tree (AST) contract hash.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface NegotiationConvergedPayload {
   readonly finalAgreedUnitPricePaise: number;
@@ -354,7 +353,7 @@ export interface NegotiationConvergedPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_neg_conv_104",
@@ -372,10 +371,10 @@ export interface NegotiationConvergedPayload {
 
 ---
 
-### 5. `MANDATE_SIGNED`
+### `MANDATE_SIGNED`
 Emitted during each step of the 4-phase AP2 mandate chain lifecycle ($M_I \to M_C \to M_E \to M_A$), broadcasting non-repudiable Ed25519 signatures, RFC 8785 Canonical JSON previews, and hash bindings.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export type MandateKind = "INTENT" | "CART" | "EXECUTION" | "AMENDMENT";
 
@@ -392,7 +391,7 @@ export interface MandateSignedPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_mandate_105",
@@ -415,10 +414,10 @@ export interface MandateSignedPayload {
 
 ---
 
-### 6. `PAYMENT_CAPTURED`
-Emitted when 2-Phase Commit (2PC) settlement executes across Razorpay Route accounts, logging the 3-way conserved split transfers and the statutory GSTR-1 SHA-256 tax hash.
+### `PAYMENT_CAPTURED`
+Emitted when 2-Phase Commit (2PC) settlement executes across Razorpay Route accounts, logging the four-way conserved split transfers and the statutory GSTR-1 SHA-256 tax hash.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface RouteTransferItem {
   readonly transferId: string;
@@ -441,7 +440,7 @@ export interface PaymentCapturedPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_pay_106",
@@ -478,10 +477,10 @@ export interface PaymentCapturedPayload {
 
 ---
 
-### 7. `OOS_HEALED`
+### `OOS_HEALED`
 Emitted when the Vector Healer intercepts an out-of-stock SKU and executes an Approximate Nearest Neighbor (ANN) substitution in Qdrant within the sub-300ms SLA.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface OosHealedPayload {
   readonly originalSkuId: string;
@@ -496,7 +495,7 @@ export interface OosHealedPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_heal_107",
@@ -519,10 +518,10 @@ export interface OosHealedPayload {
 
 ---
 
-### 8. `BUDGET_BLOCKED`
+### `BUDGET_BLOCKED`
 Emitted when an autonomous cart or execution mandate attempts to exceed the user's delegated spending cap, triggering a deterministic block with 0 external API calls made.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface BudgetBlockedPayload {
   readonly intentBudgetPaise: number;
@@ -533,7 +532,7 @@ export interface BudgetBlockedPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_blocked_108",
@@ -552,10 +551,10 @@ export interface BudgetBlockedPayload {
 
 ---
 
-### 9. `POW_CHALLENGE_SOLVED`
+### `POW_CHALLENGE_SOLVED`
 Emitted upon verification of an ingress SHA-256 Proof-of-Work challenge, proving computational commitment to mitigate Sybil attacks and API flooding.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface PowChallengeSolvedPayload {
   readonly challenge: string;
@@ -566,7 +565,7 @@ export interface PowChallengeSolvedPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_pow_109",
@@ -585,10 +584,10 @@ export interface PowChallengeSolvedPayload {
 
 ---
 
-### 10. `INVENTORY_LOCKED`
+### `INVENTORY_LOCKED`
 Emitted when Redis acquires an atomic inventory reservation lock with a monotonically increasing fencing token and Time-To-Live (TTL).
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface InventoryLockedPayload {
   readonly skuId: string;
@@ -599,7 +598,7 @@ export interface InventoryLockedPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_lock_110",
@@ -618,10 +617,10 @@ export interface InventoryLockedPayload {
 
 ---
 
-### 11. `ROUTE_ROLLBACK_TRIGGERED`
+### `ROUTE_ROLLBACK_TRIGGERED`
 Emitted when a secondary transfer in a 2-Phase Commit settlement fails, triggering LIFO compensation reverse transfers to ensure transactional atomicity.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface RouteRollbackTriggeredPayload {
   readonly transferId: string;
@@ -631,7 +630,7 @@ export interface RouteRollbackTriggeredPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_rollback_111",
@@ -649,10 +648,10 @@ export interface RouteRollbackTriggeredPayload {
 
 ---
 
-### 12. `HEARTBEAT`
+### `HEARTBEAT`
 Emitted periodically every 15 seconds to maintain keep-alive persistence on the SSE streaming channel.
 
-#### TypeScript Schema
+#### TypeScript schema
 ```typescript
 export interface HeartbeatPayload {
   readonly serverTimestampMs: number;
@@ -660,7 +659,7 @@ export interface HeartbeatPayload {
 }
 ```
 
-#### JSON Payload
+#### JSON payload
 ```json
 {
   "eventId": "evt_hb_112",
@@ -676,7 +675,111 @@ export interface HeartbeatPayload {
 
 ---
 
-## 4. Metric Computation Algorithms & Mathematical Formulations
+## Merchant-side subscribers
+
+The bus is not only the dashboard's feed. Today it is **the only way a merchant finds out that
+one of its SKUs was sold**: the mesh sends no order email, no SMS and no merchant callback on
+capture. A merchant system integrates exactly as the dashboard does -- open
+`GET /api/v1/telemetry/stream` and filter. This section is what that filter has to work with,
+including the two joins that are not where a reader expects them.
+
+### There is no `merchantDid` on the wire
+
+Worth stating first, because it is the field you would reach for. No emitter puts one on an
+event. Two joinable keys exist instead:
+
+| Event | Field | Joins against |
+|---|---|---|
+| `PAYMENT_CAPTURED` | `payload.transfers[].recipientAccountId` | the `razorpayAccountId` you gave at registration |
+| `INVENTORY_LOCKED` | `payload.skuId` | the SKU ids in your own catalog |
+
+`MANDATE_SIGNED` carries `signerKeyDid`, but that is the *signer* -- the buyer agent for an
+Execution Mandate, the MCP server for a Cart Mandate -- not a routing key for the merchant whose
+goods are being bought.
+
+### `sessionId` does not join across the settlement boundary
+
+The MCP server stamps its events with the buyer's session id. The mandate engine stamps
+`PAYMENT_CAPTURED` with the **payment id** in that same field
+(`mandateEngine/mandateApp.py`, `emitPaymentCapturedTelemetry`: `sessionId=payload.paymentId`),
+so a naive group-by `sessionId` splits one purchase in two and leaves the capture -- the event a
+merchant most wants -- orphaned in a session of its own.
+
+The join both sides already carry is the payment id: read `payload.result.paymentId` off the
+`MCP_TOOL_RESULT` for `execute_settlement`, then match it against the `sessionId` of the
+`PAYMENT_CAPTURED`. The dashboard does exactly this in
+`src/lib/liveAgentSteps.ts` (`mapPaymentIdsToSessions`) rather than change the settlement wire
+contract to thread a session id through.
+
+### The order lifecycle, as a merchant sees it
+
+`INVENTORY_LOCKED` (your stock is committed) → `BID_TURN_COMPLETED` / `NEGOTIATION_CONVERGED`
+(only if you enabled bargaining) → `MANDATE_SIGNED` (the buyer authorised) → `PAYMENT_CAPTURED`
+(money moved, and the payload carries the four transfer legs plus `gstrInvoiceHash`).
+`ROUTE_ROLLBACK_TRIGGERED` and `BUDGET_BLOCKED` are the two branches where a lock you saw taken
+never becomes a sale -- treat them as the cue to release your own reservation.
+
+### A minimal merchant listener
+
+```python
+import httpx
+import json
+
+myRouteAccountId = "acc_N0xMerchantGold99"
+
+
+def _isMySale(event: dict) -> bool:
+    if event["eventType"] != "PAYMENT_CAPTURED":
+        return False
+    transfers = event["payload"].get("transfers", [])
+    return any(t.get("recipientAccountId") == myRouteAccountId for t in transfers)
+
+
+async def watchMySales() -> None:
+    url = "http://localhost:8000/api/v1/telemetry/stream"
+    async with httpx.AsyncClient(timeout=None) as client:
+        async with client.stream("GET", url) as response:
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                event = json.loads(line[6:])
+                # SYNTHETIC events come from scripts/seedTelemetryStream.py. A merchant ledger
+                # must not book those, so provenance is a filter and not a display field.
+                if event.get("provenance") != "LIVE" or not _isMySale(event):
+                    continue
+                payload = event["payload"]
+                mine = next(
+                    t for t in payload["transfers"]
+                    if t["recipientAccountId"] == myRouteAccountId
+                )
+                print(f"sold: {payload['paymentId']} net {mine['amountPaise']} paise")
+```
+
+### What is not built
+
+One gap and one half-built path, both worth knowing before you design around this page:
+
+1. **No order egress.** Nothing emails, texts or calls a merchant back when a sale settles. The
+   mesh has exactly one outbound notification path and it serves a different purpose: signed
+   price-drop alerts to a *buyer* callback URL, registered at
+   `POST /api/v1/alerts/price-drop` on the x402 gateway and dispatched by
+   `x402Gateway/src/alerts/priceDropAlertManager.py`. A merchant order callback would follow that
+   shape; it does not exist yet.
+2. **Inbound Razorpay webhooks are received, but nothing is reconciled against them.**
+   `POST /api/v1/webhooks/razorpay` on the mandate engine verifies the HMAC-SHA256 signature with
+   a timing-safe compare and rejects a delivery outside the 300-second freshness window
+   (`webhookFreshnessWindowSeconds`), de-duplicates on `X-Razorpay-Event-Id` so a retry is
+   processed once, and answers `{"status": "accepted", "reconciled": false}`. Set
+   `RAZORPAY_WEBHOOK_SECRET` to enable it -- unset, the route answers **503** rather than
+   accepting a payload it cannot verify.
+
+   `reconciled: false` is the honest part. `SettlementResult` is never persisted, so there is no
+   order for a `payment.failed` or `refund.created` delivery to amend; the endpoint acknowledges
+   and logs. Reconciliation is blocked on order persistence, not on the receiver.
+
+---
+
+## Metrics
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -698,49 +801,49 @@ export interface HeartbeatPayload {
 │     L_avg = ( 1 / K ) ∑ healingDurationMs_i   (SLA Target: L_avg < 300ms)                        │
 │                                                                                                  │
 │  6. Self-Healing SLA Pass Rate (SPR):                                                            │
-│     SPR = ( ∑ [ healingDurationMs_i ≤ 300 ∧ constraintsPassed_i == true ] / K ) × 100%          │
+│     SPR = ( ∑ [ healingDurationMs_i ≤ 300 ∧ constraintsPassed_i == true ] / K ) × 100%           │
 │                                                                                                  │
 │  7. Anti-Spam Micro-Escrow Burn (F_burn):                                                        │
 │     F_burn = N_turns × 50 paise                                                                  │
 │                                                                                                  │
-│  8. Conserved Route Split Conservation (INV-04):                                                 │
-│     amountPaise = merchantNetPaise + protocolFeePaise + logisticsAmountPaise                     │
+│  8. Conserved Route Split Conservation:                                                          │
+│     amountPaise = merchantNetPaise + protocolFeePaise + logisticsAmountPaise + tcsWithheldPaise  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.1 Mathematical Formulations
+### Formulas
 
-#### Total Settled Volume ($V_{\text{settled}}$)
+#### Total settled volume
 Aggregates the total settled transaction value in integer paise across all `PAYMENT_CAPTURED` events:
 $$V_{\text{settled}} = \sum_{i=1}^{M} \text{amountPaise}_i$$
 
-#### Settlement Success Rate ($\text{SSR}$)
+#### Settlement success rate
 Measures the reliability of 2PC multi-party transfers:
 $$\text{SSR} = \frac{N_{\text{captured}}}{N_{\text{initiated}}} \times 100\% = \frac{N_{\text{captured}}}{N_{\text{captured}} + N_{\text{rollback}}} \times 100\%$$
 
-#### Negotiation Convergence Rate ($\text{NCR}$)
+#### Negotiation convergence rate
 Quantifies the efficiency of bilateral Rubinstein-Ståhl bargaining turns reaching equilibrium within the maximum turn boundary ($T \le 5$):
 $$\text{NCR} = \frac{N_{\text{converged}}}{N_{\text{converged}} + N_{\text{exhausted}}} \times 100\%$$
 
-#### Average Vector Healing Latency ($\overline{L}_{\text{healing}}$)
+#### Average vector healing latency
 Calculates the mean duration in milliseconds for the Vector Healer to resolve an out-of-stock exception via Qdrant cosine similarity search:
 $$\overline{L}_{\text{healing}} = \frac{1}{K} \sum_{i=1}^{K} \text{healingDurationMs}_i \quad (\text{Target SLA} < 300\text{ms})$$
 
-#### Self-Healing SLA Pass Rate ($\text{SPR}$)
+#### Self-healing SLA pass rate
 Measures the percentage of vector substitutions that both complete under the 300ms deadline and satisfy 100% of negative constraints:
 $$\text{SPR} = \frac{\sum_{i=1}^{K} \mathbb{I}(\text{healingDurationMs}_i \le 300 \land \text{negativeConstraintsPassed}_i = \text{true})}{K} \times 100\%$$
 
-#### Micro-Escrow Anti-Spam Fee Accumulation
+#### Micro-escrow fees collected
 Calculates the total non-refundable anti-spam burn collected across all completed bargaining turns:
 $$F_{\text{cumulative}} = \sum_{j=1}^{T} \text{microFeePaidPaise}_j = T \times 50\text{ paise}$$
 
-#### Conserved Route Settlement Invariant (INV-04)
+#### Route settlement conservation
 Ensures zero-loss conservation of funds across multi-party split transfers:
-$$\text{amountPaise} \equiv \text{merchantNetPaise} + \text{protocolFeePaise} + \text{logisticsAmountPaise}$$
+$$\text{amountPaise} \equiv \text{merchantNetPaise} + \text{protocolFeePaise} + \text{logisticsAmountPaise} + \text{tcsWithheldPaise}$$
 
 ---
 
-## 5. Verification & Testing Reference
+## Tests
 
 Run the dedicated test suite verifying the telemetry emitter, SSE streaming async generator, subscriber queue management, and payload serialization:
 

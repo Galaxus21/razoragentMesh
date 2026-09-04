@@ -1,0 +1,237 @@
+---
+title: "MCP tool reference"
+description: "Every tool an autonomous agent can call on the mesh, with its exact arguments, constraints and defaults, generated from the JSON Schema the server returns from tools/list."
+navLabel: "Tool Reference"
+navDescription: "Every tool and argument"
+order: 6
+section: "Reference"
+icon: "Terminal"
+audience: "developer"
+---
+
+{/*
+  GENERATED FILE -- do not edit by hand.
+  Produced by scripts/generateToolReference.ts from packages/mcpServer/src/constants/*Manifest.ts,
+  which is the same JSON Schema an agent receives from tools/list. Change the manifest, then run
+  `npm run docs:tools`.
+*/}
+
+The complete surface an autonomous buyer can call. These 10 tools are what
+`tools/list` returns; the tables below are generated from that same schema, so an argument
+documented here is an argument the server will accept, and a constraint shown here is one it will
+enforce.
+
+## Transport
+
+The server speaks MCP over Streamable HTTP.
+
+| | |
+| --- | --- |
+| Endpoint | `http://localhost:4001/mcp` |
+| Protocol | MCP over Streamable HTTP (JSON-RPC 2.0) |
+| Session | Issued by the server on initialize; sent back as `Mcp-Session-Id` |
+| Auth | None in local mode. The mesh authenticates the *mandate chain*, not the caller |
+
+A REST adapter mirrors the read-only discovery tools at `/api/v1/*` for clients that do not
+speak MCP. It is the same handler and the same telemetry; see the Telemetry & SSE guide.
+
+## Calling a tool
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "search_catalog",
+    "arguments": { "query_text": "ergonomic mesh office chair", "limit": 5 }
+  }
+}
+```
+
+Arguments are `snake_case` on the wire. The server also accepts `camelCase` aliases for the
+buyer SDK's benefit, but the manifest names below are the canonical ones.
+
+## L1 · Discovery
+
+Find something to buy and get a price for it. Every quote is sealed with an HMAC hash that a later stage must present, so a cart cannot be built from a price the mesh never issued.
+
+### `search_catalog`
+
+Finds catalog products matching a natural-language description, ranked by semantic similarity. Use this first when the buyer describes what they want rather than naming a SKU id. The response reports embedding_mode: when it is 'hash' the ranking is NOT semantic and the order is not meaningful. A result whose merchant has a sale SCHEDULED carries next_promotion, with its start time and expected_savings_paise. If ANY result carries one you MUST say so in your final answer -- naming the SKU, the saving and when it starts -- even for a product you did not buy and even when the buyer did not ask about discounts. A buyer who spends money hours before a sale they were shown, and were not told about, has been failed by their agent.
+
+### `search_catalog` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query_text` | `string` | **Yes** | Plain-language description of the desired product. 'queryText' and 'query' are accepted as aliases for this field. _(length 1–500)_ |
+| `limit` | `integer` | No | Maximum number of ranked results to return. _(1–25; defaults to `5`)_ |
+
+### `browse_catalog`
+
+Lists what the mesh actually sells, with optional category, brand, HSN and stock filters. Use this when search_catalog returns nothing useful, or when you want to see the range before choosing -- it enumerates the live catalog directly rather than ranking it, so a product missing from the semantic index still appears here. Returns total_matching so you can page with offset, and categories_available so you can widen a filter that matched nothing. Prices are list prices: call get_live_sku_quote for a binding number. Each item also carries next_promotion when its merchant has a sale SCHEDULED, with the start time and expected_savings_paise -- so you can find what is about to get cheaper without quoting every SKU. Filter with has_upcoming_promotion to ask that question directly, and advise your buyer to wait when the saving is worth the delay. available_stock, and the min_stock filter applied to it, are both read after reservations whose lock has lapsed are released -- so a SKU an abandoned lock was holding is listed again rather than staying hidden behind a hold nobody is using.
+
+### `browse_catalog` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `brand` | `string` | No | Exact brand, case-insensitive. _(length 1–∞)_ |
+| `category` | `string` | No | Exact category, case-insensitive. _(length 1–∞)_ |
+| `has_upcoming_promotion` | `boolean` | No | Omit to list everything. True lists only SKUs with a sale scheduled; false only those without one, which is what to buy when waiting is not an option. |
+| `hsn_code` | `string` | No | Exact HSN tax code, as printed on the invoice line (94013000 is seating). Use it to list everything taxed alike. _(length 1–∞)_ |
+| `limit` | `integer` | No | How many items to return in this page. _(1–100; defaults to `25`)_ |
+| `min_stock` | `integer` | No | Defaults to 1, so only orderable stock is listed. Pass 0 to include out-of-stock. _(min 0; defaults to `1`)_ |
+| `offset` | `integer` | No | How many items to skip, for paging. Compare with total_matching in the response to know when you have seen everything. _(min 0; defaults to `0`)_ |
+
+### `get_live_sku_quote`
+
+Calculates real-time unit pricing, volume discount tiers, and HSN-compliant GST for a requested SKU and volume. A merchant sale that is RUNNING is already in offered_unit_price_paise and is named in applied_discounts as SCHEDULED_PROMOTION. A sale that has not started yet is in upcoming_promotions, with its start time and expected_savings_paise. If upcoming_promotions is non-empty you MUST tell the buyer the sale exists, what it would save and when it starts, even if you go on to recommend buying now -- a buyer who later discovers you bought hours before a sale you saw and did not mention has been badly served. Say it in your final answer, not only in your reasoning. Which campaign, cashback and promo codes apply is set per SKU by its merchant, so a code that discounts one SKU may do nothing on another -- applied_discounts names every one that fired. available_stock is what reserve_inventory_lock would grant you at this moment: reservations whose lock has already lapsed are released before the count is taken, so the number you read here and the number the lock enforces are the same one.
+
+### `get_live_sku_quote` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `buyer_agent_id` | `string` | **Yes** | Your agent DID. Under mesh_demo_custodial custody it is minted by establish_agent_delegation, so call that FIRST and reuse the buyer_agent_did it returns rather than inventing one. _(matches `^did:agent:[a-z0-9_\-\.:]+$`)_ |
+| `delivery_pincode` | `string` | **Yes** | Six-digit destination PIN code. It selects the courier zone and the GST treatment, so a quote for one address does not hold for another. _(matches `^[1-9][0-9]{5}$`)_ |
+| `quantity` | `integer` | **Yes** | Units to price. Volume tiers are applied from this number, so quoting 1 and then buying 10 gives the wrong price. _(1–10000)_ |
+| `sku_id` | `string` | **Yes** | The SKU to price, exactly as search_catalog or browse_catalog returned it. _(matches `^SKU-[A-Z0-9_-]{3,32}$`)_ |
+| `promo_code` | `string` | No | Optional merchant promo code. Codes are set per SKU, so one that discounts another SKU may do nothing here; applied_discounts names whatever actually fired. |
+
+### `verify_shipping_sla`
+
+Deterministically calculates courier routing zone, delivery SLA hours, and shipping cost. CHECK serviceable before building a cart: it is false when no courier serves the delivery pincode, and when the tier you asked for is not offered to that zone. Both cases return unserviceable_reason to relay to your buyer, and available_delivery_tiers so you can re-request usefully. create_cart_mandate refuses an unserviceable address outright.
+
+### `verify_shipping_sla` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `delivery_pincode` | `string` | **Yes** | Six-digit PIN code the goods ship TO. _(matches `^[1-9][0-9]{5}$`)_ |
+| `origin_pincode` | `string` | **Yes** | Six-digit PIN code the goods ship FROM -- the merchant warehouse, not the buyer. It is the origin of the courier zone calculation. _(matches `^[1-9][0-9]{5}$`)_ |
+| `package_weight_grams` | `integer` | **Yes** | Billable package weight in grams. Shipping is priced in weight slabs, so this changes the cost even when the zone does not. _(min 1)_ |
+| `required_delivery_tier` | `string` | **Yes** | Service level to price. Not every tier is offered to every zone: when one is not, serviceable comes back false and available_delivery_tiers lists what is. _(one of `standard`, `express`, `sameDay`)_ |
+
+## L2 · Negotiation
+
+Bargain against the merchant's own policy. Each turn is metered by an x402-INR micro-escrow, which is what stops a bidding loop from being free to run.
+
+### `negotiate_price`
+
+Bargains for a lower unit price by running a full x402-INR alternating-offer negotiation against the merchant gateway -- up to 5 turns, each gated by a proof-of-work solve and charged ₹0.50 from a micro-escrow this tool opens and releases for you. Negotiation is opt-in per merchant: many sell at a firm listed price and answer status DECLINED, which costs nothing and means buy at list rather than retry. The merchant also sets the floor, so a converged price is theirs to allow, not yours to name. Give it what you want to open at and, in max_unit_price_paise, the most you will pay: the bid ladder never crosses that ceiling, so a CONVERGED result is always affordable. Worth a call before get_live_sku_quote on anything expensive; skip it on cheap items, where the turn fees can exceed the saving (the response reports both, so you can tell). A converged price BINDS: quote the same SKU with the same buyer_agent_id and quantity within 5 minutes and get_live_sku_quote applies it as a NEGOTIATED line, so the cart and the settlement charge it. Read savings_realised_paise, not savings_vs_list_paise, when you tell the buyer what the bargaining saved: the first is measured against the discounts they would have got anyway, and the second double-counts them.
+
+### `negotiate_price` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `buyer_agent_id` | `string` | **Yes** | Your agent DID, the same one you quoted with. _(matches `^did:agent:[a-z0-9_\-\.:]+$`)_ |
+| `max_unit_price_paise` | `integer` | **Yes** | Your walk-away price per unit. A hard ceiling, not a target: no turn will bid above it. _(min 1)_ |
+| `opening_bid_paise` | `integer` | **Yes** | Your opening offer per unit. Below the list price, or there is nothing to negotiate. _(min 1)_ |
+| `quantity` | `integer` | **Yes** | Units you intend to buy. Volume moves the merchant floor, so a larger order can settle lower per unit. _(1–10000)_ |
+| `sku_id` | `string` | **Yes** | The SKU to bargain over. _(matches `^SKU-[A-Z0-9_-]{3,32}$`)_ |
+| `max_turns` | `integer` | No | Cap on alternating offers. Each turn costs a micro-escrow fee, so more turns is not free; the loop stops early once the spread closes. _(1–5; defaults to `5`)_ |
+| `merchant_did` | `string` | No | Merchant to bargain with, when the SKU is sold by more than one. Omit to use the SKU own merchant. A DID you supply is never trusted as authority over price. _(length 1–∞)_ |
+
+## L4 · Settlement
+
+Reserve stock, then build and sign the Google AP2 mandate chain -- Intent, Cart, Execution -- and settle it. Every mandate is Ed25519 over RFC 8785 canonical JSON.
+
+### `reserve_inventory_lock`
+
+Atomically reserves stock against a LIVE QUOTE and returns the four values create_cart_mandate needs: lock_token, fencing_token, expires_at_unix_ms, and signature. Call get_live_sku_quote first and pass its quote_hash through unchanged -- a hash this mesh did not issue for this exact SKU, quantity and buyer_agent_id is refused and NO stock is reserved, so a refusal here costs you nothing and tells you what to fix. An out-of-stock refusal may also suggest an available substitute SKU discovered via vector search; taking it requires requesting a fresh quote for that substitute SKU. Note the two clocks: your lock lasts lock_ttl_seconds, but the quote behind it dies 60 seconds after it was issued, and create_cart_mandate needs both alive. Taking a lock longer than the quote does not extend the quote -- go straight from quote to lock to cart, and re-quote if you detour.
+
+### `reserve_inventory_lock` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `buyer_agent_id` | `string` | **Yes** | The same DID you quoted with. The quote is bound to it, so a lock for a different agent is refused. |
+| `lock_ttl_seconds` | `integer` | **Yes** | How long the reservation is held. The 60s default already matches the quote's own lifetime; a longer lock outlives the quote it was taken against and cannot be carted. _(10–120; defaults to `60`)_ |
+| `quantity` | `integer` | **Yes** | Must match the quantity the quote_hash was issued for. Quote again to lock a different number. _(min 1)_ |
+| `quote_hash` | `string` | **Yes** | From get_live_sku_quote, unchanged. Verified against the quotes this mesh issued before any stock moves. |
+| `sku_id` | `string` | **Yes** | Must match the SKU the quote_hash was issued for. |
+
+### `establish_agent_delegation`
+
+Pairs your agent with the mesh and issues a signed Intent Mandate delegating a bounded spending authority to your DID. The other three purchase tools take the delegation_id it returns -- but PRICE THE PURCHASE BEFORE YOU CALL THIS. get_live_sku_quote and verify_shipping_sla both answer without any delegation, and the cart charges exactly the shipping_cost_paise the SLA returned, so offered_unit_price_paise x quantity + total_tax_paise + shipping_cost_paise is the all-in total. Set max_budget_paise from that figure, not from a guess you mean to correct afterwards -- see the ceiling rule below for why a correction upward will not be accepted. key_custody has NO default and you must state it. 'agent_held': you keep your Ed25519 private key, prove possession by signing the budget terms, and later sign the Execution Mandate yourself -- the mesh never holds buyer authority. 'mesh_demo_custodial': the mesh mints and holds the buyer key and returns the private key to you, because a custodial demo that hands you the key cannot be mistaken for a security boundary; in that mode the mesh can sign purchases with no human approval and the budget ceiling does not bind the mesh. authorized_categories IS enforced at settlement against the merchant-signed cart. In mesh_demo_custodial a delegation authorises a SINGLE purchase: the mesh discards the session buyer key once that purchase settles, so its lifetime is the purchase and not validity_seconds. Call this tool again for each further purchase -- reusing a settled delegation is refused, whatever budget it has left. Know what that means for the ceiling you are given: the FIRST max_budget_paise this session declares becomes the session ceiling and binds every later delegation too. A further establish_agent_delegation may LOWER that ceiling but can never raise it, because re-pairing is you reconnecting and not your buyer granting more money. So a provisional cap you intended to widen once you knew the price will hold you to the provisional figure and the purchase will be refused with nothing charged. Across MCP sessions there is no ceiling at all and YOU are the one tracking the buyer's total. Before you re-pair to retry, check whether the purchase you are redoing already settled. Settling the same cart twice in one session is refused; settling it twice across sessions is not.
+
+### `establish_agent_delegation` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `key_custody` | `string` | **Yes** | No default. State which party holds the buyer signing key. _(one of `agent_held`, `mesh_demo_custodial`)_ |
+| `max_budget_paise` | `integer` | **Yes** | Total you may spend under this delegation, in paise (integer: 50000 is Rs 500). The budget gate is deterministic -- a cart one paise over is refused. _(min 1)_ |
+| `single_transaction_limit_paise` | `integer` | **Yes** | Clamped to max_budget_paise if larger. _(min 1)_ |
+| `authorized_categories` | `string[]` | No | Enforced at settlement against the category the merchant signed onto each cart line; a line outside this list aborts with ₹0 charged. Use the merchant catalog's spellings (matched case-insensitively). Empty means no restriction. _(defaults to `[]`)_ |
+| `buyer_agent_id` | `string` | No | Required for agent_held; omitted otherwise. did:agent: plus 64 lowercase hex. _(matches `^did:agent:[0-9a-f]{64}$`)_ |
+| `proof_nonce` | `string` | No | Random single-use string you signed over. Replaying a nonce is refused. _(length 1–∞)_ |
+| `proof_signature` | `string` | No | Required for agent_held. Detached Ed25519, 128 lowercase hex, over the RFC 8785 canonical JSON of {buyerAgentId, maxBudgetPaise, nonce, singleTransactionLimitPaise, timestamp}. _(length 128–128)_ |
+| `proof_timestamp` | `integer` | No | Unix seconds. Accepted within -5s to +60s of mesh time. _(min 1)_ |
+| `validity_seconds` | `integer` | No | How long this delegation stays usable, in seconds. Every later call is refused once it lapses, so allow for negotiation turns and retries. _(60–86400; defaults to `86400`)_ |
+
+### `create_cart_mandate`
+
+Produces a merchant-signed Cart Mandate from a live quote and a live inventory lock. The mesh re-derives every price from its own pricing and shipping engines and compares the result against your quote_hash, so the merchant signature attests only to numbers the merchant produced. Call get_live_sku_quote and reserve_inventory_lock first and pass their outputs through unchanged. The cart also fixes WHERE the merchant is paid: the Route payout account is resolved from the merchant identity signing this cart, so merchant_account is not a destination you can choose. Omit it.
+
+### `create_cart_mandate` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `delegation_id` | `string` | **Yes** | From establish_agent_delegation. Required on every later call. _(length 1–∞)_ |
+| `delivery_pincode` | `string` | **Yes** | Destination PIN code. An address no courier serves is refused here outright. _(matches `^[1-9][0-9]{5}$`)_ |
+| `delivery_state_code` | `string` | **Yes** | Two-digit GST state code. Decides intra- vs inter-state GST. _(matches `^[0-9]{2}$`)_ |
+| `fencing_token` | `integer` | **Yes** | From reserve_inventory_lock. _(min 1)_ |
+| `lock_expires_at_unix_ms` | `integer` | **Yes** | Milliseconds, exactly as reserve_inventory_lock returned it. _(min 1)_ |
+| `lock_signature` | `string` | **Yes** | From reserve_inventory_lock, where this value is returned under the key 'signature' -- not 'lock_signature'. Pass it through unchanged. _(length 1–∞)_ |
+| `lock_token` | `string` | **Yes** | From reserve_inventory_lock. _(length 1–∞)_ |
+| `quantity` | `integer` | **Yes** | Units to buy. Must equal the quantity you quoted, or the quote hash will not verify. _(1–10000)_ |
+| `quote_hash` | `string` | **Yes** | From get_live_sku_quote. _(length 1–∞)_ |
+| `sku_id` | `string` | **Yes** | The SKU you quoted and locked. It must match both. _(matches `^SKU-[A-Z0-9_-]{3,32}$`)_ |
+| `merchant_account` | `string` | No | Do not send this. The Razorpay Route recipient for the merchant leg is resolved from the merchant identity that signs the cart, so it is not yours to choose. It is accepted only so that naming a different account is REFUSED with a reason rather than silently ignored; the refusal names the account this merchant is actually paid at, and nothing is charged. _(length 1–∞)_ |
+| `package_weight_grams` | `integer` | No | Billable weight in grams, the same one you checked the SLA with. _(min 1; defaults to `750`)_ |
+| `promo_code` | `string` | No | Optional. Must be the same code you quoted with, if any. |
+| `quote_expiry_timestamp` | `integer` | No | Optional but recommended: pass quote_expiry_timestamp back exactly as get_live_sku_quote returned it. Supplying it lets the mesh tell an expired quote apart from a genuine parameter mismatch and refuse with a timeout you can act on. _(min 1)_ |
+
+### `sign_execution_mandate`
+
+Issues the Execution Mandate binding your Intent and Cart mandates together. In agent_held mode it returns the exact RFC 8785 canonical JSON to sign and NO signature: sign those bytes with your key and pass 128 lowercase hex to execute_settlement. In mesh_demo_custodial mode the mesh signs with the session key it holds and returns a complete mandate. Settle within 65 seconds -- the nonce ledger rejects a mandate signed outside that window. The settlement amount is taken from the stored cart and cannot be supplied by the caller.
+
+### `sign_execution_mandate` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `delegation_id` | `string` | **Yes** | From establish_agent_delegation. _(length 1–∞)_ |
+| `cart_mandate_hash` | `string` | No | Optional. Selects a cart when the delegation holds more than one. _(length 64–64)_ |
+
+### `execute_settlement`
+
+Submits the three-mandate bundle to the settlement saga and returns the capture, the Route split and the GSTR-1 invoice. A refusal -- replayed nonce, expired inventory lock, budget exceeded, bad signature, a merchant_account that is not where the signing merchant is paid -- comes back as a tool result with isError set and a machine-readable reason, NOT as a JSON-RPC error. A refusal means the protocol worked; read the reason rather than retrying blindly. The merchant leg of the split always pays the account registered to the merchantDid on the signed cart; no field on this call can move it.
+
+### `execute_settlement` arguments
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `delegation_id` | `string` | **Yes** | From establish_agent_delegation. _(length 1–∞)_ |
+| `execution_id` | `string` | **Yes** | From sign_execution_mandate. Settlement is refused if the mandate it names has expired, so sign and settle without a long gap. _(length 1–∞)_ |
+| `agent_signature` | `string` | No | Required in agent_held mode; rejected in mesh_demo_custodial mode. _(length 128–128)_ |
+| `merchant_account` | `string` | No | Do not send this. The Route recipient for the merchant leg is resolved from the merchantDid on the SIGNED cart mandate, never from this request, so it cannot redirect a payout. Sending a value that differs from the resolved account is refused before anything is charged. _(length 1–∞)_ |
+
+## When a call fails
+
+A failure comes back as a tool result with `success: false`, never as a missing response. The
+mesh distinguishes two kinds, and the distinction is on the telemetry payload as `failureKind`:
+
+| `failureKind` | Meaning | What to do |
+| --- | --- | --- |
+| `invalid_request` | The arguments failed this tool's schema. The tables above list every constraint that can produce this | Fix the arguments and retry. Nothing was refused |
+| `refusal` | A well-formed call the mesh declined -- budget exceeded, mandate expired, stock gone, signature invalid | Read `exceptionCode`. Retrying unchanged will fail identically |
+
+A refusal carries a machine-readable `exceptionCode` alongside the message:
+
+```json
+{
+  "error": "SKU with identifier SKU-DOES-NOT-EXIST was not found in catalog",
+  "exceptionCode": "SKU_NOT_FOUND"
+}
+```
+
+Both kinds are published to the telemetry stream and both are visible on the dashboard's
+Live Agent screen, counted separately: an agent misdialling an argument is not the protocol
+refusing it.

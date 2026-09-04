@@ -13,66 +13,46 @@ import { isRouteMatching } from "../src/constants/sidebarNavigationConfig.js";
 
 const expectedRouteList: ReadonlyArray<string> = [
   "/overview",
-  "/self-healing",
-  "/infrastructure",
-  "/protocol",
-  "/playground/layers",
-  "/playground",
-  "/playground/adversarial",
-  "/playground/live-agent",
-  "/sdk-console",
-  "/agent-observability",
-  "/negotiation-hub",
-  "/security-audit",
   "/merchant-studio",
+  "/visualise",
+  "/docs",
   "/docs/setup",
   "/docs/agent-quickstart",
   "/docs/onboarding",
   "/docs/buyer-sdk",
   "/docs/merchant-guide",
+  "/docs/tool-reference",
   "/docs/telemetry",
   "/docs/gstr1-invoice",
 ];
 
 const expectedLabelList: ReadonlyArray<string> = [
   "Overview",
-  "Self-Healing",
-  "Infrastructure",
-  "Protocol Map",
-  "Layer Explorer",
-  "Run The Protocol",
-  "Adversarial Playground",
-  "Live Agent",
-  "SDK Console",
-  "Agent Observability",
-  "Negotiation Hub",
-  "Security & Audit",
-  "Merchant Studio",
+  "Merchant",
+  "Visualise",
+  "All docs",
   "System Setup",
   "Agent Quickstart",
   "Developer Onboarding",
   "Buyer SDK",
   "Merchant Guide",
+  "Tool Reference",
   "Telemetry & SSE",
   "GSTR-1 Invoicing",
 ];
 
 const expectedCategoryIds: ReadonlyArray<string> = [
-  "platformOps",
-  "protocolPlayground",
-  "aiBuyerAgents",
-  "cfosAuditors",
-  "merchants",
+  "overview",
+  "merchant",
+  "visualise",
   "documentation",
 ];
 
 const expectedCategoryLabels: ReadonlyArray<string> = [
-  "Platform Ops",
-  "Protocol Playground",
-  "AI Buyer Agents",
-  "CFOs & Auditors",
-  "Merchants",
-  "Documentation",
+  "Overview",
+  "Merchant",
+  "Visualise",
+  "Docs",
 ];
 
 describe("Milestone 2 — Sidebar State & Persistence Invariants", () => {
@@ -109,8 +89,8 @@ describe("Milestone 2 — Sidebar State & Persistence Invariants", () => {
 });
 
 describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
-  it("should define exactly 6 top-level navigation categories", () => {
-    assert.equal(navigationCategories.length, 6);
+  it("should define exactly 4 top-level navigation sections", () => {
+    assert.equal(navigationCategories.length, 4);
 
     const categoryIds = navigationCategories.map((c) => c.id);
     assert.deepEqual(categoryIds, expectedCategoryIds);
@@ -124,19 +104,19 @@ describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
     }
   });
 
-  it("should register exactly 20 unique navigation routes across all categories", () => {
-    assert.equal(navigationItems.length, 20);
+  it("should register every sidebar route exactly once", () => {
+    assert.equal(navigationItems.length, 12);
 
     const routes = navigationItems.map((item) => item.route);
     const uniqueRoutes = new Set(routes);
-    assert.equal(uniqueRoutes.size, 20);
+    assert.equal(uniqueRoutes.size, 12);
 
     for (const expectedRoute of expectedRouteList) {
       assert.ok(uniqueRoutes.has(expectedRoute), `Missing route: ${expectedRoute}`);
     }
   });
 
-  it("should map descriptive labels and valid properties for all 20 child items", () => {
+  it("should map descriptive labels and valid properties for every child item", () => {
     const labels = navigationItems.map((item) => item.label);
     for (let index = 0; index < expectedLabelList.length; index += 1) {
       assert.equal(labels[index], expectedLabelList[index]);
@@ -151,16 +131,18 @@ describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
 
     assert.equal(isActiveRoute("/overview", "/overview"), true);
     assert.equal(isActiveRoute("/overview/details", "/overview"), true);
-    assert.equal(isActiveRoute("/security-audit", "/overview"), false);
-    assert.equal(isActiveRoute("/infrastructure", "/infrastructure"), true);
+    assert.equal(isActiveRoute("/visualise", "/overview"), false);
+    assert.equal(isActiveRoute("/visualise", "/visualise"), true);
     assert.equal(isActiveRoute("/merchant-studio", "/merchant-studio"), true);
     assert.equal(isActiveRoute("/docs/setup", "/docs/setup"), true);
     assert.equal(isActiveRoute("/docs/buyer-sdk", "/docs/buyer-sdk"), true);
     assert.equal(isActiveRoute("/docs/merchant-guide", "/docs/merchant-guide"), true);
 
-    // A registered nested route belongs to itself alone, so exactly one sidebar row lights up.
-    assert.equal(isActiveRoute("/playground/adversarial", "/playground/adversarial"), true);
-    assert.equal(isActiveRoute("/playground/adversarial", "/playground"), false);
-    assert.equal(isActiveRoute("/playground", "/playground"), true);
+    // A tab route belongs to itself alone, so the tab strip highlights exactly one page while
+    // the sidebar's Visualise row stays lit by prefix.
+    assert.equal(isActiveRoute("/visualise/adversarial", "/visualise/adversarial"), true);
+    assert.equal(isActiveRoute("/visualise/adversarial", "/visualise"), false);
+    assert.equal(isActiveRoute("/visualise/settle", "/visualise/settle"), true);
+    assert.equal(isActiveRoute("/visualise/settle", "/visualise"), false);
   });
 });

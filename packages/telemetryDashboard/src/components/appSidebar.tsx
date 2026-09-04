@@ -2,13 +2,13 @@
 
 import React, { useCallback, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronLeft, ChevronRight, Zap } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
-  brandSubtitle,
   brandTitle,
   collapseLabel,
   defaultExpandedCategories,
   expandLabel,
+  groupChildrenBySection,
   isCategoryActive,
   isRouteMatching,
   navigationCategories,
@@ -18,7 +18,6 @@ import {
 } from "../constants/sidebarNavigationConfig";
 
 export {
-  brandSubtitle,
   brandTitle,
   collapseLabel,
   defaultExpandedCategories,
@@ -107,8 +106,22 @@ function CategoryAccordion({ category, isExpanded, activeRoute, onToggleAccordio
 
       {isExpanded && (
         <div className="ml-3 space-y-0.5 border-l border-borderSubtle pl-2">
-          {category.children.map((child) => (
-            <ChildRouteLink key={child.route} item={child} isActive={isRouteMatching(activeRoute, child.route)} />
+          {groupChildrenBySection(category.children).map((group) => (
+            <div key={group.section || category.id}>
+              {/*
+                Only the documentation category sets a section, so every other category still
+                renders as one flat list -- the heading appears exactly where it earns its
+                line, and nothing gains an empty group label.
+              */}
+              {group.section && (
+                <p className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-textMuted">
+                  {group.section}
+                </p>
+              )}
+              {group.items.map((child) => (
+                <ChildRouteLink key={child.route} item={child} isActive={isRouteMatching(activeRoute, child.route)} />
+              ))}
+            </div>
           ))}
         </div>
       )}
@@ -116,16 +129,19 @@ function CategoryAccordion({ category, isExpanded, activeRoute, onToggleAccordio
   );
 }
 
+// Served straight from /public rather than through next/image: the mark is a fixed-size static
+// SVG, so the optimizer has nothing to resize and would only add a request hop.
+const brandMarkSource = "/logo.svg";
+const brandMarkAlt = "RazorAgent Mesh";
+
 function SidebarBrandHeader({ isCollapsed }: { readonly isCollapsed: boolean }): React.JSX.Element {
   return (
-    <div className="flex h-14 items-center justify-between border-b border-borderSubtle px-3.5">
-      <div className="flex items-center gap-2.5 overflow-hidden">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentPrimary text-white"><Zap className="h-4 w-4" /></div>
+    <div className="flex h-14 items-center border-b border-borderSubtle px-3.5">
+      <div className={`flex items-center gap-2.5 overflow-hidden ${isCollapsed ? "w-full justify-center" : ""}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={brandMarkSource} alt={brandMarkAlt} width={28} height={28} className="h-7 w-7 shrink-0" />
         {!isCollapsed && (
-          <div className="flex flex-col min-w-0">
-            <span className="truncate text-xs font-semibold text-textPrimary">{brandTitle}</span>
-            <span className="text-[10px] font-mono text-textMuted">{brandSubtitle}</span>
-          </div>
+          <span className="truncate text-sm font-semibold tracking-tight text-textPrimary">{brandTitle}</span>
         )}
       </div>
     </div>
@@ -158,7 +174,7 @@ export function AppSidebar({ isCollapsed, onToggle, activeRoute }: AppSidebarPro
   );
 
   return (
-    <aside className={`relative flex flex-col border-r border-borderSubtle bg-bgSurface transition-all duration-200 ease-in-out ${isCollapsed ? "w-16" : "w-60"}`}>
+    <aside className={`relative flex shrink-0 flex-col overflow-hidden border-r border-borderSubtle bg-bgSurface transition-all duration-200 ease-in-out ${isCollapsed ? "w-16" : "w-60"}`}>
       <SidebarBrandHeader isCollapsed={isCollapsed} />
       <nav className="flex-1 space-y-2 p-2 overflow-y-auto custom-scrollbar">
         {isCollapsed
