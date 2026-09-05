@@ -135,13 +135,13 @@ async def testRegressionCaptureAndTransfersStayMockedWhenRouteLiveFalse() -> Non
 
         # createTransfer should be mock and make 0 HTTP calls
         transferReq = RouteTransferRequest(
-            account="acc_demoMerchantChairs",
+            account="acc_demoMerchantRazorAgent",
             amount=45000,
             currency="INR",
             notes={},
         )
         transferRes = await client.createTransfer(transferReq)
-        assert transferRes.account == "acc_demoMerchantChairs"
+        assert transferRes.account == "acc_demoMerchantRazorAgent"
         assert transferRes.amount == 45000
         assert transferRes.status == "processed"
 

@@ -25,6 +25,8 @@ import {
   defaultFallbackState
 } from "../constants/protocolConstants.js";
 import { lookupStateFromPincode } from "./skuQuoter.js";
+import { defaultCatalogStore, CatalogStore } from "../catalog/catalogStore.js";
+import { defaultPackageWeightGrams } from "../constants/mandateToolConstants.js";
 import {
   ShippingSlaRequest,
   ShippingSlaResponse,
@@ -37,6 +39,25 @@ export const statePrefixLength = 2;
 export const baseWeightGramsLimit = 500;
 export const extraWeightChunkGrams = 500;
 export const extraWeightSurchargePaise = 1000;
+
+/**
+ * Billable weight is the merchant's fact, not the buyer's claim. create_cart_mandate used to pass
+ * the agent-supplied package_weight_grams straight into the surcharge, so a buyer that left the
+ * field at its 750g default shipped four 45kg acoustic pods for the same fee as one -- and an
+ * agent that wanted to could simply declare less. Worse, quantity never entered the figure at
+ * all. Resolve grams from the catalog record and multiply by the units actually being bought.
+ *
+ * A SKU that declares no weightGrams falls back to the mesh's own default parcel weight rather
+ * than to anything the caller sent, so the number stays the mesh's to decide either way.
+ */
+export function resolveBillableWeightGrams(
+  skuId: string,
+  quantity: number,
+  catalogStore: CatalogStore = defaultCatalogStore
+): number {
+  const perUnitGrams = catalogStore.getSku(skuId)?.weightGrams ?? defaultPackageWeightGrams;
+  return Math.max(1, perUnitGrams * quantity);
+}
 
 export function resolveZoneCode(originPincode: string, deliveryPincode: string): string {
   if (originPincode.slice(0, cityPrefixLength) === deliveryPincode.slice(0, cityPrefixLength)) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Verifies that every relative markdown link in documentation targets a file that
-exists on disk. Resolves links in README.md, GUIDE.md, PROJECT.md, docs/*.md,
+exists on disk. Resolves links in README.md, GUIDE.md, docs/*.md,
 and packages/telemetryDashboard/docs/*.mdx.
 
 Links are checked for file existence; anchors (path#section) are validated against
@@ -39,7 +39,6 @@ meshRoot: Path = Path(__file__).resolve().parent.parent
 documentPaths: List[Path] = [
     meshRoot / "README.md",
     meshRoot / "GUIDE.md",
-    meshRoot / "PROJECT.md",
 ]
 
 docGlobPatterns: List[Tuple[Path, str]] = [

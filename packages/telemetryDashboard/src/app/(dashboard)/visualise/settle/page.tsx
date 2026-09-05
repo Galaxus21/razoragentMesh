@@ -26,6 +26,7 @@ import { panelClass } from "@/constants/playgroundConstants";
 import { useTelemetry } from "@/context/telemetryContext";
 import { TestCredentialsCard } from "./testCredentialsCard";
 import { VerificationArtifactCard } from "./verificationArtifactCard";
+import { InvoiceCard } from "./invoiceCard";
 import {
   CheckoutConfig,
   formatPaiseToInr,
@@ -71,7 +72,7 @@ function readPayableOrders(
     if (event.eventType !== "PAYMENT_CAPTURED") {
       continue;
     }
-    const { razorpayOrderId, amountPaise, paymentId } = event.payload;
+    const { razorpayOrderId, amountPaise, paymentId, invoice } = event.payload;
     if (!razorpayOrderId || seen.has(razorpayOrderId)) {
       continue;
     }
@@ -82,6 +83,7 @@ function readPayableOrders(
       paymentId: paymentId || null,
       sessionId: event.sessionId ?? null,
       capturedAtMs: event.timestampMs ?? null,
+      invoice: invoice ?? null,
     });
   }
 
@@ -124,6 +126,7 @@ function SettleBody(): React.JSX.Element {
           paymentId: null,
           sessionId: null,
           capturedAtMs: null,
+          invoice: null,
         }
       : null;
 
@@ -344,6 +347,11 @@ function SettleBody(): React.JSX.Element {
               </dd>
             </div>
           </dl>
+
+          <InvoiceCard
+            invoice={selectedOrder.invoice}
+            razorpayOrderId={selectedOrder.razorpayOrderId}
+          />
 
           <div className="flex flex-col gap-3 border-t border-borderSubtle pt-4 sm:flex-row sm:items-center sm:justify-between">
             <Link

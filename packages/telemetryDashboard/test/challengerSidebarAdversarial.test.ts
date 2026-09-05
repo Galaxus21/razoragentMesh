@@ -15,7 +15,8 @@ import { loadAllDocPages, loadDocPage } from "../src/lib/docsLoader.js";
 
 const stressLoopIterations = 5000;
 const expectedCategoryCount = 4;
-const expectedTotalRouteCount = 12;
+// 12 before Visualise's four sub-screens became sidebar rows of their own.
+const expectedTotalRouteCount = 16;
 
 const defaultCategoryIds: ReadonlyArray<string> = [
   "overview",

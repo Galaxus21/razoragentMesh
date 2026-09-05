@@ -15,6 +15,10 @@ const expectedRouteList: ReadonlyArray<string> = [
   "/overview",
   "/merchant-studio",
   "/visualise",
+  "/visualise/settle",
+  "/visualise/run",
+  "/visualise/adversarial",
+  "/visualise/vectors",
   "/docs",
   "/docs/setup",
   "/docs/agent-quickstart",
@@ -29,7 +33,11 @@ const expectedRouteList: ReadonlyArray<string> = [
 const expectedLabelList: ReadonlyArray<string> = [
   "Overview",
   "Merchant",
-  "Visualise",
+  "Live Agent",
+  "Settle",
+  "Run It Here",
+  "Adversarial",
+  "Vector Index",
   "All docs",
   "System Setup",
   "Agent Quickstart",
@@ -105,11 +113,12 @@ describe("Milestone 2 — Navigation Categories & Accordion Hierarchy", () => {
   });
 
   it("should register every sidebar route exactly once", () => {
-    assert.equal(navigationItems.length, 12);
+    // 12 before Visualise's four sub-screens became sidebar rows of their own.
+    assert.equal(navigationItems.length, 16);
 
     const routes = navigationItems.map((item) => item.route);
     const uniqueRoutes = new Set(routes);
-    assert.equal(uniqueRoutes.size, 12);
+    assert.equal(uniqueRoutes.size, 16);
 
     for (const expectedRoute of expectedRouteList) {
       assert.ok(uniqueRoutes.has(expectedRoute), `Missing route: ${expectedRoute}`);

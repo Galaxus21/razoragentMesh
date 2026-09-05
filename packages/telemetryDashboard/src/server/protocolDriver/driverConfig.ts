@@ -83,6 +83,6 @@ export const upiCircleDelegationToken = "upi_circle_del_tok_demo_0001";
 // "Office Furniture", which is neither. Adding a category here is a change to what the user
 // delegates, so it must name a real catalog category rather than a convenient prefix.
 export const authorizedCategories: readonly string[] = ["office furniture", "furniture"];
-export const demoMerchantAccount = "acc_demoMerchantChairs";
+export const demoMerchantAccount = "acc_demoMerchantRazorAgent";
 export const demoPaymentId = "pay_demoRunLocal0001";
 export const millisPerSecond = 1000;

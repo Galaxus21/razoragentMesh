@@ -102,6 +102,46 @@ export interface RouteTransferItem {
   readonly feePaise: number;
 }
 
+/** One taxable line of the GSTR-1 invoice the settlement produced. */
+export interface SettlementInvoiceLineItem {
+  readonly skuId: string;
+  readonly hsnCode: string;
+  readonly quantity: number;
+  readonly unitPricePaise: number;
+  readonly taxableAmountPaise: number;
+  readonly gstRatePercent: number;
+  readonly cgstPaise: number;
+  readonly sgstPaise: number;
+  readonly igstPaise: number;
+  readonly totalLinePaise: number;
+}
+
+/**
+ * The statutory invoice the settlement saga generated, carried whole on the event.
+ *
+ * Optional because an engine older than this field still emits PAYMENT_CAPTURED without it, and
+ * a Settle screen that assumed its presence would crash on a replayed buffer rather than simply
+ * showing less.
+ */
+export interface SettlementInvoice {
+  readonly invoiceNumber: string;
+  readonly invoiceDate: string;
+  readonly sellerGstin: string;
+  readonly merchantStateCode: string;
+  readonly placeOfSupplyStateCode: string;
+  readonly taxableAmountPaise: number;
+  readonly totalCgstPaise: number;
+  readonly totalSgstPaise: number;
+  readonly totalIgstPaise: number;
+  readonly totalTaxPaise: number;
+  readonly totalTcsPaise: number;
+  readonly shippingPaise: number;
+  readonly discountPaise: number;
+  readonly grandTotalPaise: number;
+  readonly cryptographicAuditHash: string;
+  readonly lineItems: ReadonlyArray<SettlementInvoiceLineItem>;
+}
+
 export interface PaymentCapturedPayload {
   readonly paymentId: string;
   readonly orderId: string;
@@ -121,6 +161,7 @@ export interface PaymentCapturedPayload {
   readonly cgstPaise?: number;
   readonly sgstPaise?: number;
   readonly igstPaise?: number;
+  readonly invoice?: SettlementInvoice;
 }
 
 export interface OosHealedPayload {

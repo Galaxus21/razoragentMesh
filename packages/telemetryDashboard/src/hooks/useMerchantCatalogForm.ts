@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { usePersistentState } from "./usePersistentState";
 import {
   defaultCatalogFormState,
   defaultPromotionDiscountBps,
@@ -94,7 +95,12 @@ export interface UseMerchantCatalogFormReturn {
 }
 
 export function useMerchantCatalogForm(): UseMerchantCatalogFormReturn {
-  const [formData, setFormData] = useState<MerchantCatalogFormData>(defaultCatalogFormState);
+  // The draft survives leaving the Studio and coming back. Only formData is kept: validation
+  // errors and the last submission result describe a moment rather than the author's work.
+  const [formData, setFormData] = usePersistentState<MerchantCatalogFormData>(
+    "razoragent.merchantCatalogForm.v1",
+    defaultCatalogFormState
+  );
   const [errors, setErrors] = useState<FormValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submissionResult, setSubmissionResult] = useState<CatalogSubmissionResult | null>(null);

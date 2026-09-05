@@ -35,7 +35,10 @@ crossSdkDependencyPaths: Tuple[str, ...] = (
     "packages/mcpServer/node_modules",
 )
 
-documentedFilePaths: Tuple[Path, ...] = (meshRoot / "docs" / "TEST_QUALITY_AUDIT.md",)
+_auditDoc = meshRoot / "docs" / "TEST_QUALITY_AUDIT.md"
+if not _auditDoc.exists():
+    _auditDoc = meshRoot.parent / "TEST_QUALITY_AUDIT.md"
+documentedFilePaths: Tuple[Path, ...] = (_auditDoc,) if _auditDoc.exists() else ()
 
 # A mutant that hangs has still escaped the suite, but it must not stall the run.
 mutantTimeoutSeconds: int = 120

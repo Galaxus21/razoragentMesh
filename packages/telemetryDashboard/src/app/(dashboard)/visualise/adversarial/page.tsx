@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import Link from "next/link";
 import { ChevronRight, Play, ShieldAlert, ShieldCheck } from "lucide-react";
 import { panelClass } from "@/constants/playgroundConstants";
@@ -21,8 +22,13 @@ function findDecisiveStep(steps: readonly ProtocolStepRecord[]): ProtocolStepRec
 }
 
 export default function AdversarialPlaygroundPage(): React.JSX.Element {
-  const run = useProtocolRun();
-  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+  const run = useProtocolRun("razoragent.adversarialRun.v1");
+  // Persisted alongside the run itself: this is the only thing that says which card the
+  // restored result belongs to.
+  const [activeScenarioId, setActiveScenarioId] = usePersistentState<string | null>(
+    "razoragent.adversarialActiveScenario.v1",
+    null
+  );
 
   const adversarialScenarios = scenarioSummaries.filter(
     (scenario) => scenario.kind === "ADVERSARIAL"

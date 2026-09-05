@@ -188,7 +188,10 @@ export const mandateToolsManifest = [
           type: "integer",
           minimum: 1,
           default: defaultPackageWeightGrams,
-          description: "Billable weight in grams, the same one you checked the SLA with."
+          description:
+            "Advisory only. The mesh prices shipping from the catalog record's own weight " +
+            "multiplied by quantity, so whatever you send here does not change what you are " +
+            "charged. Declare the real parcel weight if you know it."
         },
         quote_hash: { type: "string", minLength: 1, description: "From get_live_sku_quote." },
         quote_expiry_timestamp: {

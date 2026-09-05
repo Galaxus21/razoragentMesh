@@ -97,9 +97,8 @@ export function groupChildrenBySection(
 // five panels now sit together under Visualise, which is the screen a reader watches while an
 // agent buys something.
 //
-// Sub-pages inside Merchant and Visualise are reached by a tab strip in each section's layout
-// rather than by their own sidebar rows, so the sidebar states what the dashboard is for -- see
-// the mesh, sell into it, watch it run, read about it -- instead of enumerating its panels.
+// Visualise's five screens are sidebar rows under their category, so the whole navigable
+// surface is visible from every page. Merchant stays a single row because it is one screen.
 export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
   {
     id: "overview",
@@ -121,8 +120,16 @@ export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
     id: "visualise",
     label: "Visualise",
     icon: Activity,
+    // Visualise's five screens are sidebar rows rather than a tab strip. A strip only exists
+    // once you are already inside the section, so reaching the Vector Index from the docs took
+    // two navigations and the section's shape was invisible from anywhere else. As rows they
+    // are one click from every page, and the sidebar shows what there is to look at.
     children: [
-      { route: "/visualise", label: "Visualise", description: "Watch The Protocol Run" },
+      { route: "/visualise", label: "Live Agent", description: "Watch The Protocol Run" },
+      { route: "/visualise/settle", label: "Settle", description: "Finish An Agent's Order" },
+      { route: "/visualise/run", label: "Run It Here", description: "Drive The Protocol Yourself" },
+      { route: "/visualise/adversarial", label: "Adversarial", description: "Attack It, Watch It Refuse" },
+      { route: "/visualise/vectors", label: "Vector Index", description: "The Embeddings Layer 1 Searches" },
     ],
   },
   {
@@ -138,8 +145,9 @@ export const navigationCategories: ReadonlyArray<NavCategoryConfig> = [
 export const navigationItems: ReadonlyArray<NavChildItemConfig> =
   navigationCategories.flatMap((category) => category.children);
 
-// The tab strips. Kept here beside the sidebar routes because these are the rest of the
-// dashboard's navigable surface: a route that appears in neither list is unreachable.
+// Visualise's routes, kept as a named list after they became sidebar rows. Nothing renders a
+// tab strip from this any more; it stays because route resolution and the tests that guard the
+// section's shape both read it, and because it is the one place the section is enumerated.
 export interface SectionTabConfig {
   readonly route: string;
   readonly label: string;

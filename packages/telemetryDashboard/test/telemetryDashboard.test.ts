@@ -185,7 +185,7 @@ describe("Telemetry Dashboard — Latency and Event Formatting Utilities", () =>
     assert.equal(mcpStyle.label, "MCP CALL");
 
     const paymentStyle = getEventStyle("PAYMENT_CAPTURED");
-    assert.equal(paymentStyle.label, "SETTLED");
+    assert.equal(paymentStyle.label, "MESH SETTLED");
 
     const fallbackStyle = getEventStyle("UNKNOWN_TYPE" as TelemetryEventType);
     assert.equal(fallbackStyle.label, "UNKNOWN");

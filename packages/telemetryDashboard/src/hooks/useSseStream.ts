@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { usePersistentState } from "./usePersistentState";
 import {
   resolveStreamMode,
   summarizeStreamProvenance,
@@ -44,8 +45,19 @@ export function useSseStream(options: UseSseStreamOptions = {}): UseSseStreamRes
     autoConnect = true,
   } = options;
 
-  const [events, setEvents] = useState<ReadonlyArray<TelemetryEvent>>([]);
-  const [latestEvent, setLatestEvent] = useState<TelemetryEvent | null>(null);
+  // The run survives a reload of this tab. Every panel downstream -- the Live Agent stages, the
+  // mandate chain, the negotiation ladder, the Settle screen's order list and its invoice -- is
+  // derived from this one buffer, so losing it to a stray refresh used to discard the whole
+  // purchase from the UI while the order stayed live at Razorpay. Bounded by maxEventBufferSize,
+  // scoped to the tab, and emptied by clearEvents like any other write.
+  const [events, setEvents] = usePersistentState<ReadonlyArray<TelemetryEvent>>(
+    "razoragent.telemetryEvents.v1",
+    []
+  );
+  const [latestEvent, setLatestEvent] = usePersistentState<TelemetryEvent | null>(
+    "razoragent.telemetryLatestEvent.v1",
+    null
+  );
   const [connectionState, setConnectionState] = useState<SseConnectionState>("DISCONNECTED");
   const [reconnectCount, setReconnectCount] = useState<number>(0);
 

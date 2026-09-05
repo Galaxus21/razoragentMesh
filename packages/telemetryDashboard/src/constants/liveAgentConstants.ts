@@ -13,8 +13,8 @@ import type { TelemetryEventType } from "@/types/telemetryEventTypes";
 export const liveAgentPageTitle = "Live Agent Session";
 export const liveAgentPageDescription =
   "Tool calls from an external agent -- Claude Desktop, Claude Code, Cursor -- grouped into one " +
-  "session as they arrive. Nothing here is replayed: each stage appears when the agent actually " +
-  "makes the call.";
+  "session as they arrive. Nothing here is scripted: every stage is here because the agent " +
+  "really made that call -- what you are reading is this tab's own record of the run.";
 
 export const noSessionsHeading = "No agent sessions yet";
 export const noSessionsBody =
@@ -159,8 +159,15 @@ export const eventPresentation: Partial<
     implementedBy: mandateEnginePath
   },
   PAYMENT_CAPTURED: {
-    title: "Payment captured",
-    narrative: "The settlement saga captured the payment and issued the Route split.",
+    title: "Mesh settlement recorded",
+    // Named for what actually happened. The engine's 2PC completed and the Route legs were
+    // computed on the mesh's own ledger, but nothing has been charged: the Razorpay order is
+    // created with amount_paid 0 until a person authorises it on the Settle screen. The old
+    // "Payment captured" sat directly above the handoff card that asks the human to pay, and
+    // claimed a capture the API record contradicts.
+    narrative:
+      "Two-phase commit completed and the Route split was computed on the mesh's own ledger. " +
+      "The Razorpay order is open but unpaid -- a person still has to authorise the charge.",
     protocolLayer: settlementLayer,
     implementedBy: mandateEnginePath
   },

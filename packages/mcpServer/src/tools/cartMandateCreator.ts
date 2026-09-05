@@ -32,7 +32,7 @@ import {
   type CreateCartMandateRequest
 } from "../schemas/createCartMandateSchema.js";
 import { executeSkuQuote } from "./skuQuoter.js";
-import { verifyShippingSla } from "./slaVerifier.js";
+import { verifyShippingSla, resolveBillableWeightGrams } from "./slaVerifier.js";
 import { verifyQuoteHash } from "../crypto/quoteHashSigner.js";
 import { verifyLockSignature } from "../crypto/lockSignatureGenerator.js";
 import {
@@ -182,10 +182,13 @@ export async function createCartMandateForDelegation(
   const quote = reconcileQuote(request, session.buyerAgentDid);
   reconcileLock(request);
 
+  // The cart is the money path, so the weight it prices has to be the mesh's. request's
+  // package_weight_grams survives as an advisory declaration the buyer may send, but it no
+  // longer reaches the surcharge -- see resolveBillableWeightGrams.
   const sla = verifyShippingSla({
     origin_pincode: defaultOriginPincode,
     delivery_pincode: request.delivery_pincode,
-    package_weight_grams: request.package_weight_grams
+    package_weight_grams: resolveBillableWeightGrams(request.sku_id, request.quantity)
   });
   // The SLA tool reports an unserviceable address rather than raising, so the cart tool is where
   // that answer has to become a refusal -- otherwise the merchant signs a cart for a delivery no

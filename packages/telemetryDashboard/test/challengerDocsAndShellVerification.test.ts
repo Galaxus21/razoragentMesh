@@ -19,13 +19,14 @@ import MerchantStudioPage from "../src/app/(dashboard)/merchant-studio/page.js";
 import DashboardGroupLayout from "../src/app/(dashboard)/layout.js";
 
 const expectedCategoryCount = 4;
-const expectedTotalRoutesCount = 12;
+// 12 before Visualise's four sub-screens became sidebar rows of their own.
+const expectedTotalRoutesCount = 16;
 // Sidebar rows under Docs: the eight guides plus the /docs landing page. Kept apart from
 // expectedDocumentCount because they stopped being the same number the moment the landing
 // page existed, and a single constant would have made one of the two assertions vacuous.
 const expectedDocsRoutesCount = 9;
 const expectedDocumentCount = 8;
-const expectedTelemetryRoutesCount = 3;
+const expectedTelemetryRoutesCount = 7;
 
 const docsLandingRoute = "/docs";
 
@@ -45,6 +46,10 @@ const requiredTelemetryRouteUrls: ReadonlyArray<string> = [
   "/overview",
   "/merchant-studio",
   "/visualise",
+  "/visualise/settle",
+  "/visualise/run",
+  "/visualise/adversarial",
+  "/visualise/vectors",
 ];
 
 describe("Empirical Challenger 2 — Documentation Routes Mounting & Component Trees", () => {

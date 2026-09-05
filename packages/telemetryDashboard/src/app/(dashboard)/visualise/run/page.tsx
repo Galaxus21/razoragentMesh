@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { AlertTriangle, ListOrdered, MousePointerClick } from "lucide-react";
 import { RunStepper } from "@/components/playground/runStepper";
 import { ScenarioPicker } from "@/components/playground/scenarioPicker";
@@ -18,11 +19,14 @@ const pageDescription =
   "Press Run and the buyer SDK executes against the live mesh. Every step below shows the request that was actually sent and the cryptography it actually produced.";
 
 export default function PlaygroundPage(): React.JSX.Element {
-  const run = useProtocolRun();
+  const run = useProtocolRun("razoragent.protocolPlaygroundRun.v1");
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>(
     scenarioSummaries[0]?.scenarioId ?? ""
   );
-  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [selectedStepId, setSelectedStepId] = usePersistentState<string | null>(
+    "razoragent.protocolPlaygroundStep.v1",
+    null
+  );
 
   // Preselects the scenario named by ?scenario=..., which is how the Protocol Map's
   // "Exercise this layer" link arrives here. Read from window rather than useSearchParams so

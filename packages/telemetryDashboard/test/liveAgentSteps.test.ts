@@ -264,7 +264,7 @@ describe("buildLiveAgentSessions", () => {
     assert.equal(sessions[0].sessionId, "mcp-session");
     assert.deepEqual(
       sessions[0].steps.map((step) => step.title),
-      ["Settle", "Payment captured"]
+      ["Settle", "Mesh settlement recorded"]
     );
   });
 

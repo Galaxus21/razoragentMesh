@@ -227,7 +227,7 @@ checkout. Nothing in this section takes more than a minute.
 | `PYTHONPATH=packages/buyerSdkPy python examples/python/mandateChain.py` | The same proof, in Python |
 | `cd packages/telemetryDashboard && npm run docs:verify` | Every method, argument, port and route the guides name still exists in the code |
 | `python scripts/generateApiReference.py` | Regenerates the API tables; a non-empty `git diff` afterwards means the committed reference is stale |
-| `python scripts/mutationScore.py` | Measures how much of the suite's protection is real — see [`docs/TEST_QUALITY_AUDIT.md`](docs/TEST_QUALITY_AUDIT.md) |
+| `python scripts/mutationScore.py` | Measures how much of the suite's protection is real via AST mutation analysis |
 
 Treat the test total as inventory, not as evidence: a statutory GST bug in this repository
 survived 1,545 of these tests, because no test compared the two implementations against each
@@ -259,9 +259,6 @@ Repository-level documentation not served by the dashboard:
 | [`docs/STATUTORY_RATES.md`](./docs/STATUTORY_RATES.md) | Where tax rates live, their citations and verification dates, and the procedure for keeping them true |
 | [`docs/AGENT_SETUP_TROUBLESHOOTING.md`](./docs/AGENT_SETUP_TROUBLESHOOTING.md) | Symptom-by-symptom fixes for connecting an external agent, with the exact error text |
 | [`GUIDE.md`](./GUIDE.md) | Architecture and presentation material |
-| [`PROJECT.md`](./PROJECT.md) | Completed milestone log |
-| [`AUDIT_TODO.md`](./AUDIT_TODO.md) | The audit findings still open, the standing debt, and the rule for adding a finding |
-| [`AUDIT_ARCHIVE.md`](./AUDIT_ARCHIVE.md) | The 51 closed findings with the evidence that proved each and the note recording what closed it |
 
 ---
 

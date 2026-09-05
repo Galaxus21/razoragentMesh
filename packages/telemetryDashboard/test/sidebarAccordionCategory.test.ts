@@ -24,7 +24,15 @@ describe("Sidebar Accordion & 4-Section Taxonomy", () => {
     // /visualise, which is the screen a reader watches while an agent buys something.
     assert.deepEqual(categoryMap.get("overview"), ["/overview"]);
     assert.deepEqual(categoryMap.get("merchant"), ["/merchant-studio"]);
-    assert.deepEqual(categoryMap.get("visualise"), ["/visualise"]);
+    // Visualise's five screens are sidebar rows, not a tab strip: the section's shape is
+    // reachable in one click from every page rather than only from inside the section.
+    assert.deepEqual(categoryMap.get("visualise"), [
+      "/visualise",
+      "/visualise/settle",
+      "/visualise/run",
+      "/visualise/adversarial",
+      "/visualise/vectors",
+    ]);
 
     assert.deepEqual(categoryMap.get("documentation"), [
       "/docs",
@@ -40,7 +48,8 @@ describe("Sidebar Accordion & 4-Section Taxonomy", () => {
   });
 
   it("should preserve flat navigationItems array containing every sidebar route", () => {
-    assert.equal(navigationItems.length, 12);
+    // 12 before Visualise's four sub-screens became sidebar rows of their own.
+    assert.equal(navigationItems.length, 16);
     const flattenedRoutes = navigationCategories.flatMap((c) => c.children.map((ch) => ch.route));
     assert.deepEqual(navigationItems.map((i) => i.route), flattenedRoutes);
   });

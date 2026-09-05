@@ -45,8 +45,12 @@ export const defaultPackageWeightGrams = 750;
  * No longer a default a caller can override: merchantPayoutRegistry.ts resolves the payout
  * destination from the merchant-signed cart, and this is the answer for every cart the mesh
  * signs itself.
+ *
+ * Named for the mesh, not for a product line. It was `acc_demoMerchantChairs`, which meant the
+ * settlement panel showed a furniture account collecting the payout for whatever was actually
+ * bought -- an acoustic pod, gold, a laptop -- on the one screen that exists to be read closely.
  */
-export const defaultMerchantAccount = "acc_demoMerchantChairs";
+export const defaultMerchantAccount = "acc_demoMerchantRazorAgent";
 /**
  * Where a merchant registered through the Merchant API stores its profile. Must stay equal to
  * `redisMerchantProfileKeyPrefix` in merchantApi/src/constants/merchantConstants.py: this key is

@@ -39,6 +39,10 @@ const expectedRoutes: ReadonlyArray<string> = [
   "/overview",
   "/merchant-studio",
   "/visualise",
+  "/visualise/settle",
+  "/visualise/run",
+  "/visualise/adversarial",
+  "/visualise/vectors",
   "/docs",
   "/docs/setup",
   "/docs/agent-quickstart",
@@ -105,7 +109,8 @@ describe("Challenger 2 Empirical Verification: Root Page Redirect & Route Group 
 
 describe("Challenger 2 Empirical Verification: Navigation Mapping & Active Route Resolution", () => {
   it("should verify 100% route alignment between navigationItems and the expected sidebar routes", () => {
-    assert.equal(navigationItems.length, 12);
+        // 12 before Visualise's four sub-screens became sidebar rows of their own.
+    assert.equal(navigationItems.length, 16);
 
     const actualRoutes = navigationItems.map((item) => item.route);
     assert.deepEqual(actualRoutes, expectedRoutes);

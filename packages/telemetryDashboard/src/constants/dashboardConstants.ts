@@ -203,7 +203,7 @@ export const defaultEventStyleMap: Record<TelemetryEventType, EventMetaStyle> = 
     dotColor: "bg-accentPrimary",
   },
   PAYMENT_CAPTURED: {
-    label: "SETTLED",
+    label: "MESH SETTLED",
     badgeBg: "bg-statusSuccess/10",
     badgeText: "text-statusSuccess",
     borderColor: "border-statusSuccess/30",

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
+import { usePersistentState } from "./usePersistentState";
 import { runEndpointPath } from "@/constants/playgroundConstants";
 import type { RunParameters } from "@/server/protocolDriver/driverConfig";
 import type {
@@ -60,8 +61,18 @@ function applyRunEvent(previous: ProtocolRunState, event: ProtocolRunEvent): Pro
   return { ...previous, errorMessage: event.message, isRunning: false };
 }
 
-export function useProtocolRun(): UseProtocolRunResult {
-  const [state, setState] = useState<ProtocolRunState>(idleState);
+/**
+ * @param persistKey Distinct sessionStorage key per calling page. The Adversarial page and the
+ *   Protocol Playground both run through this hook, so a shared key would show one page the
+ *   other page's last run.
+ */
+export function useProtocolRun(persistKey: string): UseProtocolRunResult {
+  // isRunning is forced false on restore: the fetch that set it did not survive the navigation,
+  // so a restored true would render a spinner that never resolves.
+  const [state, setState] = usePersistentState<ProtocolRunState>(persistKey, idleState, (stored) => ({
+    ...stored,
+    isRunning: false,
+  }));
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {

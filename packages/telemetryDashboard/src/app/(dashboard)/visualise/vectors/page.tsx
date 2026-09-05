@@ -8,6 +8,7 @@
 // cosine that made it win, rather than taking "semantic discovery" on trust.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import Link from "next/link";
 import { ChevronRight, Database, Loader2, Search, ShieldAlert, Wand2 } from "lucide-react";
 import { panelClass } from "@/constants/playgroundConstants";
@@ -55,14 +56,28 @@ export default function VectorIndexPage(): React.JSX.Element {
   const [index, setIndex] = useState<VectorIndexResponse | null>(null);
   const [indexError, setIndexError] = useState<string | null>(null);
 
-  const [queryText, setQueryText] = useState(exampleQuery);
-  const [search, setSearch] = useState<CatalogSearchResponse | null>(null);
+  // The ranked scores are the evidence this panel exists to show, so they outlive a trip to
+  // another tab. The index itself is refetched on mount and is deliberately not stored.
+  const [queryText, setQueryText] = usePersistentState<string>(
+    "razoragent.vectorIndex.queryText.v1",
+    exampleQuery
+  );
+  const [search, setSearch] = usePersistentState<CatalogSearchResponse | null>(
+    "razoragent.vectorIndex.search.v1",
+    null
+  );
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  const [heal, setHeal] = useState<OosHealingResponse | null>(null);
+  const [heal, setHeal] = usePersistentState<OosHealingResponse | null>(
+    "razoragent.vectorIndex.heal.v1",
+    null
+  );
   const [healing, setHealing] = useState(false);
-  const [selectedSkuId, setSelectedSkuId] = useState<string | null>(null);
+  const [selectedSkuId, setSelectedSkuId] = usePersistentState<string | null>(
+    "razoragent.vectorIndex.selectedSku.v1",
+    null
+  );
 
   useEffect(() => {
     let cancelled = false;

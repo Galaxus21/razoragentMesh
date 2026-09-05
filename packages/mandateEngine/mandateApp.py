@@ -183,6 +183,44 @@ async def emitPaymentCapturedTelemetry(
         {"transferId": t.id, "recipientAccountId": t.account, "amountPaise": t.amount, "feePaise": 0}
         for t in result.transfers
     ]
+    # The whole GSTR-1 invoice, not just its hash. The Settle screen is where a person authorises
+    # the charge, and it could previously show them an amount and nothing else -- no invoice
+    # number, no HSN line, no place of supply -- while the buyer agent had been told all of it.
+    # The telemetry stream is the mesh's only order feed, so anything the screen must render has
+    # to travel on this event.
+    invoiceModel = result.invoice
+    invoicePayload = {
+        "invoiceNumber": invoiceModel.invoiceNumber,
+        "invoiceDate": invoiceModel.invoiceDate,
+        "sellerGstin": invoiceModel.sellerGstin,
+        "merchantStateCode": invoiceModel.merchantStateCode,
+        "placeOfSupplyStateCode": invoiceModel.placeOfSupplyStateCode,
+        "taxableAmountPaise": invoiceModel.taxableAmountPaise,
+        "totalCgstPaise": invoiceModel.totalCgstPaise,
+        "totalSgstPaise": invoiceModel.totalSgstPaise,
+        "totalIgstPaise": invoiceModel.totalIgstPaise,
+        "totalTaxPaise": invoiceModel.totalTaxPaise,
+        "totalTcsPaise": invoiceModel.totalTcsPaise,
+        "shippingPaise": invoiceModel.shippingPaise,
+        "discountPaise": invoiceModel.discountPaise,
+        "grandTotalPaise": invoiceModel.grandTotalPaise,
+        "cryptographicAuditHash": invoiceModel.cryptographicAuditHash,
+        "lineItems": [
+            {
+                "skuId": item.skuId,
+                "hsnCode": item.hsnCode,
+                "quantity": item.quantity,
+                "unitPricePaise": item.unitPricePaise,
+                "taxableAmountPaise": item.taxableAmountPaise,
+                "gstRatePercent": item.gstRatePercent,
+                "cgstPaise": item.cgstPaise,
+                "sgstPaise": item.sgstPaise,
+                "igstPaise": item.igstPaise,
+                "totalLinePaise": item.totalLinePaise,
+            }
+            for item in invoiceModel.lineItems
+        ],
+    }
     event = TelemetryEventModel(
         eventId=f"evt_{uuid.uuid4().hex[:12]}", eventType=eventTypePaymentCaptured,
         timestampMs=int(time.time() * millisecondsPerSecond), sessionId=payload.paymentId,
@@ -194,6 +232,7 @@ async def emitPaymentCapturedTelemetry(
             "transfers": transfersList, "gstrInvoiceHash": result.invoice.cryptographicAuditHash,
             "cgstPaise": result.invoice.totalCgstPaise, "sgstPaise": result.invoice.totalSgstPaise,
             "igstPaise": result.invoice.totalIgstPaise,
+            "invoice": invoicePayload,
         },
         provenance=provenanceLive,
     )

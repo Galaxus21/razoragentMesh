@@ -26,6 +26,10 @@ const expectedRouteList: ReadonlyArray<string> = [
   "/overview",
   "/merchant-studio",
   "/visualise",
+  "/visualise/settle",
+  "/visualise/run",
+  "/visualise/adversarial",
+  "/visualise/vectors",
   "/docs",
   "/docs/setup",
   "/docs/agent-quickstart",
@@ -39,7 +43,8 @@ const expectedRouteList: ReadonlyArray<string> = [
 
 const mockSessionPrefix = "session-challenger-m2-";
 const stressToggleIterations = 10000;
-const expectedTotalNavItems = 12;
+// 12 before Visualise's four sub-screens became sidebar rows of their own.
+const expectedTotalNavItems = 16;
 
 function simulateLocalStorageReader(rawValue: string | null): boolean {
   if (rawValue === null) {

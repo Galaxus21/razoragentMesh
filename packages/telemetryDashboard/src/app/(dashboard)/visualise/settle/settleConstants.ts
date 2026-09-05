@@ -5,6 +5,8 @@
 // never lets anyone choose a product. It pays an order that a buyer agent already opened, and an
 // order id it cannot find is an error rather than an invitation to make a new one.
 
+import type { SettlementInvoice } from "@/types/telemetryEventTypes";
+
 /** GET /api/v1/checkout/config, proxied through the dashboard. */
 export interface CheckoutConfig {
   readonly keyId: string | null;
@@ -33,6 +35,12 @@ export interface PayableAgentOrder {
   readonly paymentId: string | null;
   readonly sessionId: string | null;
   readonly capturedAtMs: number | null;
+  /**
+   * Null for an order reached by deep link, because the link carries only an id and an amount.
+   * The invoice lives on the PAYMENT_CAPTURED event, so it is present for any order still in
+   * the stream and absent once the stream is cleared.
+   */
+  readonly invoice: SettlementInvoice | null;
 }
 
 export const scriptSrcRazorpayCheckout = "https://checkout.razorpay.com/v1/checkout.js";

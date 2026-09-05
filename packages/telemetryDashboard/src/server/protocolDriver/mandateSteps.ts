@@ -252,7 +252,30 @@ export const stepSignExecution: ExecutableStep = {
   }
 };
 
-const budgetRefusalMarker = "budget";
+// verifyMandateChain enforces four separate guarantees and throws the same
+// MandateVerificationError for all of them, carrying only a message. Classifying on a single
+// "budget" substring reported three of them -- the per-transaction ceiling, an expired
+// delegation and a settlement/cart mismatch -- as a cart-hash failure, so the Adversarial page
+// named a guard that had not fired on a screen whose whole claim is that the text is the error
+// the mesh really returned. Matched in order; the names are the ones scenarioCatalog puts on
+// the cards, so a card and its result agree.
+const refusalInvariantMatchers: ReadonlyArray<readonly [string, string]> = [
+  ["exceeds single transaction limit", "Per-transaction ceiling"],
+  ["exceeds intent max budget", "AP2 budget gate"],
+  ["expired at", "Delegation validity window"],
+  ["does not match cart total", "Settlement matches the signed cart"],
+  ["Cart mandate hash mismatch", "Cart hash binds the execution mandate"],
+  ["Intent mandate hash mismatch", "Intent hash binds the execution mandate"]
+];
+
+function classifyChainRefusal(message: string): string {
+  for (const [marker, invariant] of refusalInvariantMatchers) {
+    if (message.includes(marker)) {
+      return invariant;
+    }
+  }
+  return "Mandate chain integrity";
+}
 
 export const stepVerifyChain: ExecutableStep = {
   definition: {
@@ -280,9 +303,7 @@ export const stepVerifyChain: ExecutableStep = {
         refusal: {
           errorName: failure.name,
           message: failure.message,
-          invariantViolated: failure.message.includes(budgetRefusalMarker)
-            ? "AP2 budget gate"
-            : "Cart hash binds the execution mandate"
+          invariantViolated: classifyChainRefusal(failure.message)
         }
       };
     }
